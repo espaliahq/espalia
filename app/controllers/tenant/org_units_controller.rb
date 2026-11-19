@@ -70,7 +70,7 @@ class Tenant::OrgUnitsController < ApplicationController
 
   private
 
-  # A parent in another unit's own structure needs each type converted, which
+  # A parent in another structure needs each type converted, which
   # the move step asks for ([#494](https://github.com/espaliahq/espalia/issues/494)).
   def into_another_structure?(parent_id)
     return false if parent_id.blank?

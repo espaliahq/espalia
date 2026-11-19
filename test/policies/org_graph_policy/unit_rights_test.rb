@@ -80,9 +80,35 @@ class OrgGraphPolicy::UnitRightsTest < ActiveSupport::TestCase
       assert rights_for(@org[:platform]).move?
     end
 
-    should "offer no such move out of it, nor to a unit that declares one itself" do
-      assert_empty rights_for(@org[:payments]).conversion_parent_choices
+    should "offer a unit inside it a move out into the organisation's structure (#521)" do
+      assert_equal %w[Engineering Platform], rights_for(@org[:payments]).conversion_parent_choices.map(&:name)
+    end
+
+    should "offer no move that stays in the structure in force" do
       assert_empty rights_for(@org[:checkout]).conversion_parent_choices
+    end
+
+    should "offer a unit that declares a structure a move into another, which it keeps (#521)" do
+      tribe = SecureRandom.uuid_v7
+      as_tenant do
+        admin = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        OrgGraph::StructureCommandHandler.new(actor: admin).declare_structure(
+          @org[:platform], levels: [ { level_id: tribe, name: "Tribe", parent_level_ids: [ tribe ], top: true } ],
+                           conversion: {}, effective_on: Date.current
+        )
+      end
+
+      assert_equal %w[Platform], rights_for(@org[:checkout]).conversion_parent_choices.map(&:name)
+      assert_equal %w[Engineering Platform], rights_for(@org[:payments]).conversion_parent_choices.map(&:name)
+    end
+
+    should "offer a move across only with the right to change both structures" do
+      [ [ ->(unit) { unit.nil? }, "the one it leaves" ], [ ->(unit) { unit.present? }, "the one it joins" ] ].each do |right, missing|
+        rights = rights_for(@org[:payments])
+        rights.instance_variable_get(:@policy).stub(:edit_structure_of?, right) do
+          assert_empty rights.conversion_parent_choices, "Offered a move without the right to change #{missing}"
+        end
+      end
     end
   end
 end

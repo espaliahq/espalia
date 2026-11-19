@@ -141,7 +141,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     end
   end
 
-  # A parent in another unit's own structure: choosing one leads to a step
+  # A parent in another structure: choosing one leads to a step
   # that asks what each type becomes there.
   def conversion_choices
     return if @rights.conversion_parent_choices.empty?

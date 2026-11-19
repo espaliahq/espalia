@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Moves a unit into another unit's own structure from its drawer ([#494](https://github.com/espaliahq/espalia/issues/494)),
-# changing its type and those beneath it on the way. The drawer's move form
+# Moves a unit into another structure from its drawer ([#494](https://github.com/espaliahq/espalia/issues/494), [#521](https://github.com/espaliahq/espalia/issues/521)),
+# changing its type and those its structure governs on the way. The drawer's move form
 # sends a parent in another structure here.
 class Tenant::OrgUnitStructureMovesController < ApplicationController
   include OrgUnitDrawer
@@ -38,7 +38,7 @@ class Tenant::OrgUnitStructureMovesController < ApplicationController
 
     into = Views::Tenant::OrgGraph::StructureStep.structure_name(overview, overview.structure_beneath(parent))
     moved = "Moved #{@unit.name} into #{into}."
-    return "#{moved} Their types changed." if overview.descendants_of(@unit).any?
+    return "#{moved} Their types changed." if overview.converted_with(@unit).many?
 
     type = OrgTaxonomyLevel.find_by(id: conversion[@unit.level_id])
     type ? "#{moved} Its type is now #{type.name}." : moved

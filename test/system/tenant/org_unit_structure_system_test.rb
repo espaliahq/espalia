@@ -3,7 +3,7 @@
 require "application_system_test_case"
 
 # A unit's own structure from its drawer (#494): giving it one, and moving a
-# unit into it, at both widths.
+# unit into it and back out (#521), at both widths.
 class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
   include OrgGraphFixture
 
@@ -72,6 +72,29 @@ class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
         screenshot("moved_#{viewport}")
         assert_equal @org[:checkout], overview.unit(@org[:platform]).parent_id
         assert_equal "Group", type_of(:platform)
+      end
+
+      should "move a unit back out of a structure, each type preselected as it was before (#521)" do
+        group = SecureRandom.uuid_v7
+        ActsAsTenant.with_tenant(@tenant) do
+          tenant_user = TenantUser.find_by!(user: @admin_user)
+          structure = OrgGraph::StructureCommandHandler.new(actor: AuthorizationContext.new(user: @admin_user, tenant_user:, person: nil))
+          structure.declare_structure(@org[:checkout], levels: [ { level_id: group, name: "Group", parent_level_ids: [ group ], top: true } ],
+                                                       conversion: { @org[:squad] => group }, effective_on: Date.current)
+          structure.move_unit(@org[:platform], @org[:checkout], conversion: { @org[:team] => group }, effective_on: Date.current)
+        end
+        visit edit_tenant_org_unit_path(@org[:platform])
+        assert_selector "#org-graph-drawer-title", text: "Platform"
+
+        select "Engineering", from: "org-unit-parent"
+        page.execute_script("document.getElementById('org-unit-parent').form.requestSubmit()")
+        assert_text "takes it out of Checkout's structure into the organisation's structure"
+        assert_equal "Team", find("select[name='conversion[#{group}]']").find("option[selected]").text
+        assert_no_sideways_overflow
+        screenshot("move_out_step_#{viewport}")
+
+        click_button_with_js_fallback "Move Platform", expect_text: "Moved Platform into the organisation's structure. Its type is now Team."
+        assert_equal [ @org[:engineering], @org[:team] ], overview.unit(@org[:platform]).then { [ it.parent_id, it.level_id ] }
       end
 
       # #494's worked example: a copy of the types in force, a unit moved into

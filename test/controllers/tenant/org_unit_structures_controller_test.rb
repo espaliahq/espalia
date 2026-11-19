@@ -133,6 +133,45 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Group", type_of(:platform)
   end
 
+  should "move a unit out of a structure, each type preselecting the one it held there before (#521)" do
+    declare_fresh(:checkout, { @org[:squad] => "Team" })
+    assert_equal "Team", type_of(:payments)
+
+    get edit_tenant_org_unit_path(@org[:payments])
+    assert_equal %w[Engineering Platform], drawer.css("#org-unit-parent optgroup option").map { it.text.gsub(/[[:space:]]/, "") }
+
+    get new_tenant_org_unit_structure_move_path(@org[:payments], parent_id: @org[:platform])
+    assert_includes drawer.text, "takes it out of Checkout's structure into the organisation's structure"
+    assert_includes drawer.text, "Each type in Checkout's structure becomes a type in the organisation's structure"
+    held = overview.unit(@org[:payments]).level_id
+    assert_equal "Squad", drawer.at_css("select[name='conversion[#{held}]'] option[selected]").text
+
+    post tenant_org_unit_structure_move_path(@org[:payments]), params: { parent_id: @org[:platform], conversion: { held => @org[:squad] } }
+
+    assert_equal "Moved Payments into the organisation's structure. Its type is now Squad.", flash[:notice]
+    assert_equal @org[:platform], overview.unit(@org[:payments]).parent_id
+    assert_equal @org[:squad], overview.unit(@org[:payments]).level_id
+  end
+
+  should "move a unit that declares a structure into another, saying it keeps its own (#521)" do
+    declare_fresh(:checkout, { @org[:squad] => "Group" })
+    declare_fresh(:platform, [ "Tribe" ])
+
+    get edit_tenant_org_unit_path(@org[:checkout])
+    assert_equal %w[Platform], drawer.css("#org-unit-parent optgroup option").map { it.text.gsub(/[[:space:]]/, "") }
+
+    get new_tenant_org_unit_structure_move_path(@org[:checkout], parent_id: @org[:platform])
+    assert_includes drawer.text, "takes it out of the organisation's structure into Platform's structure, so it changes type"
+    assert_includes drawer.text, "Checkout keeps its own structure, and the units in it keep their types."
+
+    tribe = overview.structures.fetch(@org[:platform]).sole
+    post tenant_org_unit_structure_move_path(@org[:checkout]), params: { parent_id: @org[:platform], conversion: { @org[:team] => tribe.id } }
+
+    assert_equal "Moved Checkout into Platform's structure. Its type is now Tribe.", flash[:notice]
+    assert_equal "Tribe", type_of(:checkout)
+    assert_equal "Group", type_of(:payments)
+  end
+
   context "as a tenant member" do
     setup do
       sign_out @admin_user
