@@ -283,8 +283,9 @@ offered them too. A unit in a unit's own structure is also offered "None (at the
 when a type of the organisation's structure may sit at the top and the admin may add a unit
 there. The step it leads to names the structure the unit leaves and the one it
 joins, and asks what each type becomes. Each type comes preselected as the one its units
-last held in the structure they join, when they agree, so a move back puts each where it
-was; otherwise the type with the same name. The admin can change either.
+last held in the structure they join, when each held one and they agree, so a move back
+puts each where it was; otherwise the type with the same name. The unit's own type lists
+only the types that may sit where it lands. The admin can change any of them.
 
 A unit moves into another structure with a conversion: into a unit's own structure, out of
 one into the organisation's, or from one unit's structure into another's. The conversion
