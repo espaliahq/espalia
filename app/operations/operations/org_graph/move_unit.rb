@@ -8,7 +8,7 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
   description "Move a unit in the Org Graph beneath another live unit of a kind its own kind can sit " \
               "under, or to the top when parent_id is omitted and its kind can sit there, from effective_on (today by default). Only a unit Espalia holds " \
               "can be moved here. Moving a unit changes who inherits its ownership, so the caller needs " \
-              "rights on the unit and where it lands. To move a unit into another structure (into a unit's own " \
+              "rights on the unit and where it lands. To move a unit between structures (into a unit's own " \
               "structure, out of one into the organisation's, or between two), pass conversion: a type of the " \
               "structure it joins for each type the unit and those beneath it hold. Each changes type in the same " \
               "change, and a unit with a structure of its own takes it along, nested. That needs a tenant admin."

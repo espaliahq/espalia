@@ -316,7 +316,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal "These units wouldn't fit Checkout's structure: Platform (Lane at the top)", error.message
 
         error = assert_raises(OrgGraph::Authorization::Refused) { move_in(as: @editor) }
-        assert_equal "Only a tenant admin can move a unit into another structure", error.message
+        assert_equal "Only a tenant admin can move a unit between structures", error.message
         assert_equal @org[:team], level_of(:platform)
       end
 
@@ -386,7 +386,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         [ SecureRandom.uuid_v7, elsewhere[:platform] ].each do |stranger|
           [ [ stranger, @org[:checkout] ], [ @org[:platform], stranger ] ].each do |unit_id, parent_id|
             error = assert_raises(OrgGraph::Authorization::Refused) { move.call(@editor, unit_id, parent_id) }
-            assert_equal "Only a tenant admin can move a unit into another structure", error.message
+            assert_equal "Only a tenant admin can move a unit between structures", error.message
 
             error = assert_raises(Operations::Base::ParameterError) { move.call(@admin, unit_id, parent_id) }
             named = unit_id == stranger ? "unit_id" : "parent_id"

@@ -85,7 +85,7 @@ module OrgGraph::Authorization
   # @param from [String, nil] the structure the unit leaves, nil for the organisation's
   # @param into [String, nil] the structure it joins, nil for the organisation's
   def authorize_move_across!(from, into)
-    refusal = "Only a tenant admin can move a unit into another structure"
+    refusal = "Only a tenant admin can move a unit between structures"
     raise Refused, refusal if system?
 
     [ from, into ].uniq.each do |structure_unit_id|
