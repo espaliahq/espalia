@@ -414,24 +414,28 @@ class Views::Plans::ChangesTab < Views::Base
     "#{mover} moved #{crossing(change)}#{retyped}"
   end
 
-  # A move written before it named the structures it crossed has neither side.
+  # A move written before it named the structures it crossed has neither
+  # side, and a backdated move hides the side before the plan's base.
   def crossing(change)
-    return "between structures" unless change[:before] || change[:after]
-
-    left = structure_side(change, "before") if change[:before]
-    joined = structure_side(change, "after") if change[:after]
-    if left.nil? then "into #{joined}"
-    elsif joined.nil? then "out of #{left}"
-    else "from #{left} into #{joined}"
+    left, joined = %w[before after].map { structure_side(change, it) }
+    top = I18n.t("org_graph.structure_name.top")
+    case [ left, joined ]
+    in [ String, String ] then "from #{left} into #{joined}"
+    in [ nil | :organisation, String ] then "into #{joined}"
+    in [ String, nil | :organisation ] then "out of #{left}"
+    in [ nil, :organisation ] then "into #{top}"
+    in [ :organisation, nil ] then "out of #{top}"
+    else "between structures"
     end
   end
 
-  # nil for the organisation's structure, which the other side's wording names.
+  # nil when the side is absent, :organisation for the organisation's structure.
   def structure_side(change, side)
+    return unless change[side.to_sym]
     return "another unit's structure" if outside?(change, side)
 
     unit_id = change[side.to_sym]["structure_unit_id"]
-    "#{unit_name(unit_id)}'s structure" if unit_id
+    unit_id ? "#{unit_name(unit_id)}'s structure" : :organisation
   end
 
   def moved_line(person, change)

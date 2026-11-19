@@ -76,7 +76,10 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
         moved.(side.(GROWTH), side.(PAYMENTS)),
         moved.(nil, nil, count: 0),
         drift_change("moved_between_structures", before: side.(nil), after: side.(GROWTH), outside: %w[unit_id], count: 1),
-        moved.(nil, side.(GROWTH), outside: %w[before])
+        moved.(nil, side.(GROWTH), outside: %w[before]),
+        moved.(nil, side.(nil), outside: %w[before]),
+        moved.(side.(GROWTH), nil),
+        moved.(side.(nil), nil)
       ])
 
       assert_equal [ "Payments moved into Growth's structure: 2 units changed type",
@@ -85,8 +88,11 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
                      "Payments moved from Growth's structure into Payments's structure: 2 units changed type",
                      "Payments moved between structures",
                      "A unit above this plan moved into Growth's structure: 1 unit changed type",
-                     "Payments moved into Growth's structure: 2 units changed type" ],
-                   html.css("[data-drift-change] p:first-child").map { it.text.squish }.first(7)
+                     "Payments moved into Growth's structure: 2 units changed type",
+                     "Payments moved into the organisation's structure: 2 units changed type",
+                     "Payments moved out of Growth's structure: 2 units changed type",
+                     "Payments moved out of the organisation's structure: 2 units changed type" ],
+                   html.css("[data-drift-change] p:first-child").map { it.text.squish }.first(10)
     end
 
     should "say a covered person or unit left the plan's units without naming where they went" do
