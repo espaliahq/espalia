@@ -195,6 +195,36 @@ class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
     end
   end
 
+  context "a plan whose drift holds a move between structures by a unit above it" do
+    setup do
+      @core, @ledger = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+        structure.create_unit(@core, "Mesh Core", level_id: @group, parent_id: @engineering, effective_on: "2026-02-01")
+        structure.create_unit(@ledger, "Ledger", level_id: @pod, parent_id: @core, effective_on: "2026-02-01")
+      end
+      call(Operations::TeamPlanning::SetPlanScope, plan_id: @plan_id, unit_ids: [ @payments, @ledger ])
+      travel_to Time.utc(2026, 2, 3, 9)
+      call(Operations::OrgGraph::MoveUnit, unit_id: @core, parent_id: @sales, conversion: { @group => @territory, @pod => @region })
+    end
+
+    should "count the unit it carried, and name neither the mover nor either structure" do
+      crossing = walk("team_planning_step_outcome" => "This step isn't closed").compact
+                 .select { |_tool, json| json.include?('"kind":"moved_between_structures"') }
+      assert_includes crossing.keys, "team_planning_drift"
+
+      crossing.each do |tool, json|
+        drift = JSON.parse(json).then { it["drift"] || it }
+        items = drift.fetch("changes").select { it["kind"] == "moved_between_structures" }
+        assert_equal [ [ nil, [ @ledger ], 1, %w[unit_id before after] ] ], items.map { it.values_at("unit_id", "unit_ids", "count", "outside") }, tool
+        shown = [ items, drift.fetch("names") ].to_json
+        leaks = { "Mesh Core's id" => @core, "Mesh Core" => "Mesh Core", "Engineering's id" => @engineering,
+                  "Engineering" => "Engineering", "Sales' id" => @sales, "Sales" => "Sales" }.select { |_what, value| shown.include?(value) }.keys
+        assert_empty leaks, "#{tool} names what lies above the plan"
+      end
+    end
+  end
+
   context "an archived plan with a unit of a declared type" do
     setup { call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id) }
 
