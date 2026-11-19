@@ -169,6 +169,11 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
       assert_equal message, error.message
       assert_not structure.unit(@basket).retired
 
+      cards = create_unit("Cards", @stream, parent_id: @checkout)
+      as_tenant { @handler.retire_unit(cards, effective_on: @today) }
+      error = assert_raises(RuntimeError) { as_tenant { merge(cards, into: lending) } }
+      assert_equal message, error.message
+
       lane = create_unit("Lane", @stream, parent_id: @checkout)
       as_tenant do
         @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ ramp, lane ], effective_on: @today,
