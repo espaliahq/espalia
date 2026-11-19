@@ -1189,8 +1189,9 @@ class OrgGraph::StructureAggregate
   end
 
   def restore_kinds(governed, kinds, effective_on, changed_by_id)
+    kinds = kinds.to_h.transform_keys(&:to_s)
     governed.each do |child|
-      kind = kinds.to_h.transform_keys(&:to_s).fetch(child.unit_id)
+      kind = kinds.fetch(child.unit_id)
       apply(OrgGraph::Events::UnitKindChanged.new(data: {
         unit_id: child.unit_id, level_id: kind[:level_id], previous_level_id: child.level_id,
         provider: child.provider, effective_on:, kind_changed_by_id: changed_by_id, changed_back_id: kind[:changed_back_id]
