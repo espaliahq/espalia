@@ -153,11 +153,15 @@ class TeamPlanning::Drift
   end
 
   def structure_item(structure, members)
-    first = members.first.change
+    changes = members.map(&:change)
     named = @scope.nil? || @scope.covers_unit?(structure.unit_id)
-    change = first.with(kind: structure.after ? :structure_declared : :structure_withdrawn, unit_id: (structure.unit_id if named),
-                        learned_at: members.filter_map { it.change.learned_at }.max, before: nil, after: nil,
-                        event_id: structure.cause_id, withdrawn: members.all? { it.change.withdrawn })
+    providers = changes.map(&:provider).uniq
+    change = OrgGraph::ChangesBetween::Change.new(
+      kind: structure.after ? :structure_declared : :structure_withdrawn, effective_on: changes.first.effective_on,
+      learned_at: changes.filter_map(&:learned_at).max, person_id: nil, unit_id: (structure.unit_id if named), from_unit_id: nil,
+      succession_id: nil, fact: nil, before: nil, after: nil, provider: (providers.first if providers.one?),
+      event_id: structure.cause_id, withdrawn: changes.all?(&:withdrawn)
+    )
     Drifted.new(change:, from_plan: members.all?(&:from_plan), meets: members.flat_map(&:meets).uniq,
                 sources: members.flat_map(&:sources).uniq, outside: named ? [] : [ "unit_id" ],
                 group: Group.new(cause_id: structure.cause_id, unit_ids: members.map { it.change.unit_id }))

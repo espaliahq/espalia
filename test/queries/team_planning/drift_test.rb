@@ -178,6 +178,14 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
       assert_equal report.changes.map { it.group.cause_id }, report.changes.map { it.change.event_id }
       assert_equal "Payments", report.names[@payments]
     end
+
+    should "hold nothing on the grouped change but what a structure change says" do
+      declared = drift.changes.first
+
+      assert_equal({ kind: :structure_declared, effective_on: Date.new(2026, 3, 5), learned_at: Time.utc(2026, 3, 5, 9),
+                     person_id: nil, unit_id: @payments, from_unit_id: nil, succession_id: nil, fact: nil, before: nil, after: nil,
+                     provider: "espalia", event_id: declared.group.cause_id, withdrawn: false }, declared.change.to_h)
+    end
   end
 
   should "have no drift while the base is still to come" do
