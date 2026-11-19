@@ -109,7 +109,7 @@ Writers that neither refuse nor skip, and why that is safe:
 
 While it runs:
 
-- a plan's Checks tab says unit types were not checked, rather than flagging misfits.
+- a plan's Checks tab judges unit types from a half-built list, and doesn't say so: the previous release serves it, and has no "not checked" line. A later rebuild of this projection, served by this release, reads "Unit types not checked" instead.
 - `team_planning_units` and `team_planning_scenario_map` can show a converted unit with the type it held on the plan's base date.
 - Settings and the unit drawer can show no unit types until it ends.
 - `org_graph_sources` can misname a type's provider.
