@@ -11,7 +11,8 @@ class Tenant::OrgUnitStructureMovesController < ApplicationController
     authorize :org_graph, :show_units?
     render_drawer do |overview, rights|
       Views::Tenant::OrgGraph::StructureMoveStep.new(unit: @unit, overview:, rights:, effective_on: step_date,
-                                                     alert: flash[:drawer_alert], parent: overview.unit(params[:parent_id]))
+                                                     alert: flash[:drawer_alert], parent: overview.unit(params[:parent_id]),
+                                                     to_top: params[:parent_id].blank?)
     end
   end
 

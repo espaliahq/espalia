@@ -5,17 +5,20 @@
 # type becomes. A type the units last held in the structure they join comes
 # preselected, so a move back puts each where it was.
 class Views::Tenant::OrgGraph::StructureMoveStep < Views::Tenant::OrgGraph::StructureStep
-  # @param parent [OrgUnit, nil] where it moves; nil for the top of the organisation's structure
-  def initialize(parent:, **)
+  # @param parent [OrgUnit, nil] where it moves
+  # @param to_top [Boolean] whether it moves to the top of the organisation's
+  #   structure; a parent that is no longer live never means the top
+  def initialize(parent:, to_top:, **)
     super(**)
     @parent = parent
+    @to_top = to_top
   end
 
   private
 
   def title = "Move #{@unit.name}"
 
-  def allowed? = @parent ? @rights.conversion_parent_choices.include?(@parent) : @rights.root_conversion_choice?
+  def allowed? = @to_top ? @rights.root_conversion_choice? : @rights.conversion_parent_choices.include?(@parent)
 
   def not_allowed_because = "#{@unit.name} can't move into another structure from here. Choose a parent in its drawer."
 
@@ -41,7 +44,8 @@ class Views::Tenant::OrgGraph::StructureMoveStep < Views::Tenant::OrgGraph::Stru
     step_form(tenant_org_unit_structure_move_path(@unit), class: "space-y-4") do
       input(type: "hidden", name: "parent_id", value: @parent&.id.to_s)
       conversion_fieldset(moved, "Each type in #{structure_name(from_id)} becomes a type in #{structure_name(into_id)}") do |type, id|
-        type_select("conversion[#{type.id}]", id, into_kinds, selected: previous_type(moved, type) || same_name(type, into_kinds))
+        kinds = type.id == @unit.level_id ? own_kinds : into_kinds
+        type_select("conversion[#{type.id}]", id, kinds, selected: previous_type(moved, type, kinds) || same_name(type, kinds))
       end
       date_field
       submit(title)
@@ -58,11 +62,20 @@ class Views::Tenant::OrgGraph::StructureMoveStep < Views::Tenant::OrgGraph::Stru
     end
   end
 
+  # The types the unit itself may take where it lands. The command refuses
+  # the rest; when none fits, the full list lets it say why.
+  def own_kinds
+    taxonomy = @overview.taxonomy_of(into_id)
+    parent_kind = @overview.seated_parent_kind(@parent)
+    fitting = into_kinds.select { parent_kind ? taxonomy.allows?(it.id, beneath: parent_kind) : it.top? }
+    fitting.presence || into_kinds
+  end
+
   # The type of the structure it joins that every unit of this type held
-  # there last, when they agree.
-  def previous_type(moved, type)
+  # there last, when each held one and they agree.
+  def previous_type(moved, type, kinds)
     @held ||= @overview.last_held_among(moved, into_kinds)
-    held = moved.select { it.level_id == type.id }.filter_map { @held[it.id] }.uniq
-    held.sole if held.one?
+    held = moved.select { it.level_id == type.id }.map { @held[it.id] }.uniq
+    held.sole if held.one? && kinds.any? { it.id == held.sole }
   end
 end

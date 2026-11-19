@@ -170,6 +170,30 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ nil, @org[:squad] ], overview.unit(@org[:payments]).then { [ it.parent_id, it.level_id ] }
   end
 
+  should "offer a unit moving to the top only the types that may sit there (#521)" do
+    declare_fresh(:checkout, { @org[:squad] => "Squad" })
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                       .set_kind_parents(@org[:squad], parent_ids: [ @org[:team] ], top: false, effective_on: Date.current)
+    end
+    held = overview.unit(@org[:payments]).level_id
+
+    get new_tenant_org_unit_structure_move_path(@org[:payments], parent_id: "")
+
+    options = drawer.css("select[name='conversion[#{held}]'] option")
+    assert_equal %w[Team], options.map(&:text)
+    assert_empty options.css("[selected]")
+  end
+
+  should "not turn a parent that is no longer live into a move to the top (#521)" do
+    declare_fresh(:checkout, { @org[:squad] => "Group" })
+
+    get new_tenant_org_unit_structure_move_path(@org[:payments], parent_id: SecureRandom.uuid_v7)
+
+    assert_includes drawer.text, "Payments can't move into another structure from here."
+    assert_nil drawer.at_css("input[name='parent_id']")
+  end
+
   should "move a unit that declares a structure into another, saying it keeps its own (#521)" do
     declare_fresh(:checkout, { @org[:squad] => "Group" })
     declare_fresh(:platform, [ "Tribe" ])
