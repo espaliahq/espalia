@@ -577,9 +577,12 @@ itself so it stays put between reads: "Checkout was given its own structure: 4 u
 type", or "Checkout's structure was withdrawn". A move between structures folds the same way:
 "Payments moved out of Platform's structure: 2 units changed type". Each row counts only the
 converted units the plan covers, and names a unit only when the plan covers it too: the
-declaring unit, or the mover and each structure's declaring unit. Otherwise it reads "The
-structure above this plan changed". A plan that covers none of the converted units sees no
-row. The row is pending, like any noted drift, and a group of one unit still reads as a group.
+declaring unit, or the mover and each structure's declaring unit. Otherwise a declaration
+reads "The structure above this plan changed", and a move "A unit above this plan moved into
+Platform's structure". A move row stays even when none of the units it retyped are covered,
+and then it leaves out the count. A unit that moved out of the plan reads as leaving it, as
+any move out does. A plan that covers none of the converted units sees no declaration row.
+The row is pending, like any noted drift, and a group of one unit still reads as a group.
 
 It also checks each person (4.6):
 
