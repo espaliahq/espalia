@@ -121,6 +121,21 @@ class OrgGraph::ChangeMoveBackTest < ActiveSupport::TestCase
     assert_equal @platform, structure.unit(@payments).parent_id
   end
 
+  should "never retype a unit an HRIS supplies, by any route to one beneath the mover" do
+    move_in
+    as_tenant do
+      assert_raises(RuntimeError) { @admin.hand_over_level(@squad, "hibob", field: "work.squad", matches: { @payments_api => "s-1" }, effective_on: @today + 3) }
+      assert_raises(RuntimeError) { @system.create_unit(SecureRandom.uuid_v7, "Ledger", level_id: @squad, parent_id: @payments, provider: "hibob", external_ref: "l-1", effective_on: @today + 3) }
+      event_store.publish(OrgGraph::Events::UnitHandedOver.new(data: { unit_id: @payments_api, provider: "hibob", previous_provider: "espalia",
+                                                                      external_ref: "s-1", effective_on: (@today + 3).iso8601 },
+                                                              metadata: { tenant_id: @tenant.id }), stream_name: EventStreamNaming.org_structure_stream)
+
+      error = assert_raises(RuntimeError) { change_back_group(cause_of_move) }
+      assert_match(/supplies Payments API; change it there\z/, error.message)
+    end
+    assert_equal @platform, structure.unit(@payments).parent_id
+  end
+
   should "refuse when a unit has joined the moved team since" do
     move_in
     create_unit("Payouts", @squad, parent_id: @payments, on: @today + 3)

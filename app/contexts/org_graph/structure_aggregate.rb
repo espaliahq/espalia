@@ -673,6 +673,9 @@ class OrgGraph::StructureAggregate
     raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit.unit_id, parent_id, from: iso_date(effective_on))
 
     moved = @structures.key?(unit.unit_id) ? [ unit ] : [ unit, *governed_by(unit.unit_id) ]
+    if (supplied = moved.find { it.provider != ESPALIA })
+      raise "#{HrisConfig.provider_label(supplied.provider)} supplies #{supplied.name}; change it there"
+    end
     kind_of = restored_kinds!(moved, kinds, unit)
     on = moved_across_dated!(moved, parent_id, from, into, effective_on)
     seated = parent_id == into ? nil : parent_id
