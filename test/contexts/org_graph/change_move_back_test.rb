@@ -97,6 +97,26 @@ class OrgGraph::ChangeMoveBackTest < ActiveSupport::TestCase
     assert_empty event_store.read.of_type(OrgGraph::Events::UnitMoved).backward.first.data[:conversion]
   end
 
+  should "change back the change back of a move that made two types one" do
+    core = create_unit("Core", @team, parent_id: @engineering)
+    group = SecureRandom.uuid_v7
+    as_tenant do
+      @admin.declare_structure(core, levels: [ { level_id: group, name: "Group", parent_level_ids: [ group ], top: true } ],
+                                     conversion: {}, effective_on: @today + 1)
+      @admin.move_unit(@payments, core, effective_on: @today + 2, conversion: { @team => group, @pod => group })
+    end
+    moved_in = placed
+    as_tenant { change_back_group(cause_of_move) }
+    inverse = Rails.configuration.event_store.read.event(event_store.read.of_type(OrgGraph::Events::UnitMoved).backward.first.event_id)
+
+    as_tenant do
+      assert_nil change_back_handler.group_refusal(inverse.metadata[:correlation_id])
+      change_back_group(inverse.metadata[:correlation_id])
+    end
+
+    assert_equal moved_in, placed
+  end
+
   should "refuse to change back one part of the move alone, sending the caller to the whole change" do
     move_in
     as_tenant do
