@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Withdraws a unit's own structure from its drawer (#494).
+# Withdraws a unit's own structure from its drawer ([#494](https://github.com/espaliahq/espalia/issues/494)).
 class Tenant::OrgUnitStructureWithdrawalsController < ApplicationController
   include OrgUnitDrawer
 

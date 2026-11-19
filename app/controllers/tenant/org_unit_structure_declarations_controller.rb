@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Gives a unit a structure of its own from its drawer (#494), then lands the
+# Gives a unit a structure of its own from its drawer ([#494](https://github.com/espaliahq/espalia/issues/494)), then lands the
 # admin on that structure in Settings to say where each type can sit.
 class Tenant::OrgUnitStructureDeclarationsController < ApplicationController
   include OrgUnitDrawer

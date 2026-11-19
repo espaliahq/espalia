@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# What the drawer's structure steps share (#494): giving a unit a structure
+# What the drawer's structure steps share ([#494](https://github.com/espaliahq/espalia/issues/494)): giving a unit a structure
 # of its own, withdrawing it, and moving a unit into one. Each changes the
 # type of every unit it covers, so each asks what each type becomes.
 class Views::Tenant::OrgGraph::StructureStep < Views::Tenant::OrgGraph::UnitStep

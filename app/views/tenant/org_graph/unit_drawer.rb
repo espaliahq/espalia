@@ -314,7 +314,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     end
   end
 
-  # -- Structure (#494) -------------------------------------------------------
+  # -- Structure ([#494](https://github.com/espaliahq/espalia/issues/494)) -------------------------------------------------------
 
   def structure
     section(id: "org-unit-structure", aria: { labelledby: "org-unit-structure-heading" }, class: "space-y-3 border-t border-default pt-4") do

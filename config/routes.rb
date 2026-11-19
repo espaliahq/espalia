@@ -143,7 +143,7 @@ Rails.application.routes.draw do
       resource :retirement, only: [ :new, :create ], controller: "org_unit_retirements"
       resource :merge, only: [ :new, :create ], controller: "org_unit_merges"
       resource :split, only: [ :new, :create ], controller: "org_unit_splits"
-      # A unit's own structure (#494), and a move into one.
+      # A unit's own structure ([#494](https://github.com/espaliahq/espalia/issues/494)), and a move into one.
       resource :structure_declaration, only: [ :new, :create ], controller: "org_unit_structure_declarations"
       resource :structure_withdrawal, only: [ :new, :create ], controller: "org_unit_structure_withdrawals"
       resource :structure_move, only: [ :new, :create ], controller: "org_unit_structure_moves"

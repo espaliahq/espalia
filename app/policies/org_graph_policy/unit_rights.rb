@@ -21,7 +21,7 @@ class OrgGraphPolicy::UnitRights
   # @return [Boolean]
   def move? = rename? && (parent_choices.any? || root_choice? || conversion_parent_choices.any?)
 
-  # Give the unit a structure of its own, or withdraw it (#494).
+  # Give the unit a structure of its own, or withdraw it ([#494](https://github.com/espaliahq/espalia/issues/494)).
   #
   # @return [Boolean]
   def structure? = @policy.edit_structure_of?(@unit)
@@ -73,8 +73,8 @@ class OrgGraphPolicy::UnitRights
   end
 
   # Where the unit may move into another unit's own structure, changing its
-  # type and those beneath it on the way (#494): from the top structure only,
-  # since a move out of a declared one waits for #390. Each needs the right
+  # type and those beneath it on the way ([#494](https://github.com/espaliahq/espalia/issues/494)): from the top structure only,
+  # since a move out of a declared one waits for [#390](https://github.com/espaliahq/espalia/issues/390). Each needs the right
   # to change the structure it joins.
   #
   # @return [Array<OrgUnit>] in tree order

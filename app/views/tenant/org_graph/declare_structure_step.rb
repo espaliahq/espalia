@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Gives a unit a structure of its own (#494): fresh, or a copy of the
+# Gives a unit a structure of its own ([#494](https://github.com/espaliahq/espalia/issues/494)): fresh, or a copy of the
 # structure in force where it sits. Each type held beneath it takes a type
 # of the new structure; the unit keeps its own.
 class Views::Tenant::OrgGraph::DeclareStructureStep < Views::Tenant::OrgGraph::StructureStep

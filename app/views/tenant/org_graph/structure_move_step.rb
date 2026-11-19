@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Moves a unit into another unit's own structure (#494): it and every unit
+# Moves a unit into another unit's own structure ([#494](https://github.com/espaliahq/espalia/issues/494)): it and every unit
 # beneath it change type on the way, so the step asks what each type becomes.
 class Views::Tenant::OrgGraph::StructureMoveStep < Views::Tenant::OrgGraph::StructureStep
   # @param parent [OrgUnit, nil] where it moves

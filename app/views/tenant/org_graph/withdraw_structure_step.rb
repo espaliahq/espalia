@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Withdraws a unit's own structure (#494): the structure above governs the
+# Withdraws a unit's own structure ([#494](https://github.com/espaliahq/espalia/issues/494)): the structure above governs the
 # units beneath it again, and each type they hold takes a type of it.
 class Views::Tenant::OrgGraph::WithdrawStructureStep < Views::Tenant::OrgGraph::StructureStep
   private

@@ -9,7 +9,7 @@
 # every unit beneath it, so someone in two squads of one team counts once
 # for the team.
 #
-# A unit that declares a structure of its own (#494) gives the units beneath
+# A unit that declares a structure of its own ([#494](https://github.com/espaliahq/espalia/issues/494)) gives the units beneath
 # it that structure's types and rules, read here as the aggregate reads them.
 #
 # The page and {Operations::OrgGraph::Units} both read it, so the two agree.

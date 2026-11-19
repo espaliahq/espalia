@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Moves a unit into another unit's own structure from its drawer (#494),
+# Moves a unit into another unit's own structure from its drawer ([#494](https://github.com/espaliahq/espalia/issues/494)),
 # changing its type and those beneath it on the way. The drawer's move form
 # sends a parent in another structure here.
 class Tenant::OrgUnitStructureMovesController < ApplicationController

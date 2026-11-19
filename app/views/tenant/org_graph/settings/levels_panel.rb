@@ -6,7 +6,7 @@
 # to Espalia, here; one that holds units changes hands through the handover.
 # An admin adds a type, and removes one Sources says can go today.
 #
-# A unit with a structure of its own (#494) gets a panel of its own, whose
+# A unit with a structure of its own ([#494](https://github.com/espaliahq/espalia/issues/494)) gets a panel of its own, whose
 # writes name that unit. Its types are Espalia's, so it has no HRIS pickers.
 class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   include Views::Tenant::OrgGraph::Settings::FormHelpers
