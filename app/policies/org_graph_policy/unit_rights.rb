@@ -19,7 +19,7 @@ class OrgGraphPolicy::UnitRights
   def rename? = @unit.held_by_espalia? && @policy.edit_unit?(@unit)
 
   # @return [Boolean]
-  def move? = rename? && (parent_choices.any? || root_choice? || conversion_parent_choices.any?)
+  def move? = rename? && (parent_choices.any? || root_choice? || conversion_parent_choices.any? || root_conversion_choice?)
 
   # Give the unit a structure of its own, or withdraw it ([#494](https://github.com/espaliahq/espalia/issues/494)).
   #
@@ -72,26 +72,37 @@ class OrgGraphPolicy::UnitRights
     end
   end
 
-  # Where the unit may move into another unit's own structure, changing its
-  # type and those beneath it on the way ([#494](https://github.com/espaliahq/espalia/issues/494)): from the top structure only,
-  # since a move out of a declared one waits for [#390](https://github.com/espaliahq/espalia/issues/390). Each needs the right
-  # to change the structure it joins.
+  # Where the unit may move into another structure, the organisation's
+  # included, changing its type and those its structure governs on the way
+  # ([#521](https://github.com/espaliahq/espalia/issues/521)). A unit with a structure of its own takes a type and keeps
+  # its structure. Each needs the right to change both structures.
   #
   # @return [Array<OrgUnit>] in tree order
   def conversion_parent_choices
     @conversion_parent_choices ||= begin
-      subtree = [ @unit, *@overview.descendants_of(@unit) ]
-      if !rename? || @overview.structure_unit_of(@unit) ||
-         subtree.any? { !it.held_by_espalia? || @overview.declares_structure?(it) }
+      from = @overview.structure_unit_of(@unit)
+      if !may_cross_from?(from)
         []
       else
+        subtree = [ @unit, *@overview.descendants_of(@unit) ]
         @overview.in_tree_order.select do |unit|
           into = @overview.structure_beneath(unit)
-          into && subtree.exclude?(unit) && @policy.create_unit?(unit) &&
-            @policy.edit_structure_of?(@overview.unit(into))
+          into != from && subtree.exclude?(unit) && @policy.create_unit?(unit) && may_edit_structure?(into)
         end
       end
     end
+  end
+
+  # Whether the unit may move out of a unit's own structure to the top of the
+  # organisation's, taking a type that may sit there ([#521](https://github.com/espaliahq/espalia/issues/521)).
+  #
+  # @return [Boolean]
+  def root_conversion_choice?
+    return @root_conversion_choice if defined?(@root_conversion_choice)
+
+    from = @overview.structure_unit_of(@unit)
+    @root_conversion_choice = !from.nil? && may_cross_from?(from) && may_edit_structure?(nil) && @policy.create_unit?(nil) &&
+                              @overview.taxonomy_of(nil).kinds.any? { it.provider == OrgGraph::Taxonomy::ESPALIA && it.top? }
   end
 
   # @return [Boolean] whether the unit may sit at the root
@@ -141,6 +152,13 @@ class OrgGraphPolicy::UnitRights
   end
 
   private
+
+  # An HRIS keeps the type of a unit it supplies, so none may convert.
+  def may_cross_from?(from)
+    rename? && @overview.converted_with(@unit).all?(&:held_by_espalia?) && may_edit_structure?(from)
+  end
+
+  def may_edit_structure?(structure_unit_id) = @policy.edit_structure_of?(structure_unit_id && @overview.unit(structure_unit_id))
 
   def may_sit_under?(unit)
     return false unless @overview.structure_beneath(unit) == @overview.structure_unit_of(@unit)

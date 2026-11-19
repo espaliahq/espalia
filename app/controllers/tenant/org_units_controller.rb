@@ -70,12 +70,11 @@ class Tenant::OrgUnitsController < ApplicationController
 
   private
 
-  # A parent in another unit's own structure needs each type converted, which
+  # A parent in another structure needs each type converted, which
   # the move step asks for ([#494](https://github.com/espaliahq/espalia/issues/494)).
   def into_another_structure?(parent_id)
-    return false if parent_id.blank?
-
     overview = OrgGraph::UnitsOverview.new(selected_unit_id: @unit.id)
-    OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview).conversion_parent_choices.any? { it.id == parent_id }
+    rights = OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview)
+    parent_id.blank? ? rights.root_conversion_choice? : rights.conversion_parent_choices.any? { it.id == parent_id }
   end
 end

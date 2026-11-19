@@ -130,6 +130,25 @@ class OrgGraph::UnitsOverview
   end
 
   # @param unit [OrgUnit]
+  # @return [Array<OrgUnit>] the units whose types change when it moves into
+  #   another structure: it, and those the structure in force over it governs
+  def converted_with(unit) = [ unit, *(declares_structure?(unit) ? [] : governed_by(unit)) ]
+
+  # @param units [Array<OrgUnit>]
+  # @param kinds [Array<#id>] one structure's types
+  # @return [Hash{String => String}] each unit's id to the last of the types
+  #   it held among them, for those that ever held one
+  def last_held_among(units, kinds)
+    ids = kinds.map(&:id)
+    OrgUnitActivity.where(unit_id: units.map(&:id), event_type: "UnitKindChanged").order(position: :desc)
+                   .pluck(:unit_id, :before)
+                   .each_with_object({}) do |(unit_id, before), held|
+      level_id = before&.dig("level_id")
+      held[unit_id] ||= level_id if ids.include?(level_id)
+    end
+  end
+
+  # @param unit [OrgUnit]
   # @return [Integer] distinct people in the unit and every unit beneath it
   def headcount(unit) = people_within(unit).size
 

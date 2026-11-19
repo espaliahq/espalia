@@ -277,8 +277,15 @@ whole group's reason when the group is refused too.
 The unit drawer's Structure section names the structure a unit's type comes from. An admin
 gives the unit one there, withdraws it, or opens its types, which Settings shows in a panel
 of their own (`LevelsPanel`, anchored on the unit). The drawer's parent list offers units in
-another structure under "Into another structure, changing types", only to an admin who may
-edit that structure, and the step it leads to asks what each type becomes.
+any other structure, the organisation's included, under "Into another structure, changing
+types", only to an admin who may edit both structures. A unit with a structure of its own is
+offered them too. A unit in a unit's own structure is also offered "None (at the top)" there,
+when a type of the organisation's structure may sit at the top and the admin may add a unit
+there. The step it leads to names the structure the unit leaves and the one it
+joins, and asks what each type becomes. Each type comes preselected as the one its units
+last held in the structure they join, when each held one and they agree, so a move back
+puts each where it was; otherwise the type with the same name. The unit's own type lists
+only the types that may sit where it lands. The admin can change any of them.
 
 A unit moves into another structure with a conversion: into a unit's own structure, out of
 one into the organisation's, or from one unit's structure into another's. The conversion

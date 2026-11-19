@@ -80,9 +80,61 @@ class OrgGraphPolicy::UnitRightsTest < ActiveSupport::TestCase
       assert rights_for(@org[:platform]).move?
     end
 
-    should "offer no such move out of it, nor to a unit that declares one itself" do
-      assert_empty rights_for(@org[:payments]).conversion_parent_choices
+    should "offer a unit inside it a move out into the organisation's structure (#521)" do
+      assert_equal %w[Engineering Platform], rights_for(@org[:payments]).conversion_parent_choices.map(&:name)
+    end
+
+    should "offer no move that stays in the structure in force" do
       assert_empty rights_for(@org[:checkout]).conversion_parent_choices
+    end
+
+    should "offer a unit that declares a structure a move into another, which it keeps (#521)" do
+      tribe = SecureRandom.uuid_v7
+      as_tenant do
+        admin = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        OrgGraph::StructureCommandHandler.new(actor: admin).declare_structure(
+          @org[:platform], levels: [ { level_id: tribe, name: "Tribe", parent_level_ids: [ tribe ], top: true } ],
+                           conversion: {}, effective_on: Date.current
+        )
+      end
+
+      assert_equal %w[Platform], rights_for(@org[:checkout]).conversion_parent_choices.map(&:name)
+      assert_equal %w[Engineering Platform], rights_for(@org[:payments]).conversion_parent_choices.map(&:name)
+    end
+
+    should "offer a unit inside it a move out to the top of the organisation's structure (#521)" do
+      rights = rights_for(@org[:payments])
+
+      assert rights.root_conversion_choice?
+      assert_not rights.root_choice?
+      assert_not rights_for(@org[:checkout]).root_conversion_choice?
+    end
+
+    should "offer no move out to the top when no type of the organisation's may sit there" do
+      state_rules(@org[:team], parent_ids: [ @org[:department] ], top: false)
+      state_rules(@org[:squad], parent_ids: [ @org[:team] ], top: false)
+
+      assert_not rights_for(@org[:payments]).root_conversion_choice?
+    end
+
+    should "offer no move out to the top without the right to change either structure, or to add a unit at the top" do
+      { "the one it leaves" => [ :edit_structure_of?, ->(unit) { unit.nil? } ],
+        "the organisation's" => [ :edit_structure_of?, ->(unit) { unit.present? } ],
+        "the top" => [ :create_unit?, ->(parent) { parent.present? } ] }.each do |missing, (predicate, right)|
+        rights = rights_for(@org[:payments])
+        rights.instance_variable_get(:@policy).stub(predicate, right) do
+          assert_not rights.root_conversion_choice?, "Offered the top without the right over #{missing}"
+        end
+      end
+    end
+
+    should "offer a move across only with the right to change both structures" do
+      [ [ ->(unit) { unit.nil? }, "the one it leaves" ], [ ->(unit) { unit.present? }, "the one it joins" ] ].each do |right, missing|
+        rights = rights_for(@org[:payments])
+        rights.instance_variable_get(:@policy).stub(:edit_structure_of?, right) do
+          assert_empty rights.conversion_parent_choices, "Offered a move without the right to change #{missing}"
+        end
+      end
     end
   end
 end
