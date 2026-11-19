@@ -235,6 +235,21 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse to change a withdrawal back over a unit an HRIS has since supplied beneath it" do
+      call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        %i[team squad].each do |level|
+          matches = OrgUnit.live.where(level_id: @org[level]).pluck(:id).to_h { [ it, "ref-#{it}" ] }
+          handler.hand_over_level(@org[level], "hibob", field: "work.#{level}", matches:, effective_on: Tenant.today)
+        end
+      end
+
+      cause_id = ActsAsTenant.with_tenant(@tenant) { OrgUnitActivity.where(subject: "structure").order(:position).last.cause_id }
+      error = assert_raises(Operations::Base::ParameterError) { ActsAsTenant.with_tenant(@tenant) { call(Operations::OrgGraph::ChangeBackGroup, cause_id:) } }
+      assert_match "Payments comes from", error.message
+    end
+
     should "refuse to change back a type the withdrawal converted alone, as the request shares one cause" do
       AuditMetadata.with(acting_via: :web, correlation_id: SecureRandom.uuid_v7) do
         call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })

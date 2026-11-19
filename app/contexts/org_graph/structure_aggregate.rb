@@ -552,9 +552,7 @@ class OrgGraph::StructureAggregate
     copied_from = copy_source(copied_from)
     levels = declared_levels(levels, copied_from)
     governed = governed_by(unit.unit_id)
-    if (mirrored = governed.find { it.provider != ESPALIA })
-      raise "#{mirrored.name} comes from #{HrisConfig.provider_label(mirrored.provider)}, so #{unit.name} can't have a structure of its own over it"
-    end
+    ensure_all_espalia!(governed, unit)
 
     effective_on = structure_dated!(unit, governed, effective_on)
     conversion = converted!(governed, conversion, into: OrgGraph::Taxonomy.new(levels), label: "#{unit.name}'s structure") do |parent_id|
@@ -606,6 +604,7 @@ class OrgGraph::StructureAggregate
     raise "#{unit.name} has no structure of its own" unless @structures.key?(unit.unit_id)
 
     governed = governed_by(unit.unit_id)
+    ensure_all_espalia!(governed, unit)
     kind_of = restored_kinds!(governed, kinds, unit)
     effective_on = structure_dated!(unit, governed, effective_on)
     above = structure_in_force(unit.unit_id)
@@ -639,6 +638,7 @@ class OrgGraph::StructureAggregate
 
     levels = declared_levels(levels, nil, home: unit.unit_id)
     governed = governed_by(unit.unit_id)
+    ensure_all_espalia!(governed, unit)
     kind_of = restored_kinds!(governed, kinds, unit)
     effective_on = structure_dated!(unit, governed, effective_on)
     into = OrgGraph::Taxonomy.new(levels.map { it.slice(:level_id, :name, :parent_level_ids, :top) })
@@ -1141,6 +1141,12 @@ class OrgGraph::StructureAggregate
 
   # Every unit governed now must be one the change being reversed retyped.
   # @return [Proc] each unit's type to go back to
+  def ensure_all_espalia!(governed, unit)
+    return unless (mirrored = governed.find { it.provider != ESPALIA })
+
+    raise "#{mirrored.name} comes from #{HrisConfig.provider_label(mirrored.provider)}, so #{unit.name} can't have a structure of its own over it"
+  end
+
   def restored_kinds!(governed, kinds, unit)
     kinds = kinds.to_h.transform_keys(&:to_s)
     joined = governed.reject { kinds.key?(it.unit_id) }
