@@ -191,6 +191,17 @@ class OrgGraph::StructureCommandHandler
     with_structure(plan) { |structure| structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
   end
 
+  # Needs the rights the move it changes back needed, checked the same way.
+  #
+  # @see OrgGraph::StructureAggregate#change_move_back
+  def change_move_back(unit_id, parent_id, **options)
+    authorize_move_unit!(unit_id, parent_id)
+    with_structure(OrgGraph::PlanReference.new, grouped: true) do |structure|
+      authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id))
+      unless_kinds_rebuilding { structure.change_move_back(unit_id, parent_id, **attributed(options, :moved_by_id)) }
+    end
+  end
+
   # @see OrgGraph::StructureAggregate#change_unit_kind
   def change_unit_kind(unit_id, level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
