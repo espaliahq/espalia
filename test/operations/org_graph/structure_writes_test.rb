@@ -89,6 +89,19 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       end
     end
 
+    should "name the types a declaration gave once it is changed back, in the feed of a unit it retyped" do
+      declare
+      ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::OrgGraph::ChangeBackGroup, cause_id: OrgUnitActivity.where(subject: "structure").order(:position).last.cause_id)
+        context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        parts = OrgGraph::ActivityFeed.new(unit: OrgUnit.find(@org[:payments]), actor: context).items.flat_map(&:parts)
+        descriptions = parts.select { it.entry.subject == "level" }.map(&:description)
+
+        assert_includes descriptions, "Changed its type from Squad to Stream"
+        assert_includes descriptions, "Changed its type from Stream to Squad"
+      end
+    end
+
     should "leave a unit's structure to a tenant admin" do
       error = assert_raises(Pundit::NotAuthorizedError) { declare(as: @editor) }
 
