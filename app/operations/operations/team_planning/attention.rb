@@ -51,13 +51,13 @@ class Operations::TeamPlanning::Attention < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, schema: { description: "The scenario, or the plan's id for the baseline. Omit it for the baseline." }
 
-  # @return [Hash] `{ plan_id, scenario_id, checked, items, names, unchecked }`; an archived plan has archived_on and note in place of unchecked
+  # @return [Hash] `{ plan_id, scenario_id, checked, items, names, unchecked }`; an archived plan's also has archived_on and note
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id) || plan.id
     if plan.archived?
       known_scenario!(plan, scenario_id)
-      return { plan_id: plan.id, scenario_id:, **checked(plan), items: [], names: {} }
+      return { plan_id: plan.id, scenario_id:, **checked(plan), items: [], names: {}, unchecked: [] }
     end
 
     report = refusing_bad_plans { ::TeamPlanning::Attention.for(context:, plan:, scenario_id:) }
