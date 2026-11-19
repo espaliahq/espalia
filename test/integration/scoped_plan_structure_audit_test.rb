@@ -125,8 +125,9 @@ class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
     misfits = call(Operations::TeamPlanning::Attention, plan_id: @plan_id)[:items].select { it[:check] == "misfits" }
 
     assert_equal [ @unit_id ], misfits.pluck(:subject_id), "only Risk, the plan's Squad, holds a type of another structure"
-    assert_equal @squad, call(Operations::TeamPlanning::Units, plan_id: @plan_id)[:units].find { it[:unit_id] == @payments }[:level_id],
-                 "the plan still reads Payments as its base held it"
+    units = call(Operations::TeamPlanning::Units, plan_id: @plan_id)[:units].find { it[:unit_id] == @payments }
+    mapped = call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id: @scenario_id)[:units].find { it[:id] == @payments }
+    assert_equal [ @group, @group ], [ units[:level_id], mapped[:level_id] ], "the plan reads Payments as a Group, as its checks do"
   end
 
   should "refuse a parent outside the plan alike, whatever structure it declares or sits in" do

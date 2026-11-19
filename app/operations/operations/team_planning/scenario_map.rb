@@ -10,7 +10,8 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
   include Operations::TeamPlanning::MapPayload
 
   description "Get one scenario of a Team Planning plan the caller is in, resolved: the baseline with the " \
-              "changes of every scenario it follows and its own. Units carry their parent, level and owners. " \
+              "changes of every scenario it follows and its own. Units carry their parent, level and owners; an Org Graph " \
+              "unit's level_id is its type today, which a structure declared since the base may have changed, as the plan's checks read it. " \
               "People carry their facts and each place they hold (a unit, or a position with its unit), with " \
               "allocation and role, plus allocation_total: over 1 when over-allocated, null when unknown " \
               "because the HRIS gave no allocation. unassigned_ids are the people in no live unit. Positions " \
@@ -33,5 +34,12 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
     scenario_id = scenario_id!(:scenario_id)
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).call }
     { plan_id: plan.id, scenario_id:, **map_payload(map, plan:) }
+  end
+
+  private
+
+  def units_payload(map)
+    structures = ::TeamPlanning::PlannedStructures.load(map)
+    super.zip(map.units).map { |row, unit| row.merge(level_id: structures.level_of(unit)) }
   end
 end

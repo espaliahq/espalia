@@ -6,7 +6,8 @@ class Operations::TeamPlanning::Units < Operations::Base
 
   description "List the units of a scenario in a Team Planning plan the caller is in, resolved: the baseline's " \
               "units with the scenario's changes and its ancestors' applied. units are live, by name, each with " \
-              "its parent_id and level_id; retired_units are those a scenario retired; successions say which " \
+              "its parent_id and level_id; an Org Graph unit's level_id is its type today, which a structure declared " \
+              "since the base may have changed, as the plan's checks read it; retired_units are those a scenario retired; successions say which " \
               "units carry on from which. scenario_id defaults to the baseline, whose id is the plan's. Refused, " \
               "as an unknown plan, unless the caller is a member."
   category :read
@@ -21,15 +22,17 @@ class Operations::TeamPlanning::Units < Operations::Base
     scenario_id = scenario_for
     map = refusing_bad_plans { ::TeamPlanning::Resolution.new(context:, plan:, scenario_id:).structure }
     on_map = map.scope_ids && map.known_unit_ids
-    { plan_id: plan.id, scenario_id:, units: map.units.map { unit_row(it, on_map) }, retired_units: map.retired_units.map { unit_row(it, on_map) },
+    structures = ::TeamPlanning::PlannedStructures.load(map)
+    { plan_id: plan.id, scenario_id:, units: map.units.map { unit_row(it, on_map, structures) },
+      retired_units: map.retired_units.map { unit_row(it, on_map, structures) },
       successions: map.successions.map { { succession_id: it.id, predecessor_ids: it.predecessor_ids, successor_ids: it.successor_ids } } }
   end
 
   private
 
   # A scope root's parent sits outside the plan, so a scoped plan shows it at the top, as the scenario map does.
-  def unit_row(unit, on_map)
+  def unit_row(unit, on_map, structures)
     parent_id = unit.parent_id unless on_map && !on_map.include?(unit.parent_id)
-    { unit_id: unit.id, name: unit.name, parent_id:, level_id: unit.level_id }
+    { unit_id: unit.id, name: unit.name, parent_id:, level_id: structures.level_of(unit) }
   end
 end
