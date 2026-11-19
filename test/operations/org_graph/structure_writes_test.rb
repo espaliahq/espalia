@@ -421,6 +421,18 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal @org[:team], level_of(:platform)
       end
 
+      should "move a team back out under a parent, or to the top with no parent_id, converting it" do
+        move_in
+        result = call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], parent_id: @org[:engineering],
+                                                      conversion: { @stream => @org[:team] })
+        assert_equal({ @stream => @org[:team] }, result[:conversion])
+        assert_equal [ @org[:team], @org[:engineering] ], ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).then { [ it.level_id, it.parent_id ] } }
+
+        move_in
+        call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], conversion: { @stream => @org[:team] })
+        assert_equal [ @org[:team], nil ], ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).then { [ it.level_id, it.parent_id ] } }
+      end
+
       should "refuse a conversion on a move to the top of the organisation's structure from inside it" do
         error = assert_raises(Operations::Base::ParameterError) do
           call(Operations::OrgGraph::MoveUnit, unit_id: @org[:platform], conversion: { @org[:team] => @org[:team] })

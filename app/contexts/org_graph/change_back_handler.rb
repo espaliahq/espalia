@@ -17,8 +17,7 @@ class OrgGraph::ChangeBackHandler
 
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
   WHOLE_STRUCTURE = "This came with a change to a unit's own structure, so change the whole change back"
-  MOVED_IN = "A move into another structure can't be changed back. Move the unit back instead, " \
-             "saying what each type becomes"
+  MOVED_IN = "A move between structures can't be changed back"
 
   # @param actor [AuthorizationContext, Object] as for {OrgGraph::CommandHandler}
   # @param repository [OrgGraph::Repository]

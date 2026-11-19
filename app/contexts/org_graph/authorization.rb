@@ -76,7 +76,7 @@ module OrgGraph::Authorization
     end
   end
 
-  # A move into another structure changes the types of both, so it needs the
+  # A move between structures changes the types of both, so it needs the
   # right to change each. The refusal names neither, so a caller learns
   # nothing about either structure. A unit is nil while a Structure rebuild
   # empties org_units, and the check runs before the rebuild guard, so the
