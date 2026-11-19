@@ -388,8 +388,8 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
       structures = TeamPlanning::PlannedStructures.new(map(units:), taxonomies: { nil => @top, ROOT => @declared },
                                                                     copies: { ROOT => { @team => @group, LEVEL => @squad } })
 
-      assert_equal [ "Doesn't fit this structure: its type belongs to another structure. Here it would be a Group",
-                     "Doesn't fit this structure: its type belongs to another structure. Here it would be a Squad" ],
+      assert_equal [ "Doesn't fit this structure: its type belongs to another structure. Here its type would be Group",
+                     "Doesn't fit this structure: its type belongs to another structure. Here its type would be Squad" ],
                    TeamPlanning::Attention.new(map(units:), {}, structures:).call.select { it.check == :misfits }.map(&:reason).sort
     end
 

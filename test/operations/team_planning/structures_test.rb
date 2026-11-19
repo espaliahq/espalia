@@ -116,7 +116,7 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
       call(Operations::OrgGraph::DeclareStructure, unit_id: @engineering, copied_from: "top",
                                                    levels: [ { name: "Crew", copied_from_level_id: @squad } ], conversion: { @squad => "Crew" })
 
-      assert_equal [ "Doesn't fit this structure: its type belongs to another structure. Here it would be a Crew" ], misfits.pluck(:reason)
+      assert_equal [ "Doesn't fit this structure: its type belongs to another structure. Here its type would be Crew" ], misfits.pluck(:reason)
     end
 
     should "change its type only to one of the structure it sits in" do

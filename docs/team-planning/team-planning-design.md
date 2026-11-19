@@ -543,7 +543,7 @@ declaring unit, at that structure's top. An Org Graph unit holds the type it hol
 which a declaration may have converted since the base; a unit the plan created holds the
 type it was given. One that holds a type of another structure reads "Doesn't fit this
 structure: its type belongs to another structure", without naming the structure. When the
-structure copied that type, the line names the copy: "Here it would be a Squad".
+structure copied that type, the line names the copy: "Here its type would be Squad".
 
 - **Creating and retyping.** `team_planning_set_unit` offers the types of the structure the
   unit would sit in, and names a type of another structure as such. A unit the plan created

@@ -284,7 +284,7 @@ class TeamPlanning::Attention
     copy = @structures.copy_at(level_id, unit.id)
     return "its type belongs to another structure" unless copy
 
-    "its type belongs to another structure. Here it would be #{copy.name.match?(/\A[aeiou]/i) ? 'an' : 'a'} #{copy.name}"
+    "its type belongs to another structure. Here its type would be #{copy.name}"
   end
 
   def unresolved

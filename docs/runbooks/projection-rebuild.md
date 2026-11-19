@@ -97,7 +97,7 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 #### Recorded: `org_graph/structure` v3 (a copied type remembers its source, [#494](https://github.com/espaliahq/espalia/issues/494))
 
-Path A: `REBUILD_ON_DEPLOY=org_graph/structure`, removed once the deploy is live. The migration adds `org_taxonomy_levels.copied_from_level_id`, and the rebuild fills it from each declaration that copied a structure. A plan then names the copy a misfit unit would take: "Here it would be a Crew". Every other column is unchanged.
+Path A: `REBUILD_ON_DEPLOY=org_graph/structure`, removed once the deploy is live. The migration adds `org_taxonomy_levels.copied_from_level_id`, and the rebuild fills it from each declaration that copied a structure. A plan then names the copy a misfit unit would take: "Here its type would be Crew". Every other column is unchanged.
 
 No pause is needed. The serving release already refuses every unit type and structure write with "The Org Graph is being rebuilt; try again in a minute.", and an HRIS sync skips the people it would write and counts them under `people_skipped_while_rebuilding`. Changing a plan's unit refuses only from this release on, so a plan edit in the window between predeploy and traffic swap decides from a half-built type list.
 

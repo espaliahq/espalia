@@ -109,7 +109,7 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_text "Checks on Q1 hires"
 
       assert_selector "#checks-misfits [data-check-item]",
-                      text: /Risk · Unit.*Doesn't fit this structure: its type belongs to another structure. Here it would be a Pod.*From a change in Q1 hires/m
+                      text: /Risk · Unit.*Doesn't fit this structure: its type belongs to another structure. Here its type would be Pod.*From a change in Q1 hires/m
       assert_no_sideways_overflow
     end
   end
@@ -168,7 +168,7 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       visit checks_plan_path(@plan_id, scenario: @q1)
       assert_text "Checks on Q1 hires"
 
-      assert_selector "#checks-misfits [data-check-item]", text: /Doesn't fit this structure: its type belongs to another structure. Here it would be a Pod/
+      assert_selector "#checks-misfits [data-check-item]", text: /Doesn't fit this structure: its type belongs to another structure. Here its type would be Pod/
       assert_no_sideways_overflow
     end
   end
