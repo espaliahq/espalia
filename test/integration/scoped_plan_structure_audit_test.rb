@@ -171,6 +171,30 @@ class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
     end
   end
 
+  context "a plan whose drift holds a move between structures" do
+    setup do
+      travel_to Time.utc(2026, 2, 3, 9)
+      call(Operations::OrgGraph::MoveUnit, unit_id: @payments, parent_id: @sales, conversion: { @group => @territory })
+      call(Operations::OrgGraph::MoveUnit, unit_id: @emea, parent_id: @engineering, conversion: { @territory => @group })
+    end
+
+    should "read the move as one change, hiding both structures it crossed, and nothing of one wholly outside the plan" do
+      payloads = walk("team_planning_step_outcome" => "This step isn't closed").compact
+      parted = payloads.select { |_tool, json| json.include?('"kind":"unit_kind_changed"') || json.include?('"kind":"unit_moved"') }.keys
+      crossing = payloads.select { |_tool, json| json.include?('"kind":"moved_between_structures"') }
+
+      assert_empty parted, "a read lists a move between structures in parts"
+      assert_includes crossing.keys, "team_planning_drift"
+      assert_includes crossing.keys, "team_planning_rebase_preview"
+      crossing.each do |tool, json|
+        items = JSON.parse(json).then { it["drift"] || it }.fetch("changes").select { it["kind"] == "moved_between_structures" }
+        assert_equal [ [ @payments, [ @payments ], 1, %w[before after], nil, nil ] ],
+                     items.map { [ *it.values_at("unit_id", "unit_ids", "count", "outside"), *[ it["before"], it["after"] ].pluck("structure_unit_id") ] },
+                     "#{tool} folds Payments' move into one change"
+      end
+    end
+  end
+
   context "an archived plan with a unit of a declared type" do
     setup { call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id) }
 

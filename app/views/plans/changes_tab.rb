@@ -392,6 +392,7 @@ class Views::Plans::ChangesTab < Views::Base
     when "unit_moved" then outside?(change, "after") ? "#{unit} left the units this plan covers" : "#{unit} moved"
     when "unit_kind_changed" then "#{unit}'s type changed"
     when "structure_declared", "structure_withdrawn" then structure_line(unit, change)
+    when "moved_between_structures" then crossed_line(unit, change)
     when "unit_retired" then "#{unit} was retired"
     when "unit_succeeded" then "A succession was recorded"
     when "owner_added" then "#{outside?(change, 'person_id') ? OUTSIDE : person} became an owner of #{unit}"
@@ -405,6 +406,31 @@ class Views::Plans::ChangesTab < Views::Base
     return "The structure above this plan changed: #{retyped}" if outside?(change, "unit_id")
 
     change[:kind] == "structure_declared" ? "#{unit} was given its own structure: #{retyped}" : "#{unit}'s structure was withdrawn: #{retyped}"
+  end
+
+  def crossed_line(unit, change)
+    mover = outside?(change, "unit_id") ? "A unit above this plan" : unit
+    retyped = ": #{change[:count]} #{'unit'.pluralize(change[:count])} changed type" if change[:count].to_i.positive?
+    "#{mover} moved #{crossing(change)}#{retyped}"
+  end
+
+  # A move written before it named the structures it crossed has neither side.
+  def crossing(change)
+    return "between structures" unless change[:before] && change[:after]
+
+    left, joined = %w[before after].map { structure_side(change, it) }
+    if left.nil? then "into #{joined}"
+    elsif joined.nil? then "out of #{left}"
+    else "from #{left} into #{joined}"
+    end
+  end
+
+  # nil for the organisation's structure, which the other side's wording names.
+  def structure_side(change, side)
+    return "another unit's structure" if outside?(change, side)
+
+    unit_id = change[side.to_sym]["structure_unit_id"]
+    "#{unit_name(unit_id)}'s structure" if unit_id
   end
 
   def moved_line(person, change)

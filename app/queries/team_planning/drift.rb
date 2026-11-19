@@ -28,12 +28,12 @@ class TeamPlanning::Drift
   # @!attribute meets [Array<Met>] the plan's changes to the facet it moves
   # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
   # @!attribute outside [Array<String>] the fields {TeamPlanning::DriftScope} cut as outside the plan
-  # @!attribute group [Group, nil] the type changes a structure change folds into it
+  # @!attribute group [Group, nil] the type changes a structure change, or a move between structures, folds into it
   Drifted = Data.define(:change, :from_plan, :meets, :sources, :outside, :group) do
     def initialize(group: nil, **) = super
   end
 
-  # @!attribute cause_id [String] the structure change's cause, the same on every read
+  # @!attribute cause_id [String] the cause the write and its type changes share
   # @!attribute unit_ids [Array<String>] the units it retyped that the plan covers
   Group = Data.define(:cause_id, :unit_ids)
 
@@ -84,7 +84,7 @@ class TeamPlanning::Drift
     end
     drifted = grouped(drifted, events)
     named = drifted.map(&:change)
-    sources.preload(unit_ids: named.map(&:unit_id).compact)
+    sources.preload(unit_ids: named.flat_map { [ it.unit_id, *structures_of(it) ] }.compact)
     Report.new(from:, to: @today, changes: drifted, names: names_for(changes + named, sources))
   end
 
@@ -131,46 +131,115 @@ class TeamPlanning::Drift
     Rails.configuration.event_store.read.events(event_ids.uniq).index_by(&:event_id)
   end
 
-  # A structure declared or withdrawn retypes every unit beneath its unit
-  # under one cause, so its type changes read as one item, in the place of
-  # the first. Each stays a type change through the scope's cut, so only the
-  # units the plan covers count, and a declaring unit it doesn't cover goes
-  # unnamed.
+  # A structure declared or withdrawn retypes every unit beneath its unit,
+  # and a move between structures retypes the units it carries. Each writes
+  # its type changes straight after itself, under one cause, so each type
+  # change reads as part of the write it follows, as one item in the place of
+  # the first. The event store says which write that is, and no projection
+  # rebuild empties it. Each type change stays one through the scope's cut,
+  # so only the units the plan covers count, and a structure whose declaring
+  # unit the plan doesn't cover goes unnamed.
   def grouped(drifted, events)
-    cause_of = drifted.select { it.change.kind == :unit_kind_changed }
-                      .to_h { [ it.change.event_id, events[it.change.event_id]&.metadata&.dig(:correlation_id) ] }.compact
-    structures = OrgUnitActivity.where(cause_id: cause_of.values.uniq, subject: "structure").index_by(&:cause_id)
-    return drifted if structures.empty?
+    retyped = drifted.select { it.change.kind == :unit_kind_changed }.filter_map { events[it.change.event_id] }
+    return drifted if retyped.empty?
 
-    members = drifted.group_by { structures.key?(cause_of[it.change.event_id]) && cause_of[it.change.event_id] }
+    head_of = heads_of(retyped).transform_values { events[it.event_id] || it }
+    drifted.each { |item| (event = events[item.change.event_id]) && head?(event) && head_of[event.event_id] = event }
+    return drifted if head_of.empty?
+
+    members = drifted.select { head_of.key?(it.change.event_id) }.group_by { head_of[it.change.event_id].event_id }
     drifted.filter_map do |item|
-      cause_id = cause_of[item.change.event_id]
-      next item unless structures.key?(cause_id)
-      next unless members[cause_id].first.equal?(item)
+      head = head_of[item.change.event_id]
+      next item unless head
+      next unless members[head.event_id].first.equal?(item)
 
-      structure_item(structures[cause_id], members[cause_id])
+      head.is_a?(OrgGraph::Events::UnitMoved) ? move_item(head, members[head.event_id]) : structure_item(head, members[head.event_id])
     end
   end
 
-  def structure_item(structure, members)
+  # Each type change's id => the write it follows. One cause's events sit
+  # together in the structure's stream, so a walk out from any of them reads
+  # them all.
+  def heads_of(retyped)
+    stream = EventStreamNaming.org_structure_stream
+    retyped.group_by { cause(it) }.except(nil).each_with_object({}) do |(cause_id, (event, *)), head_of|
+      same_cause = ->(other) { cause(other) == cause_id }
+      before = store.read.stream(stream).backward.from(event.event_id).each.take_while(&same_cause).reverse
+      after = store.read.stream(stream).from(event.event_id).each.take_while(&same_cause)
+      head = nil
+      [ *before, event, *after ].each do |written|
+        if head?(written) then head = written
+        elsif written.is_a?(OrgGraph::Events::UnitKindChanged) then head_of[written.event_id] = head if head && carries?(head, written)
+        else head = nil
+        end
+      end
+    end
+  end
+
+  def head?(event)
+    case event
+    when OrgGraph::Events::TaxonomyDefined then event.data[:structure_unit_id].present?
+    when OrgGraph::Events::UnitMoved then event.data.key?(:conversion)
+    else false
+    end
+  end
+
+  # A write's conversion takes each type it changes to the new one, so a
+  # type change written after it in the same request, but apart from it,
+  # stays its own. A change back restores each unit's own type, which no one
+  # conversion can say when two types became one, so it holds every type
+  # change back that follows it.
+  def carries?(head, retyped)
+    return true if head.data[:changed_back_id] && retyped.data[:changed_back_id]
+
+    head.data[:conversion].to_h.transform_keys(&:to_s)[retyped.data[:previous_level_id].to_s] == retyped.data[:level_id]
+  end
+
+  def cause(event) = event.metadata[:correlation_id]
+
+  def store = Rails.configuration.event_store
+
+  def covered?(unit_id) = @scope.nil? || @scope.covers_unit?(unit_id)
+
+  def structure_item(head, members)
+    unit_id = head.data[:structure_unit_id]
+    named = covered?(unit_id)
+    folded(members, kind: head.data[:levels].present? ? :structure_declared : :structure_withdrawn, head:,
+                    unit_id: (unit_id if named), outside: named ? [] : [ "unit_id" ])
+  end
+
+  # A move written before it named the structures it crossed says only that
+  # it crossed, with neither side.
+  def move_item(head, members)
+    data = head.data
+    named = covered?(data[:unit_id])
+    sides = data.key?(:structure_joined_id) ? { "before" => data[:structure_left_id], "after" => data[:structure_joined_id] } : {}
+    hidden = sides.select { |_side, unit_id| unit_id && !covered?(unit_id) }.keys
+    structure = sides.to_h { |side, unit_id| [ side, { "structure_unit_id" => (unit_id unless hidden.include?(side)) } ] }
+    folded(members, kind: :moved_between_structures, head:, unit_id: (data[:unit_id] if named),
+                    before: structure["before"], after: structure["after"], outside: [ ("unit_id" unless named), *hidden ].compact)
+  end
+
+  def folded(members, kind:, head:, unit_id:, outside:, before: nil, after: nil)
     changes = members.map(&:change)
-    named = @scope.nil? || @scope.covers_unit?(structure.unit_id)
+    retyped = members.select { it.change.kind == :unit_kind_changed }
     providers = changes.map(&:provider).uniq
     change = OrgGraph::ChangesBetween::Change.new(
-      kind: structure.after ? :structure_declared : :structure_withdrawn, effective_on: changes.first.effective_on,
-      learned_at: changes.filter_map(&:learned_at).max, person_id: nil, unit_id: (structure.unit_id if named), from_unit_id: nil,
-      succession_id: nil, fact: nil, before: nil, after: nil, provider: (providers.first if providers.one?),
-      event_id: structure.cause_id, withdrawn: changes.all?(&:withdrawn)
+      kind:, effective_on: changes.first.effective_on, learned_at: changes.filter_map(&:learned_at).max, person_id: nil, unit_id:,
+      from_unit_id: nil, succession_id: nil, fact: nil, before:, after:, provider: (providers.first if providers.one?),
+      event_id: head.event_id, withdrawn: changes.all?(&:withdrawn)
     )
     Drifted.new(change:, from_plan: members.all?(&:from_plan), meets: members.flat_map(&:meets).uniq,
-                sources: members.flat_map(&:sources).uniq, outside: named ? [] : [ "unit_id" ],
-                group: Group.new(cause_id: structure.cause_id, unit_ids: members.map { it.change.unit_id }))
+                sources: members.flat_map(&:sources).uniq, outside:,
+                group: Group.new(cause_id: cause(head), unit_ids: retyped.map { it.change.unit_id }))
   end
 
   def names_for(changes, sources)
     ids = changes.flat_map { [ it.person_id, it.before&.dig("manager_id"), it.after&.dig("manager_id") ] }.compact.uniq
-    units = changes.flat_map { [ it.unit_id, it.from_unit_id ] }.compact.uniq.select { @scope.nil? || @scope.covers_unit?(it) }
+    units = changes.flat_map { [ it.unit_id, it.from_unit_id, *structures_of(it) ] }.compact.uniq.select { covered?(it) }
                    .filter_map { |id| (name = sources.unit_name(id)) && [ id, name ] }
     units.to_h.merge(::Person.where(tenant_id: @plan.tenant_id, id: ids).pluck(:id, :name).to_h)
   end
+
+  def structures_of(change) = change.kind == :moved_between_structures ? [ change.before, change.after ].compact.pluck("structure_unit_id") : []
 end

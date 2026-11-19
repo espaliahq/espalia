@@ -686,7 +686,8 @@ class OrgGraph::StructureAggregate
 
     apply(OrgGraph::Events::UnitMoved.new(data: {
       unit_id: unit.unit_id, parent_id:, previous_parent_id: unit.parent_id, provider: unit.provider,
-      effective_on: on, moved_by_id:, conversion: restored_conversion(moved, kind_of), changed_back_id:
+      effective_on: on, moved_by_id:, conversion: restored_conversion(moved, kind_of), changed_back_id:,
+      structure_left_id: from, structure_joined_id: into
     }))
     restore_kinds(moved, kinds, on, moved_by_id)
   end
@@ -1327,7 +1328,7 @@ class OrgGraph::StructureAggregate
 
     apply(OrgGraph::Events::UnitMoved.new(data: {
       unit_id: unit.unit_id, parent_id:, previous_parent_id: unit.parent_id, provider: unit.provider,
-      effective_on: on, moved_by_id:, conversion:
+      effective_on: on, moved_by_id:, conversion:, structure_left_id: from, structure_joined_id: into
     }))
     apply_conversion(moved, conversion, on, moved_by_id)
   end

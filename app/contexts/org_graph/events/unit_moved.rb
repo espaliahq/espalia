@@ -17,6 +17,10 @@
 #     out of one into the organisation's, or between two), each type held in the moved units to the type it
 #     takes; the UnitKindChanged events that follow carry it out ([#494](https://github.com/espaliahq/espalia/issues/494),
 #     [#521](https://github.com/espaliahq/espalia/issues/521)). Absent on every move within one structure.
+#   @option data [String, nil] :structure_left_id on a move between structures, the declaring unit of the
+#     structure it left, nil for the organisation's; absent on moves written before
+#     [#521](https://github.com/espaliahq/espalia/issues/521) named them
+#   @option data [String, nil] :structure_joined_id likewise, the structure it joined
 #
 class OrgGraph::Events::UnitMoved < RubyEventStore::Event
 end
