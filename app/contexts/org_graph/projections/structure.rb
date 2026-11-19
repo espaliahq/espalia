@@ -9,6 +9,7 @@
 # A level's effective_on is the date its name or place last changed. Its
 # parent_level_ids and top hold the rules it states, and stay null on a level
 # that never stated them, so {OrgTaxonomyLevel.taxonomy} derives the legacy rule.
+# A declared structure's copied_from_level_id names the type a level copies.
 #
 class OrgGraph::Projections::Structure
   # Stable identifier used as the natural key in `projection_versions.name`.
@@ -16,7 +17,7 @@ class OrgGraph::Projections::Structure
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 2
+  CODE_VERSION = 3
 
   # @return [Array<Class>]
   def self.handled_events
@@ -86,7 +87,7 @@ class OrgGraph::Projections::Structure
       row = OrgTaxonomyLevel.find_or_initialize_by(id: level[:level_id])
       unchanged = row.persisted? && row.name == level[:name] && row.position == -position - 1
       row.assign_attributes(name: level[:name], position:, parent_level_ids: level[:parent_level_ids], top: level[:top],
-                            structure_unit_id:)
+                            structure_unit_id:, copied_from_level_id: level[:copied_from_level_id])
       row.effective_on = data[:effective_on] unless unchanged
       row.save!
     end
