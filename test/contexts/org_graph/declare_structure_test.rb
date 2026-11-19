@@ -69,6 +69,17 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     assert_equal "A unit can't move beneath itself or a unit below it", error.message
   end
 
+  should "take a declaring unit's structure with it when it moves within the structure above" do
+    declare(unit: @checkout, conversion: { @pod => @group })
+    lending = create_unit("Lending", @tribe)
+    as_tenant { @handler.move_unit(@checkout, lending, effective_on: @today + 1) }
+
+    assert_equal [ lending, @checkout, @group ],
+                 [ structure.unit(@checkout).parent_id, structure.structure_in_force(@basket), structure.unit(@basket).level_id ]
+    assert_empty structure.misplaced_units
+    assert_equal [ { @checkout => %w[Group Stream] } ] * 2, [ @today, @today + 1 ].map { structures_as_of(it) }
+  end
+
   should "copy a type from the structure it copies, and refuse one that structure doesn't hold" do
     declare(copied_from: "top", levels: groups_and_streams.map { it.merge(copied_from_level_id: @squad) })
     assert_equal [ "top", @squad ], [ last_definition[:copied_from], last_definition[:levels].first[:copied_from_level_id] ]
