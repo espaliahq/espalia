@@ -1241,7 +1241,7 @@ class OrgGraph::StructureAggregate
   end
 
   def structure_label(structure_unit_id)
-    structure_unit_id ? "#{@units[structure_unit_id].name}'s structure" : "the top structure"
+    structure_unit_id ? "#{@units[structure_unit_id].name}'s structure" : "the organisation's structure"
   end
 
   # A unit keeps the structure it sits in: moving one across a boundary needs

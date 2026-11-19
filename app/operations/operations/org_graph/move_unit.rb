@@ -8,7 +8,7 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
   description "Move a unit in the Org Graph beneath another live unit of a kind its own kind can sit " \
               "under, or to the top when parent_id is omitted and its kind can sit there, from effective_on (today by default). Only a unit Espalia holds " \
               "can be moved here. Moving a unit changes who inherits its ownership, so the caller needs " \
-              "rights on the unit and where it lands. To move a unit from the top structure into a unit's own " \
+              "rights on the unit and where it lands. To move a unit from the organisation's structure into a unit's own " \
               "structure, pass conversion, a type of that structure for each type the unit and those beneath it " \
               "hold; each changes type in the same change. That needs a tenant admin, and is one-way until a unit " \
               "can move out of a structure; withdrawing the structure converts its units back, where they stay."
@@ -24,7 +24,7 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
   parameter :parent_id, String, allow_blank: false
   parameter :conversion, Hash, schema: CONVERSION_SCHEMA, allow_blank: false
   dependent_required :conversion, requires: :parent_id,
-                                  message: "A move with a conversion needs parent_id: a unit at the top stays in the top structure"
+                                  message: "A move with a conversion needs parent_id: a unit at the top stays in the organisation's structure"
 
   # Checks the conversion here, so MCP saves no approval for one that can't run.
   #

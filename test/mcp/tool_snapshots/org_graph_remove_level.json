@@ -19,7 +19,7 @@
         "minLength": 1,
         "pattern": "\\S",
         "format": "uuid",
-        "description": "a unit with a structure of its own, to change its unit types; the top structure by default"
+        "description": "a unit with a structure of its own, to change its unit types; the organisation's structure by default"
       }
     },
     "required": [

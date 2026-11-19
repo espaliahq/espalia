@@ -250,9 +250,9 @@ reader can list a unit's predecessors and successors. The history that reads "wa
 a kind that never stated rules. Readers build an `OrgGraph::Taxonomy` from the rows with
 `OrgTaxonomyLevel.taxonomy`, so the legacy rule is derived in one place, never stored.
 Each row's `structure_unit_id` names the unit whose own structure it belongs to, and is
-null for the top structure; `OrgTaxonomyLevel.top_structure` reads the top one. The
+null for the organisation's structure; `OrgTaxonomyLevel.top_structure` reads it. The
 structure in force at a unit is that of the nearest unit above it that declares one, else
-the top structure ([#494](https://github.com/espaliahq/espalia/issues/494)). A unit that
+the organisation's structure ([#494](https://github.com/espaliahq/espalia/issues/494)). A unit that
 retires gives up its structure in the same change. An admin can't date the retirement before
 the structure last changed; an HRIS, which is never refused, withdraws it on that day instead.
 
@@ -280,7 +280,7 @@ of their own (`LevelsPanel`, anchored on the unit). The drawer's parent list off
 another structure under "Into another structure, changing types", only to an admin who may
 edit that structure, and the step it leads to asks what each type becomes.
 
-A unit in the top structure moves into a unit's own structure with a conversion: a type of
+A unit in the organisation's structure moves into a unit's own structure with a conversion: a type of
 that structure for each type it and the units beneath it hold. The move writes one
 `UnitMoved` carrying the conversion, then a `UnitKindChanged` for each unit it converts,
 under one cause. Each unit keeps its id, owners, members and history. The move can't be
@@ -772,7 +772,7 @@ A unit whose people sit under different units above keeps its parent and is list
 the sync's result as split, for someone to resolve. Espalia never picks a majority.
 
 A parent read inside a unit's own structure ([#494](https://github.com/espaliahq/espalia/issues/494))
-is never written, since the HRIS's types belong to the top structure. A new unit starts with
+is never written, since the HRIS's types belong to the organisation's structure. A new unit starts with
 no parent and an existing one keeps its own. Each is kept as a sync issue, shown to admins on
 the HRIS page and in the unit's drawer, until a sync no longer reads it there.
 

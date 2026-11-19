@@ -81,7 +81,7 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
       assert_equal "Squad isn't a unit type of Payments's structure", error.message
 
       error = assert_raises(RuntimeError) { create_unit("Loose", @group) }
-      assert_equal "Group isn't a unit type of the top structure", error.message
+      assert_equal "Group isn't a unit type of the organisation's structure", error.message
     end
 
     should "refuse a type of the structure where its rules don't allow it" do
@@ -100,11 +100,11 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
     should "refuse a move out of the structure, and one into it" do
       other = create_unit("Lending", @tribe)
       error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(@checkout, other, effective_on: @today) } }
-      assert_equal "Checkout can't move out of Payments's structure into the top structure", error.message
+      assert_equal "Checkout can't move out of Payments's structure into the organisation's structure", error.message
 
       squad = create_unit("Squad A", @squad, parent_id: other)
       error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(squad, @checkout, effective_on: @today) } }
-      assert_equal "Squad A can't move out of the top structure into Payments's structure", error.message
+      assert_equal "Squad A can't move out of the organisation's structure into Payments's structure", error.message
     end
 
     should "move a unit within its structure" do
@@ -136,7 +136,7 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
       error = assert_raises(RuntimeError) do
         as_tenant { @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ other ], effective_on: @today) }
       end
-      assert_equal "A merge or split can't cross structures: these units sit in Payments's structure and the top structure", error.message
+      assert_equal "A merge or split can't cross structures: these units sit in Payments's structure and the organisation's structure", error.message
 
       ramp = create_unit("Ramp", @stream, parent_id: @checkout)
       as_tenant do

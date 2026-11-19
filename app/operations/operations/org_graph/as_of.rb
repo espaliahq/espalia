@@ -13,7 +13,7 @@ class Operations::OrgGraph::AsOf < Operations::Base
   include Operations::OrgGraph::DateParameter
 
   description "Read the Org Graph as it stood on one date: the live units with their parent, " \
-              "level, owners and direct member count, the top structure's unit types with the type ids each " \
+              "level, owners and direct member count, the organisation's unit types with the type ids each " \
               "could sit under (parent_ids) and whether it could sit at the top, the same for each unit " \
               "that had a structure of its own (structures, by unit_id and its name that day), and the number of employed people. A future " \
               "date includes changes already recorded for it, such as a hire who starts then or a " \
