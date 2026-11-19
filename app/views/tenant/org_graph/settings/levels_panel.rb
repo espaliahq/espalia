@@ -4,7 +4,10 @@
 # can sit. An admin ticks the types each one can sit under, and whether it can
 # sit at the top. An empty type can be read from an HRIS field, or handed back
 # to Espalia, here; one that holds units changes hands through the handover.
-# An admin adds a type, and removes one no unit has ever been.
+# An admin adds a type, and removes one Sources says can go today.
+#
+# A unit with a structure of its own ([#494](https://github.com/espaliahq/espalia/issues/494)) gets a panel of its own, whose
+# writes name that unit. Its types are Espalia's, so it has no HRIS pickers.
 class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   include Views::Tenant::OrgGraph::Settings::FormHelpers
 
@@ -28,19 +31,22 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   # @param hris [Hash] provider, label and connected, as Operations::OrgGraph::Sources reads them
   # @param levels [Array<Hash>] each level as Operations::OrgGraph::Sources reads it, top first
   # @param can_edit_taxonomy [Boolean] whether the viewer may add and remove unit types, and set where each can sit
-  def initialize(hris:, levels:, can_edit_taxonomy: false)
+  # @param structure [Hash, nil] `{ unit_id, name }` of the unit whose own structure this is; nil for the top one
+  def initialize(hris:, levels:, can_edit_taxonomy: false, structure: nil)
     @hris = hris
     @levels = levels
     @can_edit_taxonomy = can_edit_taxonomy
+    @structure = structure
   end
 
+  # @param structure_unit_id [String, nil]
+  # @return [String] the panel's id, which a write lands back on
+  def self.anchor(structure_unit_id) = structure_unit_id ? "org-graph-levels-#{structure_unit_id}" : "org-graph-levels"
+
   def view_template
-    render Components::Kit::Card.new(title: words("unit_types"), heading_level: :h2, id: "org-graph-levels") do |card|
+    render Components::Kit::Card.new(title:, heading_level: :h2, id: self.class.anchor(@structure&.dig(:unit_id))) do |card|
       card.body do
-        p(class: "text-sm text-muted") do
-          plain "Each type of unit in the structure, and the types it can sit under. " \
-                "A type an HRIS supplies sits at the top, or under one type above it that the HRIS supplies."
-        end
+        p(class: "text-sm text-muted") { intro }
         if @levels.empty?
           p(class: "mt-4 text-sm text-default") { "No unit types yet." }
         else
@@ -53,7 +59,33 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
 
   private
 
-  def connected? = @hris[:connected]
+  def title = @structure ? words("own_unit_types", unit: @structure[:name]) : words("unit_types")
+
+  def intro
+    return "Unit types only the units beneath #{@structure[:name]} use, and the types each can sit under." if @structure
+
+    "Each type of unit in the structure, and the types it can sit under. " \
+      "A type an HRIS supplies sits at the top, or under one type above it that the HRIS supplies."
+  end
+
+  # An own structure's types are Espalia's, so they have no HRIS field.
+  def connected? = @structure.nil? && @hris[:connected]
+
+  def top_words = @structure ? words("can_sit_directly_under", unit: @structure[:name]) : words("can_sit_at_the_top")
+
+  def top_place = @structure ? "directly under #{@structure[:name]}" : "at the top"
+
+  def new_field_id = @structure ? "org-graph-new-level-#{@structure[:unit_id]}" : "org-graph-new-level"
+
+  # Turbo drops a redirect's anchor, and an own structure's panel sits below
+  # the fold, so its forms submit without Turbo to land back on it.
+  def panel_form(url, **, &)
+    @structure ? settings_form(url, **, data: { turbo: "false" }, &) : settings_form(url, **, &)
+  end
+
+  def structure_field
+    input(type: "hidden", name: "structure_unit_id", value: @structure[:unit_id]) if @structure
+  end
 
   def level_row(level)
     li(id: "org-graph-level-#{level[:id]}", class: "py-3 first:pt-0 last:pb-0") do
@@ -63,7 +95,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
           p(class: "text-sm text-muted") { summary(level) }
         end
         div(id: "org-graph-level-actions-#{level[:id]}", class: "flex shrink-0 items-center gap-2") do
-          hand_back_form(level) if level[:live_units].zero? && level[:provider] != ESPALIA
+          hand_back_form(level) if @structure.nil? && level[:live_units].zero? && level[:provider] != ESPALIA
           level_menu(level) if @can_edit_taxonomy && level[:removable]
         end
       end
@@ -84,7 +116,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   def hand_back_form(level)
-    settings_form(tenant_org_graph_settings_level_provider_path(level[:id]), method: :patch) do
+    panel_form(tenant_org_graph_settings_level_provider_path(level[:id]), method: :patch) do
       input(type: "hidden", name: "provider", value: ESPALIA)
       render Components::Kit::Button.new(
         variant: :outline, tone: :neutral, type: :submit, id: "org-graph-level-espalia-#{level[:id]}"
@@ -96,9 +128,10 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   # hidden top value stands for an unticked switch. The was_ values are the
   # rules as drawn, so the controller can refuse a save over a newer change.
   def rules_form(level)
-    settings_form(tenant_org_graph_settings_kind_parent_path(level[:id]), method: :patch,
+    panel_form(tenant_org_graph_settings_kind_parent_path(level[:id]), method: :patch,
                                                                           id: "org-graph-level-rules-#{level[:id]}",
                                                                           class: "mt-3") do
+      structure_field
       level[:parent_ids].each { |id| input(type: "hidden", name: "was_parent_ids[]", value: id) }
       input(type: "hidden", name: "was_top", value: level[:top] ? "1" : "0")
       fieldset do
@@ -112,7 +145,7 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
           input(type: "hidden", name: "top", value: "0")
           input(type: "checkbox", name: "top", value: "1", checked: level[:top], id: "org-graph-level-top-#{level[:id]}",
                 class: Components::Kit::Field::CHECKBOX)
-          plain words("can_sit_at_the_top")
+          plain top_words
         end
         render Components::Kit::Button.new(variant: :outline, tone: :neutral, size: :sm, type: :submit,
                                            id: "org-graph-level-rules-save-#{level[:id]}") { "Save #{level[:name]}" }
@@ -132,9 +165,9 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   # "Can sit under: Department, Team, or at the top", as #390 words it.
   def rules_sentence(level)
     names = @levels.select { level[:parent_ids].include?(it[:id]) }.map { it[:name] }
-    return "#{words('can_sit_at_the_top')} only" if names.empty?
+    return "#{top_words} only" if names.empty?
 
-    "#{words('can_sit_under')}: #{names.join(', ')}#{', or at the top' if level[:top]}"
+    "#{words('can_sit_under')}: #{names.join(', ')}#{", or #{top_place}" if level[:top]}"
   end
 
   # Remove is destructive, so it sits in the row's kebab, which opens the dialog.
@@ -157,9 +190,12 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   def remove_form(level)
-    p(class: "text-sm text-default") { "No unit has ever been a #{level[:name]}, so nothing else changes." }
-    settings_form(tenant_org_graph_settings_level_path(level[:id]), method: :delete,
+    p(class: "text-sm text-default") do
+      "No unit is a #{level[:name]} from today on, so nothing else changes. Earlier dates still show it."
+    end
+    panel_form(tenant_org_graph_settings_level_path(level[:id]), method: :delete,
                                                                     class: "mt-4 flex justify-end gap-2") do
+      structure_field
       render Components::Kit::Button.new(variant: :outline, tone: :neutral, data: { action: "modal#close" }) { "Cancel" }
       render Components::Kit::Button.new(tone: :danger, type: :submit, id: "org-graph-level-remove-confirm-#{level[:id]}") do
         "Remove #{level[:name]}"
@@ -181,12 +217,15 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   def add_form
-    settings_form(tenant_org_graph_settings_levels_path, class: "mt-4") do
-      label(for: "org-graph-new-level", class: "block text-sm font-medium text-default") { "Name of the new unit type" }
+    panel_form(tenant_org_graph_settings_levels_path, class: "mt-4") do
+      structure_field
+      label(for: new_field_id, class: "block text-sm font-medium text-default") { "Name of the new unit type" }
       div(class: "mt-1 flex flex-col sm:flex-row gap-2") do
-        input(id: "org-graph-new-level", name: "name", type: "text", required: true, autocomplete: "off",
+        input(id: new_field_id, name: "name", type: "text", required: true, autocomplete: "off",
               class: "#{Components::Kit::Field::INPUT} sm:flex-1 min-w-0")
-        render Components::Kit::Button.new(variant: :outline, tone: :neutral, type: :submit) { "Add a unit type" }
+        render Components::Kit::Button.new(variant: :outline, tone: :neutral, type: :submit, id: "#{new_field_id}-add") do
+          "Add a unit type"
+        end
       end
     end
   end

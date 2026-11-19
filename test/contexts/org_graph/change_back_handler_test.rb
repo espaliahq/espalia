@@ -139,7 +139,7 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
     assert_equal "Payments can't change to Squad, as these wouldn't fit: Checkout (Squad) under Payments", error.message
   end
 
-  should "read a removed type as one since removed, and refuse to change a unit back into it" do
+  should "name a removed type from its history, and refuse to change a unit back into it" do
     pod = SecureRandom.uuid_v7
     as_tenant do
       @structure.add_level(pod, "Pod", effective_on: "2026-01-10")
@@ -150,7 +150,7 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
     admin = as_tenant { actor_for(@lead).tap { it.tenant_user.update!(role: :admin) } }
     items = as_tenant { OrgGraph::ActivityFeed.new(unit: OrgUnit.find(@payments), actor: admin).items }
 
-    assert_equal [ "Changed its type from a type since removed to Squad", "Changed its type from Squad to a type since removed" ],
+    assert_equal [ "Changed its type from Pod to Squad", "Changed its type from Squad to Pod" ],
                  items.first(2).map { it.parts.sole.description }
     error = assert_raises(RuntimeError) { change_back(latest(@payments)) }
     assert_equal "That unit type doesn't exist", error.message

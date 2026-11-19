@@ -1,6 +1,6 @@
 {
   "name": "org_graph_sources",
-  "description": "Read where the Org Graph's data comes from: the connected HRIS, each kind of person fact with its provider and the fields an HRIS reads it from, each structure level (top first) with its provider, field, how many live units it holds and how many retired units it held (by distinct name, the first three of each named), the type ids it can sit under (parent_ids), whether it can sit at the top and whether it can be removed, the same for each unit that has a structure of its own (structures, by unit_id and name), and the staleness threshold with how many facts Espalia holds are stale, by fact. Admins and Org Graph editors only.",
+  "description": "Read where the Org Graph's data comes from: the connected HRIS, each kind of person fact with its provider and the fields an HRIS reads it from, each structure level (top first) with its provider, field, how many live units it holds and how many retired units it held (by distinct name, the first three of each named), the type ids it can sit under (parent_ids), whether it can sit at the top and whether the caller can remove it today (as remove_level would accept it), the same for each unit that has a structure of its own (structures, by unit_id and name), and the staleness threshold with how many facts Espalia holds are stale, by fact. Admins and Org Graph editors only.",
   "inputSchema": {
     "type": "object",
     "properties": {},

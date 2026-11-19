@@ -39,6 +39,12 @@ class Views::Tenant::OrgGraph::SettingsView < Views::Base
             hris: @sources[:hris], levels: @sources[:levels], can_edit_taxonomy: @can_edit_taxonomy
           )
           render Views::Tenant::OrgGraph::Settings::HandoverPanel.new(hris: @sources[:hris], levels: @sources[:levels])
+          Array(@sources[:structures]).each do |structure|
+            render Views::Tenant::OrgGraph::Settings::LevelsPanel.new(
+              hris: @sources[:hris], levels: structure[:levels], can_edit_taxonomy: @can_edit_taxonomy,
+              structure: structure.slice(:unit_id, :name)
+            )
+          end
         end
         div(class: "space-y-6 min-w-0") do
           render Views::Tenant::OrgGraph::Settings::EditorsPanel.new(editors: @editors, candidates: @editor_candidates)

@@ -9,7 +9,7 @@ class Operations::OrgGraph::Sources < Operations::Base
               "with its provider and the fields an HRIS reads it from, each structure level (top first) " \
               "with its provider, field, how many live units it holds and how many retired units it held " \
               "(by distinct name, the first three of each named), the type ids it can sit under (parent_ids), " \
-              "whether it can sit at the top and whether it can be removed, the same for each unit that has a " \
+              "whether it can sit at the top and whether the caller can remove it today (as remove_level would accept it), the same for each unit that has a " \
               "structure of its own (structures, by unit_id and name), and the staleness threshold with how " \
               "many facts Espalia holds are stale, by fact. Admins and Org Graph editors only."
   category :read
@@ -29,7 +29,7 @@ class Operations::OrgGraph::Sources < Operations::Base
     {
       hris: hris_payload(tenant),
       facts: facts_payload,
-      levels: levels_payload(OrgTaxonomyLevel.top_structure.to_a),
+      levels: levels_payload(OrgTaxonomyLevel.top_structure.to_a, nil),
       structures: structures_payload,
       freshness: { staleness_days: tenant.org_graph_config.staleness_days, stale: stale.values.sum, stale_by_fact: stale }
     }
@@ -56,12 +56,13 @@ class Operations::OrgGraph::Sources < Operations::Base
     declared = OrgTaxonomyLevel.where.not(structure_unit_id: nil).order(:position).group_by(&:structure_unit_id)
     names = OrgUnit.where(id: declared.keys).pluck(:id, :name).to_h
     declared.sort_by { |unit_id, _| names[unit_id].to_s }.map do |unit_id, levels|
-      { unit_id:, name: names[unit_id], levels: levels_payload(levels) }
+      { unit_id:, name: names[unit_id], levels: levels_payload(levels, unit_id) }
     end
   end
 
   # @param levels [Array<OrgTaxonomyLevel>] one structure's, top first
-  def levels_payload(levels)
+  # @param structure_unit_id [String, nil] its declaring unit; nil for the top structure
+  def levels_payload(levels, structure_unit_id)
     live = live_units_by_level
     retired = retired_units_by_level
     rules = OrgTaxonomyLevel.rules_by_id(levels)
@@ -70,7 +71,7 @@ class Operations::OrgGraph::Sources < Operations::Base
       retired_count, retired_names = retired.fetch(level.id, [ 0, [] ])
       { id: level.id, name: level.name, provider: level.provider, field: level.provider_field,
         live_units: live_count, live_unit_names: live_names, retired_units: retired_count,
-        retired_unit_names: retired_names, removable: removable?(level, live_count + retired_count, levels.size),
+        retired_unit_names: retired_names, removable: removable?(level, structure_unit_id),
         **rules[level.id] }
     end
   end
@@ -79,12 +80,37 @@ class Operations::OrgGraph::Sources < Operations::Base
 
   def retired_units_by_level = @retired_units_by_level ||= names_by_level(OrgUnit.where.not(retired_on: nil))
 
-  # Stricter than the aggregate, which lets a level go the day after its last
-  # unit left it: the panel's Remove still says no unit was ever one, so a
-  # level any unit held waits for the page to say otherwise
-  # ([#494](https://github.com/espaliahq/espalia/issues/494), PR D).
-  def removable?(level, units_ever, level_count)
-    level.provider == ::OrgGraph::StructureAggregate::ESPALIA && units_ever.zero? && level_count > 1
+  # The panel offers Remove exactly when RemoveLevel would take it today: the
+  # aggregate's own checks, then the live plans it can't see. Loading the
+  # structure replays its whole stream (~0.6s at 3,000 events), so only a
+  # caller who may remove the type pays for it.
+  def removable?(level, structure_unit_id)
+    return false unless level.provider == ::OrgGraph::StructureAggregate::ESPALIA
+    return false unless may_remove_from?(structure_unit_id) && live_plans_by_level
+
+    live_plans_by_level.fetch(level.id, 0).zero? && structure.removal_refusal(level.id, structure_unit_id:).nil?
+  end
+
+  def may_remove_from?(structure_unit_id)
+    @may_remove_from ||= Hash.new do |allowed, unit_id|
+      policy = Pundit.policy!(context, :org_graph)
+      allowed[unit_id] = unit_id ? policy.edit_structure_of?(OrgUnit.find_by(id: unit_id)) : policy.edit_taxonomy?
+    end
+    @may_remove_from[structure_unit_id]
+  end
+
+  def structure = @structure ||= ::OrgGraph::Repository.new.load_structure
+
+  # Nil mid-rebuild, when no type is offered for removal.
+  def live_plans_by_level
+    return @live_plans_by_level if defined?(@live_plans_by_level)
+
+    @live_plans_by_level = ProjectionVersion.unless_rebuilding(TeamPlanning::Projections::Overrides::PROJECTION_NAME,
+                                                               ::OrgGraph::Projections::Structure::PROJECTION_NAME) do
+      TeamPlanningOverride.live_plans_by_level
+    end
+  rescue ProjectionVersion::Rebuilding
+    @live_plans_by_level = nil
   end
 
   # Live units' names are unique, so the count is the number of live units;

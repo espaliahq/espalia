@@ -37,4 +37,16 @@ class OrgFactPeriod < ApplicationRecord
   # @param at [Time, nil] the instant that day ended, when a reader fixed it
   #   earlier, so a later change of zone doesn't move it
   scope :known_on, ->(date, at: nil) { at ? known_at(at) : date ? known_at(Tenant.end_of(date)) : current }
+
+  # Every unit type's name, removed ones included, so history can name a type
+  # the live taxonomy no longer holds. A live type takes its current name. A
+  # type whose rows were all superseded, as when the declaration that gave it
+  # is changed back, keeps the name it last had.
+  #
+  # @return [Hash{String => String}] level_id => name
+  def self.kind_names
+    named = where(subject_type: OrgGraph::Projections::History::LEVEL, fact: "kind").where("value ? 'name'")
+                .order(Arel.sql("superseded_at IS NULL"), :effective_from, :learned_at)
+    named.pluck(:subject_id, Arel.sql("value ->> 'name'")).to_h.merge(OrgTaxonomyLevel.pluck(:id, :name).to_h)
+  end
 end

@@ -99,6 +99,19 @@ class OrgGraph::DateComparisonTest < ActiveSupport::TestCase
     assert_empty compare("2026-10-01").unit_marks(unit(:payments))
   end
 
+  should "name a type since removed by the name it had" do
+    pods = SecureRandom.uuid_v7
+    as_tenant do
+      @structure.add_level(pods, "Pod", parent_ids: [ @org[:team] ], top: false, effective_on: "2026-01-01")
+      @structure.change_unit_kind(@org[:payments], pods, effective_on: "2026-09-10")
+      @structure.change_unit_kind(@org[:payments], @org[:squad], effective_on: "2026-09-20")
+      @structure.remove_level(pods, effective_on: "2026-09-20")
+    end
+    travel_to TODAY
+
+    assert_equal [ "type was Pod" ], compare("2026-09-15").unit_marks(unit(:payments))
+  end
+
   should "list who joined, left and moved through each unit, by the date each took effect" do
     reorganise
     travel_to TODAY

@@ -19,8 +19,11 @@ class OrgGraph::ActivityFeed
     # @return [Boolean]
     def changeable? = refusal.nil?
 
-    # @return [Boolean] whether changing it back reaches past its one part here
-    def whole_cause? = parts.many? || unit_count > 1
+    # A unit's own structure changes back whole, even when it retyped no unit.
+    def self.whole_cause?(parts, unit_count) = parts.many? || unit_count > 1 || parts.first.entry.subject == "structure"
+
+    # @return [Boolean] whether changing it back goes through its whole cause
+    def whole_cause? = self.class.whole_cause?(parts, unit_count)
 
     # @return [String] the part itself when alone, so it names who it moved
     def headline = parts.one? ? parts.first.description : group.summary.upcase_first
@@ -79,8 +82,7 @@ class OrgGraph::ActivityFeed
       Part.new(entry:, description: describe(entry), by: self.class.by(entry), refusal: @change_back.refusal(entry))
     end
     unit_count = unit_counts.fetch(group.cause_id, 1)
-    whole_cause = parts.many? || unit_count > 1
-    refusal = whole_cause ? @change_back.group_refusal(group.cause_id) : parts.first.refusal
+    refusal = Item.whole_cause?(parts, unit_count) ? @change_back.group_refusal(group.cause_id) : parts.first.refusal
     Item.new(group:, parts:, refusal:, unit_count:)
   end
 
@@ -115,7 +117,7 @@ class OrgGraph::ActivityFeed
     entry.after ? "Moved #{person} in from #{other}" : "Moved #{person} out to #{other}"
   end
 
-  def kind_name(level_id) = (@kind_names ||= OrgTaxonomyLevel.pluck(:id, :name).to_h).fetch(level_id, "a type since removed")
+  def kind_name(level_id) = (@kind_names ||= OrgFactPeriod.kind_names).fetch(level_id, "a type since removed")
 
   def parent_phrase(parent_id)
     parent = parent_id && OrgUnit.find_by(id: parent_id)

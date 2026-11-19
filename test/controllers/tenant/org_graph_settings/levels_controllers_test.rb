@@ -20,9 +20,12 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
                                   { level_id: @team_id, name: "Team" } ], effective_on: Date.current)
       tribe = SecureRandom.uuid_v7
       structure.create_unit(tribe, "Commerce", level_id: @tribe_id, effective_on: Date.current)
-      structure.create_unit(SecureRandom.uuid_v7, "Payments", level_id: @team_id, parent_id: tribe, effective_on: Date.current)
+      @payments_id = SecureRandom.uuid_v7
+      structure.create_unit(@payments_id, "Payments", level_id: @team_id, parent_id: tribe, effective_on: Date.current)
     end
   end
+
+  def own_names = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.in_structure(@payments_id).pluck(:name) }
 
   def level_names = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_structure.pluck(:name) }
 
@@ -179,6 +182,58 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_select "#org-graph-level-#{@guild_id}", text: /0 units · held Atlas/
       assert_select "#org-graph-level-#{@team_id}", text: /Managed here · holds Payments/
       assert_select "#org-graph-level-menu-#{@squad_id}[aria-label=?]", "Actions for Squad"
+    end
+  end
+
+  context "as a tenant admin, with Payments' own structure" do
+    setup do
+      @pod_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        tenant_user = TenantUser.find_by!(user: @admin_user)
+        admin = AuthorizationContext.new(user: @admin_user, tenant_user:, person: nil)
+        OrgGraph::StructureCommandHandler.new(actor: admin).declare_structure(
+          @payments_id, levels: [ { level_id: @pod_id, name: "Pod", parent_level_ids: [ @pod_id ], top: true } ],
+                        conversion: {}, effective_on: Date.current
+        )
+      end
+      sign_in @admin_user
+    end
+
+    should "show Payments' types in a panel of their own, whose forms name Payments and which has no HRIS pickers" do
+      get tenant_org_graph_settings_path
+
+      assert_select "#org-graph-levels-#{@payments_id}" do
+        assert_select "h2", text: "Unit types beneath Payments"
+        assert_select "#org-graph-level-#{@pod_id}", text: /Managed here · 0 units/
+        assert_select "form#org-graph-level-rules-#{@pod_id} input[type=hidden][name=structure_unit_id][value=?]", @payments_id
+        assert_select "label", text: "Can sit directly under Payments"
+        assert_select "input#org-graph-new-level-#{@payments_id}[name=name]"
+        assert_select "turbo-frame", count: 0
+      end
+      assert_select "#org-graph-levels h2", text: "Unit types"
+      assert_select "#org-graph-levels #org-graph-level-#{@pod_id}", count: 0
+    end
+
+    should "add, rule and remove a type in Payments' structure, landing back on its panel" do
+      post tenant_org_graph_settings_levels_path, params: { name: "Guild", structure_unit_id: @payments_id }
+      assert_equal "Guild is a unit type now. It can sit under any other type, or directly under Payments, until you narrow that.",
+                   flash[:notice]
+      assert_redirected_to tenant_org_graph_settings_path(anchor: "org-graph-levels-#{@payments_id}")
+      assert_equal %w[Pod Guild], own_names
+      assert_equal %w[Tribe Squad Team], level_names
+
+      guild_id = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.in_structure(@payments_id).find_by!(name: "Guild").id }
+      drawn = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.rules_by_id(OrgTaxonomyLevel.in_structure(@payments_id).to_a) }
+                          .fetch(guild_id)
+      patch tenant_org_graph_settings_kind_parent_path(guild_id),
+            params: { parent_ids: [ @pod_id ], top: "0", was_parent_ids: drawn[:parent_ids], was_top: drawn[:top] ? "1" : "0",
+                      structure_unit_id: @payments_id }
+      assert_equal [ "Saved where Guild can sit.", nil ], [ flash[:notice], flash[:alert] ]
+      assert_redirected_to tenant_org_graph_settings_path(anchor: "org-graph-levels-#{@payments_id}")
+
+      delete tenant_org_graph_settings_level_path(guild_id), params: { structure_unit_id: @payments_id }
+      assert_equal "Guild is no longer a unit type.", flash[:notice]
+      assert_equal %w[Pod], own_names
     end
   end
 

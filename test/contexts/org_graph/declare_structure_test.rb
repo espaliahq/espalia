@@ -438,15 +438,17 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     as_tenant { @admin.withdraw_structure(@payments, conversion: { @group => @squad, @stream => @pod }, effective_on: @today) }
 
     as_tenant do
-      change_back = OrgGraph::ChangeBackHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      change_back = OrgGraph::ChangeBackHandler.new(actor: admin_context)
       causes = OrgUnitActivity.where(subject: "structure").order(:created_at).pluck(:cause_id).uniq
       assert_equal 2, causes.size
-      causes.each do |cause_id|
+      reasons = [ "A later change has replaced this one; change that back first",
+                  "This came with a change to a unit's own structure, so change the whole change back" ]
+      causes.zip(reasons).each do |cause_id, reason|
         kinds = OrgUnitActivity.where(cause_id:, event_type: "UnitKindChanged").to_a
         assert_equal [ @basket, @checkout ].sort, kinds.map(&:unit_id).sort
         assert_equal @payments, OrgUnitActivity.find_by!(cause_id:, subject: "structure").unit_id
         error = assert_raises(RuntimeError) { change_back.change_back(kinds.first) }
-        assert_equal "This came with a change to a unit's own structure, which can't be changed back yet", error.message
+        assert_equal reason, error.message
       end
     end
   end

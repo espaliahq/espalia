@@ -225,7 +225,7 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
 
   def unit_name(id) = units.fetch(id, "an unknown unit")
 
-  def kind_name(level_id) = (@kind_names ||= OrgTaxonomyLevel.pluck(:id, :name).to_h).fetch(level_id, "one since removed")
+  def kind_name(level_id) = (@kind_names ||= OrgFactPeriod.kind_names).fetch(level_id, "one since removed")
 
   def units
     @units ||= begin

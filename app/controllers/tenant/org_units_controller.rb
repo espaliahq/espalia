@@ -57,11 +57,25 @@ class Tenant::OrgUnitsController < ApplicationController
       write(notice: "Renamed.") do
         Operations::OrgGraph::RenameUnit.call(context: pundit_user, params: with_date(unit_id: @unit.id, name: attrs[:name]))
       end
+    elsif into_another_structure?(attrs[:parent_id])
+      redirect_to new_tenant_org_unit_structure_move_path(@unit, parent_id: attrs[:parent_id], on: drawer_on, **comparison_params),
+                  status: :see_other
     else
       write(notice: "Moved.") do
         Operations::OrgGraph::MoveUnit.call(context: pundit_user,
                                             params: with_date(unit_id: @unit.id, parent_id: attrs[:parent_id].presence))
       end
     end
+  end
+
+  private
+
+  # A parent in another unit's own structure needs each type converted, which
+  # the move step asks for ([#494](https://github.com/espaliahq/espalia/issues/494)).
+  def into_another_structure?(parent_id)
+    return false if parent_id.blank?
+
+    overview = OrgGraph::UnitsOverview.new(selected_unit_id: @unit.id)
+    OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview).conversion_parent_choices.any? { it.id == parent_id }
   end
 end

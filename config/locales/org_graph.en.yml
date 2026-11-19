@@ -8,6 +8,8 @@ en:
     unit_types: "Unit types"
     can_sit_under: "Can sit under"
     can_sit_at_the_top: "Can sit at the top"
+    can_sit_directly_under: "Can sit directly under %{unit}"
+    own_unit_types: "Unit types beneath %{unit}"
     placement:
       whole: "A person belongs to one"
       split: "A person can be split across several"
@@ -17,3 +19,7 @@ en:
     budgets: "Budgets are set for this type"
     change_type: "Change type"
     misfit: "Doesn't fit this structure"
+    # Which structure a unit's type comes from. Tal may rename the top one.
+    structure_name:
+      top: "the top structure"
+      unit: "%{unit}'s structure"

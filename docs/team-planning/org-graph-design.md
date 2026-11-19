@@ -256,6 +256,29 @@ the top structure ([#494](https://github.com/espaliahq/espalia/issues/494)). A u
 retires gives up its structure in the same change. An admin can't date the retirement before
 the structure last changed; an HRIS, which is never refused, withdraws it on that day instead.
 
+An admin gives a unit a structure of its own with `declare_structure` (MCP:
+`org_graph_declare_structure`), which writes a `TaxonomyDefined` naming the unit, then a
+`UnitKindChanged` for each unit it governs, under one cause. The new types are fresh, or a
+copy of the structure in force there: `copied_from` names `top` or the unit whose structure
+it copies, and each copied type keeps its rules. A type that could sit beneath the unit's own
+type may also sit at the top of the copy, since the units directly beneath the unit sit
+there. Fresh types can sit anywhere in the
+structure until an admin tightens them in Settings. No unit beneath may come from an HRIS.
+`withdraw_structure` (MCP: `org_graph_withdraw_structure`) writes a `TaxonomyDefined` with no
+levels, and each unit beneath takes a type of the structure above, one Espalia manages.
+Either changes back as one group: a withdrawal sends each unit back to the type it held,
+even where the declaration made two types one, and a declaration comes back with the same
+type ids. A change back is refused once a unit has joined the structure since, or a later
+change to its types has overtaken it. A withdrawal can't be changed back once an HRIS
+supplies a unit beneath. One entry of the group can't be changed back alone; it gives the
+whole group's reason when the group is refused too.
+
+The unit drawer's Structure section names the structure a unit's type comes from. An admin
+gives the unit one there, withdraws it, or opens its types, which Settings shows in a panel
+of their own (`LevelsPanel`, anchored on the unit). The drawer's parent list offers units in
+another structure under "Into another structure, changing types", only to an admin who may
+edit that structure, and the step it leads to asks what each type becomes.
+
 A unit in the top structure moves into a unit's own structure with a conversion: a type of
 that structure for each type it and the units beneath it hold. The move writes one
 `UnitMoved` carrying the conversion, then a `UnitKindChanged` for each unit it converts,

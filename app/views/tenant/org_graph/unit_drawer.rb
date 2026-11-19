@@ -43,6 +43,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
         details
         owners
         members
+        structure
         reshape
       end
     end
@@ -133,9 +134,20 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
           current_place_option if stays
           option(value: "", selected: @unit.parent_id.nil?) { "None (at the top)" } if @rights.root_choice?
           @rights.parent_choices.each { |unit| unit_option(unit, selected: unit.id == @unit.parent_id) }
+          conversion_choices
         end
         submit("Move")
       end
+    end
+  end
+
+  # A parent in another unit's own structure: choosing one leads to a step
+  # that asks what each type becomes there.
+  def conversion_choices
+    return if @rights.conversion_parent_choices.empty?
+
+    optgroup(label: "Into another structure, changing types") do
+      @rights.conversion_parent_choices.each { |unit| unit_option(unit) }
     end
   end
 
@@ -302,6 +314,40 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     end
   end
 
+  # -- Structure ([#494](https://github.com/espaliahq/espalia/issues/494)) -------------------------------------------------------
+
+  def structure
+    section(id: "org-unit-structure", aria: { labelledby: "org-unit-structure-heading" }, class: "space-y-3 border-t border-default pt-4") do
+      h3(id: "org-unit-structure-heading", class: "text-sm font-semibold text-default") { words("structure") }
+      p(class: "text-sm text-muted") { "Its unit type comes from #{structure_name(@overview.structure_unit_of(@unit))}." }
+      own_structure if @overview.declares_structure?(@unit)
+      structure_links if @rights.structure?
+    end
+  end
+
+  def own_structure
+    names = @overview.structures.fetch(@unit.id).map(&:name)
+    p(id: "org-unit-own-structure", class: "text-sm text-default") do
+      "#{@unit.name} has its own structure, which the units beneath it use: #{names.to_sentence}."
+    end
+  end
+
+  def structure_name(structure_unit_id) = Views::Tenant::OrgGraph::StructureStep.structure_name(@overview, structure_unit_id)
+
+  def structure_links
+    div(class: "flex flex-wrap gap-2") do
+      if @overview.declares_structure?(@unit)
+        reshape_link("Edit its unit types", tenant_org_graph_settings_path(anchor: Views::Tenant::OrgGraph::Settings::LevelsPanel.anchor(@unit.id)),
+                     label: "Edit the unit types beneath #{@unit.name}")
+        reshape_link("Withdraw its structure", new_tenant_org_unit_structure_withdrawal_path(@unit, on: @effective_on, **compared),
+                     tone: :danger, label: "Withdraw #{@unit.name}'s structure")
+      else
+        reshape_link("Give it its own structure", new_tenant_org_unit_structure_declaration_path(@unit, on: @effective_on, **compared),
+                     label: "Give #{@unit.name} its own structure")
+      end
+    end
+  end
+
   # -- Retire, merge and split (#138) ---------------------------------------
 
   def reshape
@@ -324,9 +370,9 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     end
   end
 
-  def reshape_link(text, href, tone: :neutral)
+  def reshape_link(text, href, tone: :neutral, label: "#{text} #{@unit.name}")
     render Components::Kit::Button.new(variant: :outline, tone:, size: :sm, compact: true, href:,
-                                       aria_label: "#{text} #{@unit.name}",
+                                       aria_label: label,
                                        data: { action: "effective-date#carry" }) { text }
   end
 

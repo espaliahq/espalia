@@ -76,6 +76,32 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       assert_equal @org[:squad], level_of(:payments)
     end
 
+    should "change back a structure given to a unit with nothing beneath it, from its activity" do
+      call(Operations::OrgGraph::DeclareStructure, unit_id: @org[:payments], levels: [ { name: "Stream" } ], conversion: {})
+
+      ActsAsTenant.with_tenant(@tenant) do
+        context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        item = OrgGraph::ActivityFeed.new(unit: OrgUnit.find(@org[:payments]), actor: context).items.first
+
+        assert_equal [ true, nil ], [ item.whole_cause?, item.refusal ]
+        call(Operations::OrgGraph::ChangeBackGroup, cause_id: item.group.cause_id)
+        assert_empty OrgGraph::Repository.new.load_structure.declared_structures.fetch(@org[:payments], nil)&.kinds.to_a
+      end
+    end
+
+    should "name the types a declaration gave once it is changed back, in the feed of a unit it retyped" do
+      declare
+      ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::OrgGraph::ChangeBackGroup, cause_id: OrgUnitActivity.where(subject: "structure").order(:position).last.cause_id)
+        context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        parts = OrgGraph::ActivityFeed.new(unit: OrgUnit.find(@org[:payments]), actor: context).items.flat_map(&:parts)
+        descriptions = parts.select { it.entry.subject == "level" }.map(&:description)
+
+        assert_includes descriptions, "Changed its type from Squad to Stream"
+        assert_includes descriptions, "Changed its type from Stream to Squad"
+      end
+    end
+
     should "leave a unit's structure to a tenant admin" do
       error = assert_raises(Pundit::NotAuthorizedError) { declare(as: @editor) }
 
@@ -156,22 +182,25 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
 
       units = result[:units].index_by { it[:id] }
       assert_equal [ nil, @org[:checkout] ], units.values_at(@org[:checkout], @org[:payments]).pluck(:structure_unit_id)
-      assert_equal [ [ @org[:checkout], %w[Stream Lane] ] ], result[:structures].map { [ it[:unit_id], it[:levels].pluck(:name) ] }
+      assert_equal [ [ @org[:checkout], "Checkout", %w[Stream Lane] ] ],
+                   result[:structures].map { [ it[:unit_id], it[:name], it[:levels].pluck(:name) ] }
       assert_equal %w[Department Team Squad], result[:levels].pluck(:name)
     end
 
     should "list a structure's types with their units and whether each can go, in Sources" do
-      structure = call(Operations::OrgGraph::Sources, as: @editor)[:structures].sole
+      structure = call(Operations::OrgGraph::Sources)[:structures].sole
 
       assert_equal [ @org[:checkout], "Checkout" ], structure.values_at(:unit_id, :name)
       assert_equal [ [ "Stream", 1, false ], [ "Lane", 0, true ] ], structure[:levels].map { it.values_at(:name, :live_units, :removable) }
+      assert_equal [ false, false ], call(Operations::OrgGraph::Sources, as: @editor)[:structures].sole[:levels].pluck(:removable)
     end
 
     should "read the structure in force on a date, even narrowed to a unit beneath it" do
       day = ActsAsTenant.with_tenant(@tenant) { Tenant.today.iso8601 }
       [ {}, { unit_id: @org[:payments] } ].each do |narrowed|
         result = call(Operations::OrgGraph::AsOf, date: day, **narrowed)
-        assert_equal [ [ @org[:checkout], %w[Stream Lane] ] ], result[:structures].map { [ it[:unit_id], it[:kinds].pluck(:name) ] }
+        assert_equal [ [ @org[:checkout], "Checkout", %w[Stream Lane] ] ],
+                     result[:structures].map { [ it[:unit_id], it[:name], it[:kinds].pluck(:name) ] }
       end
       assert_empty call(Operations::OrgGraph::AsOf, date: day, unit_id: @org[:platform])[:structures]
     end
@@ -198,7 +227,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       end
     end
 
-    should "show the declaration and the withdrawal in the unit's activity, and refuse to change either back" do
+    should "show the declaration and the withdrawal in the unit's activity, and change the withdrawal back" do
       call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })
 
       ActsAsTenant.with_tenant(@tenant) do
@@ -209,12 +238,32 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal [ "Withdrew its structure of Stream and Lane", "Gave it a structure of its own: Stream and Lane" ],
                      [ withdrawal, declaration ].map { it.parts.find { |part| part.entry.subject == "structure" }.description }
         assert_equal [ "withdrew its structure", "gave it a structure of its own" ], [ withdrawal, declaration ].map { it.group.summary.split(" and ").last }
-        assert_equal [ "A unit's own structure can't be changed back yet" ] * 2, [ withdrawal, declaration ].map(&:refusal)
+        assert_equal [ nil, "A later change has replaced this one; change that back first" ], [ withdrawal, declaration ].map(&:refusal)
         assert_equal [ @admin.person.name ] * 2, [ withdrawal, declaration ].map { it.parts.find { |part| part.entry.subject == "structure" }.by }
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        call(Operations::OrgGraph::ChangeBackGroup, cause_id: OrgUnitActivity.where(subject: "structure").order(:position).last.cause_id)
+        assert_includes OrgGraph::Repository.new.load_structure.declared_structures.fetch(@org[:checkout]).kinds.map(&:id), @stream
       end
     end
 
-    should "refuse to change back a type the withdrawal converted, as the request shares one cause" do
+    should "refuse to change a withdrawal back over a unit an HRIS has since supplied beneath it" do
+      call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        %i[team squad].each do |level|
+          matches = OrgUnit.live.where(level_id: @org[level]).pluck(:id).to_h { [ it, "ref-#{it}" ] }
+          handler.hand_over_level(@org[level], "hibob", field: "work.#{level}", matches:, effective_on: Tenant.today)
+        end
+      end
+
+      cause_id = ActsAsTenant.with_tenant(@tenant) { OrgUnitActivity.where(subject: "structure").order(:position).last.cause_id }
+      error = assert_raises(Operations::Base::ParameterError) { ActsAsTenant.with_tenant(@tenant) { call(Operations::OrgGraph::ChangeBackGroup, cause_id:) } }
+      assert_match "Payments comes from", error.message
+    end
+
+    should "refuse to change back a type the withdrawal converted alone, as the request shares one cause" do
       AuditMetadata.with(acting_via: :web, correlation_id: SecureRandom.uuid_v7) do
         call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })
       end
@@ -223,7 +272,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
         conversion = OrgUnitActivity.where(unit_id: @org[:payments], event_type: "UnitKindChanged").order(:created_at).last
 
-        assert_equal "This came with a change to a unit's own structure, which can't be changed back yet",
+        assert_equal "This came with a change to a unit's own structure, so change the whole change back",
                      OrgGraph::ChangeBackHandler.new(actor: context).refusal(conversion)
       end
     end
