@@ -260,7 +260,8 @@ An admin gives a unit a structure of its own with `declare_structure` (MCP:
 `org_graph_declare_structure`), which writes a `TaxonomyDefined` naming the unit, then a
 `UnitKindChanged` for each unit it governs, under one cause. The new types are fresh, or a
 copy of the structure in force there: `copied_from` names `top` or the unit whose structure
-it copies, and each copied type keeps its rules. A type that could sit beneath the unit's own
+it copies, and each copied type keeps its rules and remembers the type it copies
+(`copied_from_level_id`). A type that could sit beneath the unit's own
 type may also sit at the top of the copy, since the units directly beneath the unit sit
 there. Fresh types can sit anywhere in the
 structure until an admin tightens them in Settings. No unit beneath may come from an HRIS.

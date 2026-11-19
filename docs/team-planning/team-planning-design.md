@@ -542,8 +542,8 @@ against it. A unit sits in the structure in force at its planned parent, and ben
 declaring unit, at that structure's top. An Org Graph unit holds the type it holds today,
 which a declaration may have converted since the base; a unit the plan created holds the
 type it was given. One that holds a type of another structure reads "Doesn't fit this
-structure: its type belongs to another structure", without naming the structure or the type
-it should take.
+structure: its type belongs to another structure", without naming the structure. When the
+structure copied that type, the line names the copy: "Here its type would be Squad".
 
 - **Creating and retyping.** `team_planning_set_unit` offers the types of the structure the
   unit would sit in, and names a type of another structure as such. A unit the plan created
@@ -566,11 +566,19 @@ it should take.
   Graph's by whether `org_units` holds the id, which a Structure rebuild empties. So each
   refuses mid-rebuild with "The Org Graph is being rebuilt; try again in a minute", and
   `team_planning_undo_step` offers nothing. They refuse more, never count less.
+  `team_planning_set_unit` refuses the same way, since it judges types from those tables.
+  The misfit check can't judge any unit, so it doesn't run: `team_planning_attention` lists
+  `misfits` under `unchecked`, and the checks tab says unit types were not checked.
 - **An archived plan** reads as before once a structure its units sat in is withdrawn, or a
   type they held is removed: its misfits report a missing type, and nothing fails.
 
-Until a later change groups them, a declaration shows in drift as one line per unit it
-converts.
+Drift reads a declaration or withdrawal since the base as one row, keyed by the change's
+cause so it stays put between reads: "Checkout was given its own structure: 4 units changed
+type", or "Checkout's structure was withdrawn". It counts only the converted units the plan
+covers, and names the declaring unit only when the plan covers it too; otherwise it reads
+"The structure above this plan changed". A plan that covers none of the converted units sees
+no row. The row is pending, like any noted drift, and a group of one unit still reads as a
+group.
 
 It also checks each person (4.6):
 

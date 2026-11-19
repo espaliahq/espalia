@@ -127,7 +127,7 @@ class Operations::TeamPlanning::AttentionTest < ActiveSupport::TestCase
   should "read a scenario that fits as needing nothing" do
     assign(@q2, @ada, { unit_id: @growth, allocation: 1 })
 
-    assert_equal({ plan_id: @plan_id, scenario_id: @q2, checked: true, items: [], names: {} }, attention)
+    assert_equal({ plan_id: @plan_id, scenario_id: @q2, checked: true, items: [], names: {}, unchecked: [] }, attention)
   end
 
   should "mark a step's changes once an earlier step retires the unit they stand on" do

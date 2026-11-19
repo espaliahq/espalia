@@ -50,7 +50,10 @@ class TeamPlanning::Attention
   #
   # @!attribute items [Array<Item>] in {CHECKS} order
   # @!attribute names [Hash{String => String}] subject id => name
-  Report = Data.define(:items, :names)
+  # @!attribute unchecked [Array<Symbol>] the checks in {CHECKS} that did not run, so found nothing
+  Report = Data.define(:items, :names, :unchecked) do
+    def initialize(unchecked: [], **) = super
+  end
 
   CHECKS = %i[placements positions late_hires units misfits unresolved uncovered successions capacity_overrides allocations leavers managers overloaded
               unclassified budget_lines fundings unfunded ambiguous_funding unplaced cost_centre_mismatches budget_variance unused_budget_lines].freeze
@@ -89,11 +92,24 @@ class TeamPlanning::Attention
     map = shared.map
     capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
     budget = TeamPlanning::Budget.new(context:, plan:, scenario_id:, repository:, aggregate:, shared:).call if scenario_id != plan.id && map.budget_lines.any?
+    structures = structures_unless_rebuilding(map)
     items = new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
                               unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats, budget:,
-                              structures: TeamPlanning::PlannedStructures.load(map)).call
-    Report.new(items:, names: items.empty? ? {} : names_of(resolution.named(map), items))
+                              structures:).call
+    Report.new(items:, names: items.empty? ? {} : names_of(resolution.named(map), items), unchecked: structures ? [] : %i[misfits])
   end
+
+  # Mid-rebuild the structure projection holds part of the Org Graph's types,
+  # so every unit would read as a misfit.
+  #
+  # @param map [TeamPlanning::Baseline::Map]
+  # @return [TeamPlanning::PlannedStructures, nil] nil while the structure projection is being rebuilt
+  def self.structures_unless_rebuilding(map)
+    ProjectionVersion.unless_rebuilding(OrgGraph::Projections::Structure::PROJECTION_NAME) { TeamPlanning::PlannedStructures.load(map) }
+  rescue ProjectionVersion::Rebuilding
+    nil
+  end
+  private_class_method :structures_unless_rebuilding
 
   PERSON_FACETS = [ ASSIGNMENT, LINE, LEVEL, DEPARTURE ].freeze
   REMOVED_UNIT = "A removed unit"
@@ -251,7 +267,7 @@ class TeamPlanning::Attention
 
     taxonomy = @structures.at(unit.id)
     level_id = @structures.level_of(unit)
-    return missing_type(level_id) unless (kind = taxonomy.kind(level_id))
+    return missing_type(unit, level_id) unless (kind = taxonomy.kind(level_id))
     return unless judged
     return ("#{kind.name} can't sit at the top" unless kind.top?) if parent.nil? || @structures.declares?(parent.id)
     return unless (parent_kind = taxonomy.kind(@structures.level_of(parent)))
@@ -260,11 +276,15 @@ class TeamPlanning::Attention
   end
 
   # A type the plan can see in another structure is named; one it can't, or
-  # one gone from every structure, reads as gone.
-  def missing_type(level_id)
+  # one gone from every structure, reads as gone. When the structure in force
+  # copied it, its copy is the type to take.
+  def missing_type(unit, level_id)
     return "its unit type no longer exists" unless @structures.visible_type?(level_id)
 
-    "its type belongs to another structure"
+    copy = @structures.copy_at(level_id, unit.id)
+    return "its type belongs to another structure" unless copy
+
+    "its type belongs to another structure. Here its type would be #{copy.name}"
   end
 
   def unresolved

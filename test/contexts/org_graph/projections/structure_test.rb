@@ -82,6 +82,20 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         assert_equal %w[Team Division], OrgTaxonomyLevel.top_structure.pluck(:name)
       end
     end
+
+    should "hold the type each copied level was copied from, and keep it through a replay" do
+      lane_level = SecureRandom.uuid_v7
+      as_tenant do
+        publish_taxonomy(structure_unit_id: @payments, levels: [ { level_id: lane_level, name: "Lane", top: true, copied_from_level_id: @team_level } ])
+        assert_equal @team_level, OrgTaxonomyLevel.find(lane_level).copied_from_level_id
+        assert_nil OrgTaxonomyLevel.find(@group_level).copied_from_level_id
+      end
+
+      OrgGraph::Projections::Structure.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: OrgGraph::Projections::Structure, tenant: @tenant)
+
+      as_tenant { assert_equal @team_level, OrgTaxonomyLevel.find(lane_level).copied_from_level_id }
+    end
   end
 
   context "the providers" do

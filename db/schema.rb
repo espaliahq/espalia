@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_18_174112) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_19_022934) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -923,6 +923,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_174112) do
     t.uuid "parent_level_ids", array: true
     t.boolean "top"
     t.uuid "structure_unit_id"
+    t.uuid "copied_from_level_id"
     t.index ["tenant_id", "structure_unit_id", "position"], name: "index_org_taxonomy_levels_on_structure_position", unique: true, nulls_not_distinct: true
   end
 

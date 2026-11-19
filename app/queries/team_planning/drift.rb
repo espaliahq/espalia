@@ -28,7 +28,14 @@ class TeamPlanning::Drift
   # @!attribute meets [Array<Met>] the plan's changes to the facet it moves
   # @!attribute sources [Array<String>] who supplies what it moves, from {TeamPlanning::SourceOfTruth}
   # @!attribute outside [Array<String>] the fields {TeamPlanning::DriftScope} cut as outside the plan
-  Drifted = Data.define(:change, :from_plan, :meets, :sources, :outside)
+  # @!attribute group [Group, nil] the type changes a structure change folds into it
+  Drifted = Data.define(:change, :from_plan, :meets, :sources, :outside, :group) do
+    def initialize(group: nil, **) = super
+  end
+
+  # @!attribute cause_id [String] the structure change's cause, the same on every read
+  # @!attribute unit_ids [Array<String>] the units it retyped that the plan covers
+  Group = Data.define(:cause_id, :unit_ids)
 
   # @!attribute scenario_id [String] the plan's id for the root
   # @!attribute change_id [String] the planned change's event id
@@ -66,16 +73,19 @@ class TeamPlanning::Drift
     return Report.new(from:, to: @today, changes: [], names: {}) if changes.empty?
 
     planned = planned_changes(aggregate)
-    from_plan = plan_ids(changes.map(&:event_id))
+    events = events_by_id(changes.map(&:event_id))
     sources = TeamPlanning::SourceOfTruth.new(tenant_id: @plan.tenant_id)
                                          .preload(unit_ids: changes.flat_map { [ it.unit_id, it.from_unit_id ] },
                                                   succession_ids: changes.map(&:succession_id))
     drifted = cuts.map do |cut|
       change = cut.change
-      Drifted.new(change:, from_plan: from_plan[change.event_id] == @plan.id, meets: meeting(planned, change),
+      Drifted.new(change:, from_plan: events[change.event_id]&.data&.dig(:plan_id) == @plan.id, meets: meeting(planned, change),
                   sources: sources.of_drift(change), outside: cut.outside)
     end
-    Report.new(from:, to: @today, changes: drifted, names: names_for(changes, sources))
+    drifted = grouped(drifted, events)
+    named = drifted.map(&:change)
+    sources.preload(unit_ids: named.map(&:unit_id).compact)
+    Report.new(from:, to: @today, changes: drifted, names: names_for(changes + named, sources))
   end
 
   private
@@ -115,10 +125,46 @@ class TeamPlanning::Drift
     end
   end
 
-  def plan_ids(event_ids)
+  def events_by_id(event_ids)
     return {} if event_ids.empty?
 
-    Rails.configuration.event_store.read.events(event_ids.uniq).to_h { [ it.event_id, it.data[:plan_id] ] }
+    Rails.configuration.event_store.read.events(event_ids.uniq).index_by(&:event_id)
+  end
+
+  # A structure declared or withdrawn retypes every unit beneath its unit
+  # under one cause, so its type changes read as one item, in the place of
+  # the first. Each stays a type change through the scope's cut, so only the
+  # units the plan covers count, and a declaring unit it doesn't cover goes
+  # unnamed.
+  def grouped(drifted, events)
+    cause_of = drifted.select { it.change.kind == :unit_kind_changed }
+                      .to_h { [ it.change.event_id, events[it.change.event_id]&.metadata&.dig(:correlation_id) ] }.compact
+    structures = OrgUnitActivity.where(cause_id: cause_of.values.uniq, subject: "structure").index_by(&:cause_id)
+    return drifted if structures.empty?
+
+    members = drifted.group_by { structures.key?(cause_of[it.change.event_id]) && cause_of[it.change.event_id] }
+    drifted.filter_map do |item|
+      cause_id = cause_of[item.change.event_id]
+      next item unless structures.key?(cause_id)
+      next unless members[cause_id].first.equal?(item)
+
+      structure_item(structures[cause_id], members[cause_id])
+    end
+  end
+
+  def structure_item(structure, members)
+    changes = members.map(&:change)
+    named = @scope.nil? || @scope.covers_unit?(structure.unit_id)
+    providers = changes.map(&:provider).uniq
+    change = OrgGraph::ChangesBetween::Change.new(
+      kind: structure.after ? :structure_declared : :structure_withdrawn, effective_on: changes.first.effective_on,
+      learned_at: changes.filter_map(&:learned_at).max, person_id: nil, unit_id: (structure.unit_id if named), from_unit_id: nil,
+      succession_id: nil, fact: nil, before: nil, after: nil, provider: (providers.first if providers.one?),
+      event_id: structure.cause_id, withdrawn: changes.all?(&:withdrawn)
+    )
+    Drifted.new(change:, from_plan: members.all?(&:from_plan), meets: members.flat_map(&:meets).uniq,
+                sources: members.flat_map(&:sources).uniq, outside: named ? [] : [ "unit_id" ],
+                group: Group.new(cause_id: structure.cause_id, unit_ids: members.map { it.change.unit_id }))
   end
 
   def names_for(changes, sources)

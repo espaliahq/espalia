@@ -1,6 +1,6 @@
 {
   "name": "team_planning_units",
-  "description": "List the units of a scenario in a Team Planning plan the caller is in, resolved: the baseline's units with the scenario's changes and its ancestors' applied. units are live, by name, each with its parent_id and level_id; retired_units are those a scenario retired; successions say which units carry on from which. scenario_id defaults to the baseline, whose id is the plan's. Refused, as an unknown plan, unless the caller is a member.",
+  "description": "List the units of a scenario in a Team Planning plan the caller is in, resolved: the baseline's units with the scenario's changes and its ancestors' applied. units are live, by name, each with its parent_id and level_id; an Org Graph unit's level_id is its type today, which a structure declared since the base may have changed, as the plan's checks read it; retired_units are those a scenario retired; successions say which units carry on from which. scenario_id defaults to the baseline, whose id is the plan's. Refused, as an unknown plan, unless the caller is a member.",
   "inputSchema": {
     "type": "object",
     "properties": {

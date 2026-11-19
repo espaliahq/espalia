@@ -33,6 +33,7 @@ class Views::Plans::ChecksTab < Views::Base
     budget_variance: [ "Over budget", "Budget lines, cost centres or the whole budget over their approved amount or head count." ],
     unused_budget_lines: [ "Unused budget lines", "Budget lines in this scenario's period that nothing draws on." ]
   }.freeze
+  UNCHECKED_LINE = "This check did not run: the Org Graph is being rebuilt. Try again in a minute."
   # @param check [String, Symbol]
   # @return [String] the group's heading, or the key itself for a check with none
   def self.heading(check) = HEADINGS.dig(check.to_sym, 0) || check.to_s
@@ -57,9 +58,10 @@ class Views::Plans::ChecksTab < Views::Base
       end
       if @attention[:checked] == false
         unchecked(@attention)
-      elsif @attention[:items].empty?
+      elsif @attention[:items].empty? && Array(@attention[:unchecked]).empty?
         render Components::Kit::EmptyState.new(title: "Everything in this scenario still fits.", size: :panel)
       else
+        not_run
         summary
         groups.each { |check, items| group(check, items) }
       end
@@ -77,6 +79,15 @@ class Views::Plans::ChecksTab < Views::Base
     @groups ||= begin
       found = @attention[:items].group_by { it[:check].to_s }
       TeamPlanning::Attention::CHECKS.to_h { [ it.to_s, found.delete(it.to_s) || [] ] }.merge(found)
+    end
+  end
+
+  def not_run
+    skipped = Array(@attention[:unchecked])
+    return if skipped.empty?
+
+    render Components::Kit::Alert.new(tone: :warning, role: "status", data: { checks_not_run: skipped.join(" ") }) do
+      "#{skipped.map { self.class.heading(it) }.to_sentence} not checked: the Org Graph is being rebuilt. Try again in a minute."
     end
   end
 
@@ -99,7 +110,9 @@ class Views::Plans::ChecksTab < Views::Base
       if (sentence = HEADINGS.dig(check.to_sym, 1))
         p(class: "mt-1 text-sm text-muted") { sentence }
       end
-      if items.empty?
+      if Array(@attention[:unchecked]).include?(check)
+        p(class: "mt-3 text-sm text-default", data: { check_unchecked: check }) { UNCHECKED_LINE }
+      elsif items.empty?
         div(class: "mt-3") { render Components::Kit::EmptyState.new(title: "Nothing to fix here.", size: :panel) }
       else
         ul(class: "mt-3 divide-y divide-default rounded-lg border border-default bg-default") { items.each { item_row(it) } }

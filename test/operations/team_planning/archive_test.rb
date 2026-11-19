@@ -52,7 +52,7 @@ class Operations::TeamPlanning::ArchiveTest < ActiveSupport::TestCase
     assert_equal({ plan_id: @plan_id, **unchecked, changes: [], names: {} }, call(Operations::TeamPlanning::Drift, plan_id: @plan_id))
     assert_equal({ plan_id: @plan_id, scenario_id: @q1, **unchecked, statuses: [], names: {} },
                  call(Operations::TeamPlanning::Status, plan_id: @plan_id, scenario_id: @q1))
-    assert_equal({ plan_id: @plan_id, scenario_id: @q1, **unchecked, items: [], names: {} },
+    assert_equal({ plan_id: @plan_id, scenario_id: @q1, **unchecked, items: [], names: {}, unchecked: [] },
                  call(Operations::TeamPlanning::Attention, plan_id: @plan_id, scenario_id: @q1))
     assert_equal TeamPlanning::PlanAggregate::ARCHIVED, refusal(Operations::TeamPlanning::RebasePreview, plan_id: @plan_id)
   end

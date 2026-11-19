@@ -19,8 +19,8 @@ class Views::Plans::ChecksTabTest < ActiveSupport::TestCase
 
   def change(event_id, scenario_id: PLAN) = { kind: "UnitRetired", scenario_id:, event_id: }
 
-  def render_tab(items: [], scenario_id: Q1, linked_ids: Set.new)
-    attention = { plan_id: PLAN, scenario_id:, items:, names: { ADA => "Ada Quill", RISK => "Risk" } }
+  def render_tab(items: [], scenario_id: Q1, linked_ids: Set.new, unchecked: [])
+    attention = { plan_id: PLAN, scenario_id:, items:, names: { ADA => "Ada Quill", RISK => "Risk" }, unchecked: }
     controller = ApplicationController.new
     controller.request = ActionDispatch::TestRequest.create
     Nokogiri::HTML5.fragment(controller.view_context.render(
@@ -50,6 +50,17 @@ class Views::Plans::ChecksTabTest < ActiveSupport::TestCase
     assert_nil html.at_css("#checks-managers [data-check-item]")
     assert_not_includes html.at_css("#checks-placements").text, "Nothing to fix here."
     assert_equal [ "Placements 1" ], html.css("nav[aria-label='Checks'] a").map { it.text.squish }
+  end
+
+  should "say a check did not run, rather than that everything fits" do
+    html = render_tab(unchecked: %w[misfits])
+
+    assert_not_includes html.text, "Everything in this scenario still fits."
+    assert_equal "Unit types not checked: the Org Graph is being rebuilt. Try again in a minute.",
+                 html.at_css("[data-checks-not-run='misfits'][role='status']").text.squish
+    assert_equal Views::Plans::ChecksTab::UNCHECKED_LINE, html.at_css("#checks-misfits [data-check-unchecked='misfits']").text
+    assert_not_includes html.at_css("#checks-misfits").text, "Nothing to fix here."
+    assert_includes html.at_css("#checks-units").text, "Nothing to fix here."
   end
 
   should "show a check with no heading under its key, with its items" do

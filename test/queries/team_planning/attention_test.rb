@@ -383,6 +383,16 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
       assert_equal [ "Doesn't fit this structure: its type belongs to another structure" ], misfits(units, ROOT => @declared)
     end
 
+    should "name the type a unit would take when the structure in force copied its own" do
+      units = [ unit(ROOT, nil), unit(SecureRandom.uuid_v7, ROOT).with(level_id: @team), unit(SecureRandom.uuid_v7, ROOT).with(level_id: LEVEL) ]
+      structures = TeamPlanning::PlannedStructures.new(map(units:), taxonomies: { nil => @top, ROOT => @declared },
+                                                                    copies: { ROOT => { @team => @group, LEVEL => @squad } })
+
+      assert_equal [ "Doesn't fit this structure: its type belongs to another structure. Here its type would be Group",
+                     "Doesn't fit this structure: its type belongs to another structure. Here its type would be Squad" ],
+                   TeamPlanning::Attention.new(map(units:), {}, structures:).call.select { it.check == :misfits }.map(&:reason).sort
+    end
+
     should "read the structure in force above a scoped plan's root from the Org Graph, and name no unit there" do
       outside, root = SecureRandom.uuid_v7, SecureRandom.uuid_v7
       units = [ unit(root, outside).with(level_id: @group), unit(SecureRandom.uuid_v7, root).with(level_id: @squad) ]

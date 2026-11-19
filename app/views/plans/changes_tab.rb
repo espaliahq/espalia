@@ -391,12 +391,20 @@ class Views::Plans::ChangesTab < Views::Base
       outside?(change, "before") ? "Renamed #{renamed}" : "#{change.dig(:before, 'name') || unit} was renamed #{renamed}"
     when "unit_moved" then outside?(change, "after") ? "#{unit} left the units this plan covers" : "#{unit} moved"
     when "unit_kind_changed" then "#{unit}'s type changed"
+    when "structure_declared", "structure_withdrawn" then structure_line(unit, change)
     when "unit_retired" then "#{unit} was retired"
     when "unit_succeeded" then "A succession was recorded"
     when "owner_added" then "#{outside?(change, 'person_id') ? OUTSIDE : person} became an owner of #{unit}"
     when "owner_removed" then "#{outside?(change, 'person_id') ? OUTSIDE : person} stopped owning #{unit}"
     else change[:kind].humanize
     end
+  end
+
+  def structure_line(unit, change)
+    retyped = "#{change[:count]} #{'unit'.pluralize(change[:count])} changed type"
+    return "The structure above this plan changed: #{retyped}" if outside?(change, "unit_id")
+
+    change[:kind] == "structure_declared" ? "#{unit} was given its own structure: #{retyped}" : "#{unit}'s structure was withdrawn: #{retyped}"
   end
 
   def moved_line(person, change)

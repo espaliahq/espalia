@@ -152,6 +152,42 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
     assert_equal [ true, false, false ], drift.changes.map(&:from_plan)
   end
 
+  context "a structure declared and withdrawn since the base" do
+    setup do
+      @cards, @wallet = Array.new(2) { SecureRandom.uuid_v7 }
+      @pod = SecureRandom.uuid_v7
+      structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+      as_tenant do
+        structure.set_kind_parents(@squads, parent_ids: [ @squads ], top: true, effective_on: "2026-01-01")
+        structure.create_unit(@cards, "Cards", level_id: @squads, parent_id: @payments, effective_on: "2026-01-01")
+        structure.create_unit(@wallet, "Wallet", level_id: @squads, parent_id: @payments, effective_on: "2026-01-01")
+      end
+      admin = OrgGraph::StructureCommandHandler.new(actor: context_for(@planner))
+      on(Time.utc(2026, 3, 5, 9)) do
+        admin.declare_structure(@payments, levels: [ { level_id: @pod, name: "Pod" } ], conversion: { @squads => @pod }, effective_on: "2026-03-05")
+      end
+      on(Time.utc(2026, 3, 9, 9)) { admin.withdraw_structure(@payments, conversion: { @pod => @squads }, effective_on: "2026-03-09") }
+    end
+
+    should "read each as one change naming the declaring unit and every unit it retyped, keyed by its cause" do
+      report = drift
+      items = report.changes.map { [ it.change.kind, it.change.unit_id, it.group&.unit_ids&.sort ] }
+
+      assert_equal [ [ :structure_declared, @payments, [ @cards, @wallet ].sort ], [ :structure_withdrawn, @payments, [ @cards, @wallet ].sort ] ], items
+      assert_equal report.changes.map { it.change.event_id }, drift.changes.map { it.change.event_id }
+      assert_equal report.changes.map { it.group.cause_id }, report.changes.map { it.change.event_id }
+      assert_equal "Payments", report.names[@payments]
+    end
+
+    should "hold nothing on the grouped change but what a structure change says" do
+      declared = drift.changes.first
+
+      assert_equal({ kind: :structure_declared, effective_on: Date.new(2026, 3, 5), learned_at: Time.utc(2026, 3, 5, 9),
+                     person_id: nil, unit_id: @payments, from_unit_id: nil, succession_id: nil, fact: nil, before: nil, after: nil,
+                     provider: "espalia", event_id: declared.group.cause_id, withdrawn: false }, declared.change.to_h)
+    end
+  end
+
   should "have no drift while the base is still to come" do
     on(Time.utc(2026, 2, 20, 9)) { @org.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-02-20") }
 

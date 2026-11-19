@@ -59,6 +59,7 @@ So the writers that plan from those tables refuse while the projection they read
 | An HRIS sync's Org Graph writes (people, leavings, the mirror) | `org_graph/structure` |
 | Any change to the unit types: adding, renaming or removing one, saying where it can sit, or changing its provider | `org_graph/history` or `org_graph/structure` |
 | Giving a unit its own structure, withdrawing it, changing either back, or moving a unit into one | `org_graph/history` or `org_graph/structure` |
+| Changing a plan's unit: its name, type or place (`team_planning_set_unit`) | `org_graph/structure` |
 | Feeding Person Development from the Org Graph: each reconcile, the sweep, the cut-over | `person_development/current_assessment`, `assessment_cycles/current_state` or `frameworks/published_state` |
 
 So:
@@ -66,6 +67,7 @@ So:
 - a write during a rebuild refuses at once. A person sees "The Org Graph is being rebuilt; try again in a minute." over the web or MCP.
 - an HRIS sync during a rebuild still updates people's rows, offboards and assigns, and counts what it held back apart from the errors: `levels_skipped_while_rebuilding` for a mirror refused by a members rebuild, `people_skipped_while_rebuilding` for the people it wrote nothing for during a structure rebuild. On a tenant that is not fed, it offboards anyone HiBob reported as gone and assigns them nothing, though a cut-over tenant's row still reads active. The next sync writes them. A fed tenant's Pass 3b offboards only Espalia-held people, so a leaver HiBob holds keeps their assignment until the next sync writes `PersonLeft` and the feed offboards them.
 - a fed tenant's reconcile during one of those three rebuilds is refused. The handler counts it under `errors`. The sweep skips everyone and counts them under `skipped_while_rebuilding`, and the next sync's sweep catches it up. The Person Development cut-over refuses to start.
+- a plan's unit type check skips during a structure rebuild, and says so. `team_planning_attention` lists `misfits` under `unchecked`, and the Checks tab reads "Unit types not checked: the Org Graph is being rebuilt. Try again in a minute." in place of "Everything fits".
 - a rebuild that starts during a write waits for it to finish. A structure rebuild waits for a running HRIS sync, HiBob fetch included.
 
 **The guard covers only rebuilds that start after it ships.** A rebuild that runs in the same deploy as the guard, through `REBUILD_ON_DEPLOY`, runs while the old release still serves traffic, and the old release takes no lock. Rebuild `org_graph/members` or `org_graph/structure` in a quiet window until one deploy carrying the guard has gone out.
@@ -92,6 +94,27 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 4. **Remove the env var** after deploy succeeds (it lives in the `espalia-shared` env group on Render (an existing deployment may keep an older group name)). A forgotten variable is inert once the stamp is current, but keep the group honest.
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
+
+#### Recorded: `org_graph/structure` v3 (a copied type remembers its source, [#494](https://github.com/espaliahq/espalia/issues/494))
+
+Path A: `REBUILD_ON_DEPLOY=org_graph/structure`, removed once the deploy is live. The migration adds `org_taxonomy_levels.copied_from_level_id`, and the rebuild fills it from each declaration that copied a structure. A plan then names the copy a misfit unit would take: "Here its type would be Crew". Every other column is unchanged.
+
+No pause is needed. The serving release already refuses every unit type and structure write with "The Org Graph is being rebuilt; try again in a minute.", and an HRIS sync skips the people it would write and counts them under `people_skipped_while_rebuilding`. Changing a plan's unit refuses only from this release on, so a plan edit in the window between predeploy and traffic swap decides from a half-built type list.
+
+Writers that neither refuse nor skip, and why that is safe:
+
+- creating, renaming, moving or retiring an Org Graph unit that declares no structure. The aggregate decides from its own events.
+- retiring a plan's unit, or setting its succession. Neither judges a type.
+- creating a plan with a scope, or changing one. A unit still being replayed is refused as unknown, so these refuse more, never accept wrongly.
+
+While it runs:
+
+- a plan's Checks tab judges unit types from a half-built list, and doesn't say so: the previous release serves it, and has no "not checked" line. A later rebuild of this projection, served by this release, reads "Unit types not checked" instead.
+- `team_planning_units` and `team_planning_scenario_map` can show a converted unit with the type it held on the plan's base date.
+- Settings and the unit drawer can show no unit types until it ends.
+- `org_graph_sources` can misname a type's provider.
+
+Measured on the seeded dev database (20 handled events, every tenant): about 2 s, Rails boot included.
 
 #### Recorded: `frameworks/published_state` v4 (a rebuild stops at each publish)
 

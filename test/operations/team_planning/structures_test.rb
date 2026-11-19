@@ -38,6 +38,16 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
 
   def misfits = call(Operations::TeamPlanning::Attention, plan_id: @plan_id)[:items].select { it[:check] == "misfits" }
 
+  def rebuilding_structure(&)
+    structure = OrgGraph::Projections::Structure::PROJECTION_NAME
+    rebuilding = lambda do |*names, &block|
+      raise ProjectionVersion::Rebuilding if names.include?(structure)
+
+      block.call
+    end
+    ProjectionVersion.stub(:unless_rebuilding, rebuilding, &)
+  end
+
   # Engineering's own structure: Group at its top, Pod beneath a Group. Its
   # squads become Groups.
   def declare
@@ -101,8 +111,38 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
       assert_empty misfits
     end
 
+    should "name the copy it would take when the structure copied its type" do
+      call(Operations::OrgGraph::WithdrawStructure, unit_id: @engineering, conversion: { @group => @squad, @pod => @squad })
+      call(Operations::OrgGraph::DeclareStructure, unit_id: @engineering, copied_from: "top",
+                                                   levels: [ { name: "Crew", copied_from_level_id: @squad } ], conversion: { @squad => "Crew" })
+
+      assert_equal [ "Doesn't fit this structure: its type belongs to another structure. Here its type would be Crew" ], misfits.pluck(:reason)
+    end
+
     should "change its type only to one of the structure it sits in" do
       assert_equal "Level is not a type of the structure this unit would sit in", refusal(unit_id: @risk, level_id: @department)
+    end
+  end
+
+  context "while the Org Graph's structure is being rebuilt" do
+    setup do
+      @risk = set_unit(name: "Risk", parent_id: @engineering, level_id: @squad)[:unit_id]
+      declare
+    end
+
+    should "refuse a change to a plan's unit" do
+      error = rebuilding_structure { assert_raises(Operations::Base::ParameterError) { set_unit(unit_id: @risk, level_id: @group) } }
+
+      assert_equal "The Org Graph is being rebuilt; try again in a minute.", error.message
+    end
+
+    should "skip the fit check, and say it did" do
+      attention = rebuilding_structure { call(Operations::TeamPlanning::Attention, plan_id: @plan_id) }
+
+      assert_equal %w[misfits], attention[:unchecked]
+      assert_empty attention[:items].select { it[:check] == "misfits" }
+      assert_equal [], call(Operations::TeamPlanning::Attention, plan_id: @plan_id)[:unchecked]
+      assert_equal [ @risk ], misfits.pluck(:subject_id)
     end
   end
 
@@ -156,6 +196,18 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
     setup do
       set_unit(unit_id: @payments, name: "Payments and Billing")
       declare
+    end
+
+    should "give each unit on the scenario map its own type, whatever order the rows come in" do
+      payload = Operations::TeamPlanning::MapPayload
+      payload.alias_method(:in_map_order, :units_payload)
+      payload.define_method(:units_payload) { |map| in_map_order(map).reverse }
+      levels = call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id: @plan_id)[:units].to_h { it.values_at(:id, :level_id) }
+
+      assert_equal({ @engineering => @department, @payments => @group, @platform => @group }, levels)
+    ensure
+      payload.alias_method(:units_payload, :in_map_order)
+      payload.remove_method(:in_map_order)
     end
 
     should "let the old type go" do

@@ -34,8 +34,10 @@ class Operations::TeamPlanning::SetUnit < Operations::Base
     scenario_id = scenario_for
     unit_id = params[:unit_id] && uuid!(:unit_id)
     subject_id = unit_id || SecureRandom.uuid_v7
-    stored = set_unit_changes!(scenario_id) do |map|
-      [ { kind: ::TeamPlanning::Events::UnitSet, scenario_id:, subject_id:, end_state: end_state_in(map, unit_id) } ]
+    stored = ProjectionVersion.unless_rebuilding(::OrgGraph::Projections::Structure::PROJECTION_NAME) do # end_state_in judges types by it
+      set_unit_changes!(scenario_id) do |map|
+        [ { kind: ::TeamPlanning::Events::UnitSet, scenario_id:, subject_id:, end_state: end_state_in(map, unit_id) } ]
+      end
     end
     { plan_id: plan_id!, scenario_id:, unit_id: subject_id,
       **stored.changes_in(scenario_id).last.data.slice(:name, :parent_id, :level_id) }

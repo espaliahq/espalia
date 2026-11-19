@@ -41,7 +41,9 @@ class Operations::TeamPlanning::Attention < Operations::Base
               "scenario's map holds to the name the map shows: a person's (a placeholder hire's label), a unit's, a position's " \
               "such as \"Backfill: Software Engineer\", or a succession's as its units before and after. A forgotten person reads as " \
               "\"#{Person::FORMER_MEMBER}\", a removed placeholder label as \"#{::TeamPlanning::Baseline::PLACEHOLDER_NAME}\", and a " \
-              "unit, position or succession the map no longer holds has no name. #{UNCHECKED} Refused, as an unknown plan, unless " \
+              "unit, position or succession the map no longer holds has no name. `unchecked` lists the checks that did not run on a plan that is checked: " \
+              "misfits while the Org Graph's structure is being rebuilt, when no unit's type can be judged; try again in a minute. " \
+              "#{UNCHECKED} Refused, as an unknown plan, unless " \
               "the caller is a member."
   category :read
   approval :none
@@ -49,18 +51,19 @@ class Operations::TeamPlanning::Attention < Operations::Base
   parameter :plan_id, String, required: true
   parameter :scenario_id, String, schema: { description: "The scenario, or the plan's id for the baseline. Omit it for the baseline." }
 
-  # @return [Hash] `{ plan_id, scenario_id, checked, items, names }`, with archived_on and note for an archived plan
+  # @return [Hash] `{ plan_id, scenario_id, checked, items, names, unchecked }`; an archived plan's also has archived_on and note
   def perform
     plan = plan!
     scenario_id = scenario_id!(:scenario_id) || plan.id
     if plan.archived?
       known_scenario!(plan, scenario_id)
-      return { plan_id: plan.id, scenario_id:, **checked(plan), items: [], names: {} }
+      return { plan_id: plan.id, scenario_id:, **checked(plan), items: [], names: {}, unchecked: [] }
     end
 
     report = refusing_bad_plans { ::TeamPlanning::Attention.for(context:, plan:, scenario_id:) }
     sources = ::TeamPlanning::SourceOfTruth.new(tenant_id: plan.tenant_id).preload(unit_ids: report.items.flat_map(&:unit_ids))
-    { plan_id: plan.id, scenario_id:, **checked(plan), items: report.items.map { item_row(it, sources) }, names: report.names }
+    { plan_id: plan.id, scenario_id:, **checked(plan), items: report.items.map { item_row(it, sources) }, names: report.names,
+      unchecked: report.unchecked.map(&:to_s) }
   end
 
   private
