@@ -134,6 +134,28 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
       end
       assert_not unit(@org[:payments]).retired?
     end
+
+    should "merge across structures for an owner of both units who can't change either structure (#521)" do
+      group = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        admin = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        OrgGraph::StructureCommandHandler.new(actor: admin).declare_structure(
+          @org[:checkout], levels: [ { level_id: group, name: "Group", parent_level_ids: [ group ], top: true } ],
+                           conversion: { @org[:squad] => group }, effective_on: "2026-01-05"
+        )
+      end
+      ledger = own_two_squads(@tenant, @org, @owner.person)
+      owner = AuthorizationContext.new(user: @owner.user, tenant_user: @owner, person: @owner.person)
+      assert_not OrgGraphPolicy.new(owner, :org_graph).edit_structure_of?(unit(@org[:checkout]))
+
+      result = call(Operations::OrgGraph::MergeUnit, as: @owner, unit_id: @org[:payments], into_unit_id: ledger,
+                                                     effective_on: Date.current.iso8601)
+
+      assert_equal 1, result[:memberships_moved]
+      assert unit(@org[:payments]).retired?
+      assert_equal [ ledger ], units_of(:dot)
+      assert_equal @org[:squad], unit(ledger).level_id
+    end
   end
 
   context "SplitUnit" do

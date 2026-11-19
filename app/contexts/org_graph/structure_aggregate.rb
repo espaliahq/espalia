@@ -742,7 +742,7 @@ class OrgGraph::StructureAggregate
       raise "Unit not found" unless (predecessor_ids + successor_ids).all? { |id| @units.key?(id) }
       raise "A unit can't come to precede itself" if preceded_by(predecessor_ids).intersect?(successor_ids)
 
-      ensure_one_structure!(predecessor_ids + successor_ids)
+      ensure_one_structure!(predecessor_ids + successor_ids) unless merge?(successor_ids, retire_predecessors)
       latest = (predecessor_ids + successor_ids).map { |id| @units[id] }.max_by(&:created_on)
       raise "A succession can't predate #{latest.name}, created on #{latest.created_on}" if effective_on < latest.created_on
     end
@@ -1381,11 +1381,17 @@ class OrgGraph::StructureAggregate
     on
   end
 
+  # A merge retires its predecessors into one successor and moves only
+  # memberships, so no unit changes type and it may cross structures
+  # ([#521](https://github.com/espaliahq/espalia/issues/521)). A split, or a link that retires nothing, stays within one.
+  # Step 2's check belongs here: a successor whose type can't hold a membership.
+  def merge?(successor_ids, retire_predecessors) = retire_predecessors && successor_ids.one?
+
   def ensure_one_structure!(unit_ids)
     structures = unit_ids.map { structure_in_force(it) }.uniq
     return if structures.size == 1
 
-    raise "A merge or split can't cross structures: these units sit in #{structures.map { structure_label(it) }.to_sentence}"
+    raise "A split, or a succession that retires nothing, can't cross structures: these units sit in #{structures.map { structure_label(it) }.to_sentence}"
   end
 
   # A declared structure keeps no dated rules ([#498](https://github.com/espaliahq/espalia/issues/498)), so a change to a unit
