@@ -131,16 +131,52 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
       assert_empty structure.misplaced_units
     end
 
-    should "refuse a merge across structures, and split one within a structure" do
-      other = create_unit("Lending", @tribe)
-      error = assert_raises(RuntimeError) do
-        as_tenant { @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ other ], effective_on: @today) }
-      end
-      assert_equal "A merge or split can't cross structures: these units sit in Payments's structure and the organisation's structure", error.message
+    should "merge a unit into one in another structure, keeping the successor's type (#521)" do
+      lending = create_unit("Lending", @tribe)
+      as_tenant { merge(@basket, into: lending) }
 
+      assert structure.unit(@basket).retired
+      assert_equal @tribe, structure.unit(lending).level_id
+    end
+
+    should "withdraw the structure a merged unit declares, as its retirement does (#521)" do
+      ledger = create_unit("Ledger", @group, parent_id: @payments)
+      publish_taxonomy([ { level_id: SecureRandom.uuid_v7, name: "Desk", parent_level_ids: [], top: true } ], unit_id: ledger)
+      lending = create_unit("Lending", @tribe)
+      as_tenant { merge(ledger, into: lending) }
+
+      assert structure.unit(ledger).retired
+      assert_equal [ @payments ], structure.declared_structures.keys
+    end
+
+    should "refuse a split across structures, or a link that retires nothing, and split one within a structure" do
+      lending = create_unit("Lending", @tribe)
       ramp = create_unit("Ramp", @stream, parent_id: @checkout)
+      message = "A split, or a succession that retires nothing, can't cross structures: " \
+                "these units sit in Payments's structure and the organisation's structure"
+
+      error = assert_raises(RuntimeError) do
+        as_tenant do
+          @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ ramp, lending ],
+                                                           effective_on: @today, retire_predecessors: true)
+        end
+      end
+      assert_equal message, error.message
+
+      error = assert_raises(RuntimeError) do
+        as_tenant { @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ lending ], effective_on: @today) }
+      end
+      assert_equal message, error.message
+      assert_not structure.unit(@basket).retired
+
+      cards = create_unit("Cards", @stream, parent_id: @checkout)
+      as_tenant { @handler.retire_unit(cards, effective_on: @today) }
+      error = assert_raises(RuntimeError) { as_tenant { merge(cards, into: lending) } }
+      assert_equal message, error.message
+
+      lane = create_unit("Lane", @stream, parent_id: @checkout)
       as_tenant do
-        @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ ramp ], effective_on: @today,
+        @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @basket ], successor_ids: [ ramp, lane ], effective_on: @today,
                                                          retire_predecessors: true)
       end
       assert structure.unit(@basket).retired
@@ -177,6 +213,11 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
     unit_id = SecureRandom.uuid_v7
     as_tenant { @handler.create_unit(unit_id, name, level_id:, parent_id:, effective_on: on) }
     unit_id
+  end
+
+  def merge(unit_id, into:)
+    @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ unit_id ], successor_ids: [ into ], effective_on: @today,
+                                                     retire_predecessors: true)
   end
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)

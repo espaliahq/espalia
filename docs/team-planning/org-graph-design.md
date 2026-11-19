@@ -118,11 +118,14 @@ A succession can retire its predecessors in the same step. Each such `UnitRetire
 names the succession and its successors, and its members move rather than leave:
 
 - **One successor (a merge or a replacement):** every open membership moves to it on
-  the succession date.
+  the succession date. The two sides may sit in different structures, since no unit
+  changes type: the successor keeps its own, and a predecessor that declares a structure
+  withdraws it as it retires. A merge needs the right to change every unit in it, and no
+  right over either structure ([#521](https://github.com/espaliahq/espalia/issues/521)).
 - **Several successors (a split):** whoever issues the split may name a successor per
   person, and those people move. Anyone not named has their membership ended on that
   date, so they appear in the "in no team" tray for someone to place. The handler never
-  guesses.
+  guesses. A split stays within one structure, as does a succession that retires nothing.
 - **Placements are not stored on the structure events.** They are ordinary membership
   commands issued with the split, sharing its cause. The split step in the unit drawer
   (5.6, [#138](https://github.com/espaliahq/espalia/issues/138)) and applying a plan

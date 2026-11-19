@@ -15,8 +15,9 @@ class Operations::OrgGraph::MergeUnit < Operations::Base
 
   description "Merge a unit into another live unit from effective_on (today by default). Every membership " \
               "moves to into_unit_id, keeping its role and allocation, and unit_id retires, all under one " \
-              "cause. A unit with live sub-units is refused, as is either unit when an HRIS supplies it. The " \
-              "caller must be able to change both units."
+              "cause. The two units may sit in different structures: into_unit_id keeps its type, and a structure " \
+              "unit_id declares is withdrawn as it retires. A unit with live sub-units is refused, as is either " \
+              "unit when an HRIS supplies it. The caller must be able to change both units."
   approval :in_app
 
   parameter :unit_id, String, required: true

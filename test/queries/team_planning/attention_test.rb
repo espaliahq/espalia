@@ -376,6 +376,16 @@ class TeamPlanning::AttentionTest < ActiveSupport::TestCase
       assert_equal [ "Doesn't fit this structure: Squad can't sit at the top" ], misfits(units, ROOT => @declared)
     end
 
+    should "raise nothing for a merge out of it into a unit of the structure above (#521)" do
+      group, other, team = Array.new(3) { SecureRandom.uuid_v7 }
+      units = [ unit(ROOT, nil), unit(group, ROOT).with(level_id: @group), unit(other, nil), unit(team, other).with(level_id: @team) ]
+      merged = map(units:, retired_units: [ unit(RETIRED, group).with(level_id: @squad) ], people: [ member(places: [ [ team, 1 ] ]) ],
+                   successions: [ B::Succession.new(id: SecureRandom.uuid_v7, predecessor_ids: [ RETIRED ], successor_ids: [ team ]) ])
+      structures = TeamPlanning::PlannedStructures.new(merged, taxonomies: { nil => @top, ROOT => @declared })
+
+      assert_empty TeamPlanning::Attention.new(merged, {}, structures:).call.select { %i[successions misfits placements].include?(it.check) }
+    end
+
     should "mark a unit beneath it that still holds a type of the structure above" do
       stale = SecureRandom.uuid_v7
       units = [ unit(ROOT, nil), unit(stale, ROOT).with(level_id: @team) ]

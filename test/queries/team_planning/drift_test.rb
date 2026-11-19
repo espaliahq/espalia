@@ -131,6 +131,28 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
     assert_equal [ [ @platform, "unit" ] ], met.map { [ it.subject_id, it.facet ] }
   end
 
+  should "meet a planned retirement when the Org Graph merges the unit into another structure (#521)" do
+    cards, pod = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+    structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+    as_tenant do
+      structure.set_kind_parents(@squads, parent_ids: [ @squads ], top: true, effective_on: "2026-01-01")
+      structure.create_unit(cards, "Cards", level_id: @squads, parent_id: @payments, effective_on: "2026-01-01")
+      handler.set_change(@plan_id, TeamPlanning::Events::UnitRetired, scenario_id: @q1, subject_id: cards,
+                                                                       end_state: { name: "Cards", parent_id: @payments, level_id: @squads })
+    end
+    on(Time.utc(2026, 3, 5, 9)) do
+      OrgGraph::StructureCommandHandler.new(actor: context_for(@planner))
+                                       .declare_structure(@payments, levels: [ { level_id: pod, name: "Pod" } ], conversion: { @squads => pod }, effective_on: "2026-03-05")
+    end
+    on(Time.utc(2026, 3, 10, 9)) do
+      structure.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ cards ], successor_ids: [ @platform ],
+                                                        effective_on: "2026-03-10", retire_predecessors: true)
+    end
+
+    met = drift.changes.flat_map(&:meets)
+    assert_equal [ [ cards, "unit" ] ], met.map { [ it.subject_id, it.facet ] }
+  end
+
   should "show a change the Org Graph learned before the base and no longer believes as withdrawn" do
     plan(PlacementsSet, @ada, placements: [ { unit_id: @platform, allocation: 1.0 } ])
     on(Time.utc(2026, 2, 20, 9)) { @org.move_membership(@ada.id, @payments, @platform, effective_on: "2026-03-15") }
