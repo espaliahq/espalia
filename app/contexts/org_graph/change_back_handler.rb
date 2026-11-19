@@ -201,10 +201,15 @@ class OrgGraph::ChangeBackHandler
   end
 
   # A move between structures changes back whole: the move with every unit
-  # it retyped, as one change.
+  # it retyped, as one change. A type change its conversion didn't make came
+  # with it in the same request, and changing it back would need its own
+  # inverse.
   def ensure_move_reversible!(move, entries, apart_from:)
     raise whole_refusal(move.cause_id, WHOLE_MOVE) unless apart_from
-    return if entries.all? { it.event_id == move.event_id || it.event_type == "UnitKindChanged" }
+
+    conversion = Rails.configuration.event_store.read.event(move.event_id).data[:conversion].to_h.transform_keys(&:to_s)
+    carried = ->(kind) { kind.event_type == "UnitKindChanged" && conversion[kind.before&.dig("level_id").to_s] == kind.after&.dig("level_id") }
+    return if entries.all? { it.event_id == move.event_id || carried.(it) }
 
     raise "This came with a move between structures, which can't be changed back yet"
   end

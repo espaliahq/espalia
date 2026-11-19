@@ -109,6 +109,18 @@ class OrgGraph::ChangeMoveBackTest < ActiveSupport::TestCase
     assert_equal @platform, structure.unit(@payments).parent_id
   end
 
+  should "refuse when a type change the move didn't make came in the same request" do
+    data = create_unit("Data", @pod, parent_id: @engineering)
+    as_tenant do
+      event_store.with_metadata(correlation_id: "one-request") do
+        @admin.move_unit(@payments, @platform, effective_on: @today + 2, conversion: { @team => @tribe, @pod => @squad })
+        @admin.change_unit_kind(data, @team, effective_on: @today + 2)
+      end
+      assert_equal "This came with a move between structures, which can't be changed back yet", change_back_handler.group_refusal("one-request")
+    end
+    assert_equal @platform, structure.unit(@payments).parent_id
+  end
+
   should "refuse when a unit has joined the moved team since" do
     move_in
     create_unit("Payouts", @squad, parent_id: @payments, on: @today + 3)
