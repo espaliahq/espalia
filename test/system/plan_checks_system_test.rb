@@ -102,14 +102,14 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       assert_no_sideways_overflow
     end
 
-    should "mark a unit of the plan's that holds a type of another structure" do
+    should "mark a unit of the plan's that holds a type of another structure, naming its copy there" do
       unit_of_another_structure
       sign_in_as(@planner.user)
       visit checks_plan_path(@plan_id, scenario: @q1)
       assert_text "Checks on Q1 hires"
 
       assert_selector "#checks-misfits [data-check-item]",
-                      text: /Risk · Unit.*Doesn't fit this structure: its type belongs to another structure.*From a change in Q1 hires/m
+                      text: /Risk · Unit.*Doesn't fit this structure: its type belongs to another structure. Here it would be a Pod.*From a change in Q1 hires/m
       assert_no_sideways_overflow
     end
   end
@@ -168,7 +168,7 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
       visit checks_plan_path(@plan_id, scenario: @q1)
       assert_text "Checks on Q1 hires"
 
-      assert_selector "#checks-misfits [data-check-item]", text: /Doesn't fit this structure: its type belongs to another structure/
+      assert_selector "#checks-misfits [data-check-item]", text: /Doesn't fit this structure: its type belongs to another structure. Here it would be a Pod/
       assert_no_sideways_overflow
     end
   end
@@ -232,7 +232,8 @@ class PlanChecksSystemTest < ApplicationSystemTestCase
     structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     ActsAsTenant.with_tenant(@tenant) { structure.set_kind_parents(@team, parent_ids: [ @team ], top: true, effective_on: Date.current.iso8601) }
     call(Operations::TeamPlanning::SetUnit, @planner, plan_id: @plan_id, scenario_id: @q1, name: "Risk", parent_id: @payments, level_id: @team)
-    call(Operations::OrgGraph::DeclareStructure, account(role: :admin), unit_id: @payments, levels: [ { name: "Pod" } ], conversion: {})
+    call(Operations::OrgGraph::DeclareStructure, account(role: :admin), unit_id: @payments, copied_from: "top",
+                                                                         levels: [ { name: "Pod", copied_from_level_id: @team } ], conversion: {})
   end
 
   def disagreeing_entry

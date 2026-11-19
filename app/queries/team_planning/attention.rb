@@ -251,7 +251,7 @@ class TeamPlanning::Attention
 
     taxonomy = @structures.at(unit.id)
     level_id = @structures.level_of(unit)
-    return missing_type(level_id) unless (kind = taxonomy.kind(level_id))
+    return missing_type(unit, level_id) unless (kind = taxonomy.kind(level_id))
     return unless judged
     return ("#{kind.name} can't sit at the top" unless kind.top?) if parent.nil? || @structures.declares?(parent.id)
     return unless (parent_kind = taxonomy.kind(@structures.level_of(parent)))
@@ -260,11 +260,15 @@ class TeamPlanning::Attention
   end
 
   # A type the plan can see in another structure is named; one it can't, or
-  # one gone from every structure, reads as gone.
-  def missing_type(level_id)
+  # one gone from every structure, reads as gone. When the structure in force
+  # copied it, its copy is the type to take.
+  def missing_type(unit, level_id)
     return "its unit type no longer exists" unless @structures.visible_type?(level_id)
 
-    "its type belongs to another structure"
+    copy = @structures.copy_at(level_id, unit.id)
+    return "its type belongs to another structure" unless copy
+
+    "its type belongs to another structure. Here it would be #{copy.name.match?(/\A[aeiou]/i) ? 'an' : 'a'} #{copy.name}"
   end
 
   def unresolved

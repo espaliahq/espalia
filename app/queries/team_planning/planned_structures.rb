@@ -30,15 +30,18 @@ class TeamPlanning::PlannedStructures
     rows = OrgTaxonomyLevel.order(:position).to_a.group_by(&:structure_unit_id)
     live = OrgUnit.pluck(:id, :parent_id, :level_id)
     new(map, taxonomies: rows.transform_values { OrgTaxonomyLevel.taxonomy(it) },
+             copies: rows.transform_values { |levels| levels.select(&:copied_from_level_id).to_h { [ it.copied_from_level_id, it.id ] } },
              live_parents: live.to_h { |id, parent_id, _| [ id, parent_id ] }, live_levels: live.to_h { |id, _, level_id| [ id, level_id ] })
   end
 
   # @param map [TeamPlanning::Baseline::Map]
   # @param taxonomies [Hash{String, nil => OrgGraph::Taxonomy}] each structure, by declaring unit id; nil for the top
+  # @param copies [Hash{String, nil => Hash{String => String}}] each structure's copied types, source type id => its copy's id
   # @param live_parents [Hash{String => String, nil}] every Org Graph unit's live parent
   # @param live_levels [Hash{String => String}] every Org Graph unit's live type
-  def initialize(map, taxonomies:, live_parents: {}, live_levels: {})
+  def initialize(map, taxonomies:, copies: {}, live_parents: {}, live_levels: {})
     @taxonomies = taxonomies
+    @copies = copies
     @live_parents = live_parents
     @live_levels = live_levels
     @planned = (map.units + map.retired_units).index_by(&:id)
@@ -79,6 +82,14 @@ class TeamPlanning::PlannedStructures
   # @param structure_unit_id [String, nil]
   # @return [OrgGraph::Taxonomy] empty for a top structure with no types
   def taxonomy_of(structure_unit_id) = @taxonomies.fetch(structure_unit_id) { EMPTY }
+
+  # @param level_id [String] a type of another structure
+  # @param unit_id [String]
+  # @return [OrgGraph::Taxonomy::Kind, nil] the type the structure in force at the unit copied from it
+  def copy_at(level_id, unit_id)
+    structure = structure_at(unit_id)
+    at(unit_id).kind(@copies.dig(structure, level_id))
+  end
 
   # @param level_id [String, nil]
   # @return [Boolean] whether the type belongs to a structure in force at a

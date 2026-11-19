@@ -101,6 +101,14 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
       assert_empty misfits
     end
 
+    should "name the copy it would take when the structure copied its type" do
+      call(Operations::OrgGraph::WithdrawStructure, unit_id: @engineering, conversion: { @group => @squad, @pod => @squad })
+      call(Operations::OrgGraph::DeclareStructure, unit_id: @engineering, copied_from: "top",
+                                                   levels: [ { name: "Crew", copied_from_level_id: @squad } ], conversion: { @squad => "Crew" })
+
+      assert_equal [ "Doesn't fit this structure: its type belongs to another structure. Here it would be a Crew" ], misfits.pluck(:reason)
+    end
+
     should "change its type only to one of the structure it sits in" do
       assert_equal "Level is not a type of the structure this unit would sit in", refusal(unit_id: @risk, level_id: @department)
     end
