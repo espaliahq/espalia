@@ -48,7 +48,7 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
 
     plans = ProjectionVersion.unless_rebuilding(TeamPlanning::Projections::Overrides::PROJECTION_NAME,
                                                 ::OrgGraph::Projections::Structure::PROJECTION_NAME) do
-      TeamPlanningOverride.live_plans_by_level.fetch(level.id, 0)
+      TeamPlanningOverride.live_plans_by_level([ level.id ]).fetch(level.id, 0)
     end
     return if plans.zero?
 
