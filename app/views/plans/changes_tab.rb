@@ -416,9 +416,10 @@ class Views::Plans::ChangesTab < Views::Base
 
   # A move written before it named the structures it crossed has neither side.
   def crossing(change)
-    return "between structures" unless change[:before] && change[:after]
+    return "between structures" unless change[:before] || change[:after]
 
-    left, joined = %w[before after].map { structure_side(change, it) }
+    left = structure_side(change, "before") if change[:before]
+    joined = structure_side(change, "after") if change[:after]
     if left.nil? then "into #{joined}"
     elsif joined.nil? then "out of #{left}"
     else "from #{left} into #{joined}"
