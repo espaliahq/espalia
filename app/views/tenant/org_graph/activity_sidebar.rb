@@ -101,7 +101,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
 
     if item.changeable?
       if item.whole_cause?
-        change_back_form("Change it all back", cause_id: item.group.cause_id)
+        change_back_form(item.parts.one? && item.unit_count == 1 ? "Change it back" : "Change it all back", cause_id: item.group.cause_id)
       else
         change_back_form("Change it back", entry_id: item.parts.first.entry.id)
       end

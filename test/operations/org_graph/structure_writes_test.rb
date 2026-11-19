@@ -76,6 +76,19 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       assert_equal @org[:squad], level_of(:payments)
     end
 
+    should "change back a structure given to a unit with nothing beneath it, from its activity" do
+      call(Operations::OrgGraph::DeclareStructure, unit_id: @org[:payments], levels: [ { name: "Stream" } ], conversion: {})
+
+      ActsAsTenant.with_tenant(@tenant) do
+        context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
+        item = OrgGraph::ActivityFeed.new(unit: OrgUnit.find(@org[:payments]), actor: context).items.first
+
+        assert_equal [ true, nil ], [ item.whole_cause?, item.refusal ]
+        call(Operations::OrgGraph::ChangeBackGroup, cause_id: item.group.cause_id)
+        assert_empty OrgGraph::Repository.new.load_structure.declared_structures.fetch(@org[:payments], nil)&.kinds.to_a
+      end
+    end
+
     should "leave a unit's structure to a tenant admin" do
       error = assert_raises(Pundit::NotAuthorizedError) { declare(as: @editor) }
 
