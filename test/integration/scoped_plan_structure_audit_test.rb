@@ -142,6 +142,35 @@ class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
     assert_equal [ "The parent must be a live unit in this scenario" ], refusals.uniq
   end
 
+  # Engineering's declaration straddles the scope: Payments is covered,
+  # Engineering isn't. Sales' lies wholly outside. Payments then declares one
+  # of its own, inside, over Cards.
+  context "a plan whose drift holds structure changes" do
+    setup do
+      @cards = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM).create_unit(@cards, "Cards", level_id: @pod, parent_id: @payments, effective_on: "2026-02-01")
+      end
+      travel_to Time.utc(2026, 2, 3, 9)
+      call(Operations::OrgGraph::DeclareStructure, unit_id: @payments, levels: [ { name: "Lane" } ], conversion: { @pod => "Lane" })
+    end
+
+    should "read each as one change, naming only what the plan covers, in every read that lists drift" do
+      payloads = walk("team_planning_step_outcome" => "This step isn't closed").compact
+      ungrouped = payloads.select { |_tool, json| json.include?('"kind":"unit_kind_changed"') }.keys
+      grouping = payloads.select { |_tool, json| json.include?('"kind":"structure_declared"') }
+
+      assert_empty ungrouped, "a read lists a structure's type changes one unit at a time"
+      assert_includes grouping.keys, "team_planning_drift"
+      assert_includes grouping.keys, "team_planning_rebase_preview"
+      grouping.each do |tool, json|
+        items = JSON.parse(json).then { it["drift"] || it }.fetch("changes").select { it["kind"] == "structure_declared" }
+        assert_equal [ [ nil, [ @payments ], 1, [ "unit_id" ] ], [ @payments, [ @cards ], 1, [] ] ],
+                     items.map { it.values_at("unit_id", "unit_ids", "count", "outside") }, "#{tool} groups a structure's type changes"
+      end
+    end
+  end
+
   context "an archived plan with a unit of a declared type" do
     setup { call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id) }
 
