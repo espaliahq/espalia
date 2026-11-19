@@ -21,10 +21,14 @@ class Operations::TeamPlanning::Drift < Operations::Base
               "scenario, or placed in one of them since, including by a move known before the base that takes effect after it. " \
               "Such a move decides coverage from its own day but is not listed. A change that takes one of them out, or a covered person now reporting " \
               "to someone the plan can't show, keeps the fact and nulls what lies outside; a joiner keeps only the units and manager " \
-              "the plan covers. A structure a unit declares or withdraws retypes every unit beneath it under one cause, " \
-              "and reads as one change, `structure_declared` or `structure_withdrawn`, in the place of its first type change: " \
-              "`event_id` is that cause, the same on every read, `unit_ids` the retyped units the plan covers and `count` how many. " \
-              "Its `unit_id` is the declaring unit, null with \"unit_id\" in `outside` when the plan doesn't cover it. " \
+              "the plan covers. A structure a unit declares or withdraws retypes every unit beneath it, and a move between structures " \
+              "retypes the units it carries. Each reads as one change, `structure_declared`, `structure_withdrawn` or " \
+              "`moved_between_structures`, in the place of its first part: `event_id` is the declaration, withdrawal or move itself, " \
+              "the same on every read, `unit_ids` the retyped units the plan covers and `count` how many. " \
+              "A structure change's `unit_id` is the declaring unit, a move's the unit moved, each null with \"unit_id\" in `outside` " \
+              "when the plan doesn't cover it. A move's `before` and `after` each hold `structure_unit_id`, the declaring unit of the " \
+              "structure it left and joined: null for the organisation's, or, with \"before\" or \"after\" in `outside`, for one the plan " \
+              "doesn't cover. Both are null on a move written before the Org Graph recorded its structures. " \
               "A change that took effect before the base nulls `before`. `outside` lists the fields nulled or trimmed. " \
               "People are named by id, and `names` maps every person and unit id the changes name to a name, but a scoped plan " \
               "names only the units it covers today; a forgotten " \
@@ -43,9 +47,11 @@ class Operations::TeamPlanning::Drift < Operations::Base
   # Every id the changes name, so a client never meets an id it can't name.
   def self.names_for(report)
     ids = report.changes.flat_map { [ it.change.person_id, it.change.before&.dig("manager_id"), it.change.after&.dig("manager_id") ] }
-    unit_ids = report.changes.flat_map { [ it.change.unit_id, it.change.from_unit_id, *it.group&.unit_ids ] }.compact.uniq
+    unit_ids = report.changes.flat_map { [ it.change.unit_id, it.change.from_unit_id, *it.group&.unit_ids, *structures_of(it.change) ] }.compact.uniq
     report.names.slice(*unit_ids).merge(ids.compact.uniq.index_with { report.name_of(it) })
   end
+
+  def self.structures_of(change) = change.kind == :moved_between_structures ? [ change.before, change.after ].compact.pluck("structure_unit_id") : []
 
   def self.serialize(drifted)
     change = drifted.change
@@ -55,7 +61,7 @@ class Operations::TeamPlanning::Drift < Operations::Base
                       outside: drifted.outside, **group_fields(drifted.group))
   end
   def self.group_fields(group) = group ? { unit_ids: group.unit_ids, count: group.unit_ids.size } : {}
-  private_class_method :names_for, :serialize, :group_fields
+  private_class_method :names_for, :structures_of, :serialize, :group_fields
 
   # @return [Hash] `{ plan_id, checked, from, to, changes, names }`; an archived plan's has
   #   `{ plan_id, checked, archived_on, note, changes, names }`

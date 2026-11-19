@@ -652,6 +652,49 @@ class OrgGraph::StructureAggregate
     restore_kinds(governed, kinds, effective_on, defined_by_id)
   end
 
+  # Changes back a move between structures: the unit goes back beneath its
+  # old parent, and it and each unit that moved with it go back to the type
+  # its own entry says it held. A conversion can't say that once the move
+  # made two types one.
+  #
+  # @param unit_id [String] the unit that moved
+  # @param parent_id [String, nil] the parent it moved from
+  # @param kinds [Hash{String => Hash}] as for {#change_declaration_back}, per unit that moved
+  # @param changed_back_id [String] the move
+  # @param effective_on [Date, String] as for {#move_unit}
+  # @param moved_by_id [String, nil]
+  # @raise [RuntimeError] naming what doesn't fit
+  def change_move_back(unit_id, parent_id, kinds:, changed_back_id:, effective_on:, moved_by_id: nil)
+    unit = editable_unit!(unit_id, ESPALIA)
+    parent_id = require_id(parent_id, "Parent id") if parent_id
+    live_unit!(parent_id, role: :parent) if parent_id
+    into = structure_beneath(parent_id)
+    from = structure_in_force(unit.unit_id)
+    raise "A unit can't move beneath itself or a unit below it" if parent_id && loops?(unit.unit_id, parent_id, from: iso_date(effective_on))
+
+    moved = @structures.key?(unit.unit_id) ? [ unit ] : [ unit, *governed_by(unit.unit_id) ]
+    if (supplied = moved.find { it.provider != ESPALIA })
+      raise "#{HrisConfig.provider_label(supplied.provider)} supplies #{supplied.name}; change it there"
+    end
+    kind_of = restored_kinds!(moved, kinds, unit)
+    on = moved_across_dated!(moved, parent_id, from, into, effective_on)
+    seated = parent_id == into ? nil : parent_id
+    seat = ->(above_id) { above_id == unit.parent_id ? seated : above_id }
+    ensure_restorable!(moved, kind_of, into: kinds_at(into), label: structure_label(into), &seat)
+    unless into
+      ensure_fits_since!(moved.map(&kind_of).uniq, on) do |rules, label|
+        ensure_fits!(moved, into: rules, label:, kind_of:, &seat)
+      end
+    end
+
+    apply(OrgGraph::Events::UnitMoved.new(data: {
+      unit_id: unit.unit_id, parent_id:, previous_parent_id: unit.parent_id, provider: unit.provider,
+      effective_on: on, moved_by_id:, conversion: restored_conversion(moved, kind_of), changed_back_id:,
+      structure_left_id: from, structure_joined_id: into
+    }))
+    restore_kinds(moved, kinds, on, moved_by_id)
+  end
+
   # Retires a unit. Its live sub-units must be moved or retired first. A unit
   # with a structure of its own gives it up in the same change, whoever
   # supplies the retirement, so changing the retirement back can restore both.
@@ -1288,7 +1331,7 @@ class OrgGraph::StructureAggregate
 
     apply(OrgGraph::Events::UnitMoved.new(data: {
       unit_id: unit.unit_id, parent_id:, previous_parent_id: unit.parent_id, provider: unit.provider,
-      effective_on: on, moved_by_id:, conversion:
+      effective_on: on, moved_by_id:, conversion:, structure_left_id: from, structure_joined_id: into
     }))
     apply_conversion(moved, conversion, on, moved_by_id)
   end

@@ -392,6 +392,7 @@ class Views::Plans::ChangesTab < Views::Base
     when "unit_moved" then outside?(change, "after") ? "#{unit} left the units this plan covers" : "#{unit} moved"
     when "unit_kind_changed" then "#{unit}'s type changed"
     when "structure_declared", "structure_withdrawn" then structure_line(unit, change)
+    when "moved_between_structures" then crossed_line(unit, change)
     when "unit_retired" then "#{unit} was retired"
     when "unit_succeeded" then "A succession was recorded"
     when "owner_added" then "#{outside?(change, 'person_id') ? OUTSIDE : person} became an owner of #{unit}"
@@ -405,6 +406,36 @@ class Views::Plans::ChangesTab < Views::Base
     return "The structure above this plan changed: #{retyped}" if outside?(change, "unit_id")
 
     change[:kind] == "structure_declared" ? "#{unit} was given its own structure: #{retyped}" : "#{unit}'s structure was withdrawn: #{retyped}"
+  end
+
+  def crossed_line(unit, change)
+    mover = outside?(change, "unit_id") ? "A unit above this plan" : unit
+    retyped = ": #{change[:count]} #{'unit'.pluralize(change[:count])} changed type" if change[:count].to_i.positive?
+    "#{mover} moved #{crossing(change)}#{retyped}"
+  end
+
+  # A move written before it named the structures it crossed has neither
+  # side, and a backdated move hides the side before the plan's base.
+  def crossing(change)
+    left, joined = %w[before after].map { structure_side(change, it) }
+    top = I18n.t("org_graph.structure_name.top")
+    case [ left, joined ]
+    in [ String, String ] then "from #{left} into #{joined}"
+    in [ nil | :organisation, String ] then "into #{joined}"
+    in [ String, nil | :organisation ] then "out of #{left}"
+    in [ nil, :organisation ] then "into #{top}"
+    in [ :organisation, nil ] then "out of #{top}"
+    else "between structures"
+    end
+  end
+
+  # nil when the side is absent, :organisation for the organisation's structure.
+  def structure_side(change, side)
+    return unless change[side.to_sym]
+    return "another unit's structure" if outside?(change, side)
+
+    unit_id = change[side.to_sym]["structure_unit_id"]
+    unit_id ? "#{unit_name(unit_id)}'s structure" : :organisation
   end
 
   def moved_line(person, change)

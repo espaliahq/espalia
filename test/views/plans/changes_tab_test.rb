@@ -66,6 +66,35 @@ class Views::Plans::ChangesTabTest < ActiveSupport::TestCase
       assert_includes rows[4], "Ada Quill joined #{TeamPlanning::Attention::REMOVED_UNIT}"
     end
 
+    should "say which structures a move between them crossed, naming only those the plan covers" do
+      side = ->(unit_id) { { "structure_unit_id" => unit_id } }
+      moved = ->(before, after, outside: [], count: 2) { drift_change("moved_between_structures", unit_id: PAYMENTS, before:, after:, outside:, count:) }
+      html = render_tab(changes: [
+        moved.(side.(nil), side.(GROWTH)),
+        moved.(side.(GROWTH), side.(nil), count: 1),
+        moved.(side.(GROWTH), side.(nil), outside: %w[before]),
+        moved.(side.(GROWTH), side.(PAYMENTS)),
+        moved.(nil, nil, count: 0),
+        drift_change("moved_between_structures", before: side.(nil), after: side.(GROWTH), outside: %w[unit_id], count: 1),
+        moved.(nil, side.(GROWTH), outside: %w[before]),
+        moved.(nil, side.(nil), outside: %w[before]),
+        moved.(side.(GROWTH), nil),
+        moved.(side.(nil), nil)
+      ])
+
+      assert_equal [ "Payments moved into Growth's structure: 2 units changed type",
+                     "Payments moved out of Growth's structure: 1 unit changed type",
+                     "Payments moved out of another unit's structure: 2 units changed type",
+                     "Payments moved from Growth's structure into Payments's structure: 2 units changed type",
+                     "Payments moved between structures",
+                     "A unit above this plan moved into Growth's structure: 1 unit changed type",
+                     "Payments moved into Growth's structure: 2 units changed type",
+                     "Payments moved into the organisation's structure: 2 units changed type",
+                     "Payments moved out of Growth's structure: 2 units changed type",
+                     "Payments moved out of the organisation's structure: 2 units changed type" ],
+                   html.css("[data-drift-change] p:first-child").map { it.text.squish }.first(10)
+    end
+
     should "say a covered person or unit left the plan's units without naming where they went" do
       html = render_tab(changes: [
         drift_change("moved", person_id: BO, unit_id: nil, from_unit_id: PAYMENTS, outside: [ "unit_id" ]),

@@ -572,13 +572,17 @@ structure copied that type, the line names the copy: "Here its type would be Squ
 - **An archived plan** reads as before once a structure its units sat in is withdrawn, or a
   type they held is removed: its misfits report a missing type, and nothing fails.
 
-Drift reads a declaration or withdrawal since the base as one row, keyed by the change's
-cause so it stays put between reads: "Checkout was given its own structure: 4 units changed
-type", or "Checkout's structure was withdrawn". It counts only the converted units the plan
-covers, and names the declaring unit only when the plan covers it too; otherwise it reads
-"The structure above this plan changed". A plan that covers none of the converted units sees
-no row. The row is pending, like any noted drift, and a group of one unit still reads as a
-group.
+Drift reads a declaration or withdrawal since the base as one row, keyed by the write
+itself so it stays put between reads: "Checkout was given its own structure: 4 units changed
+type", or "Checkout's structure was withdrawn". A move between structures folds the same way:
+"Payments moved out of Platform's structure: 2 units changed type". Each row counts only the
+converted units the plan covers, and names a unit only when the plan covers it too: the
+declaring unit, or the mover and each structure's declaring unit. Otherwise a declaration
+reads "The structure above this plan changed", and a move "A unit above this plan moved into
+Platform's structure". A move row stays even when none of the units it retyped are covered,
+and then it leaves out the count. A unit that moved out of the plan reads as leaving it, as
+any move out does. A plan that covers none of the converted units sees no declaration row.
+The row is pending, like any noted drift, and a group of one unit still reads as a group.
 
 It also checks each person (4.6):
 

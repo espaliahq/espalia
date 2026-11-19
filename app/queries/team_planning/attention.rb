@@ -92,24 +92,12 @@ class TeamPlanning::Attention
     map = shared.map
     capacity = TeamPlanning::Capacity.new(resolution:, plan:).report_for(map)
     budget = TeamPlanning::Budget.new(context:, plan:, scenario_id:, repository:, aggregate:, shared:).call if scenario_id != plan.id && map.budget_lines.any?
-    structures = structures_unless_rebuilding(map)
+    structures = TeamPlanning::PlannedStructures.unless_rebuilding(map)
     items = new(map, changes, left_ids: resolution.left_since(map), closed_units: resolution.closed_position_units(aggregate, changes),
                               unclassified: capacity.configured? ? capacity.unclassified : [], priced: capacity.seats, budget:,
                               structures:).call
     Report.new(items:, names: items.empty? ? {} : names_of(resolution.named(map), items), unchecked: structures ? [] : %i[misfits])
   end
-
-  # Mid-rebuild the structure projection holds part of the Org Graph's types,
-  # so every unit would read as a misfit.
-  #
-  # @param map [TeamPlanning::Baseline::Map]
-  # @return [TeamPlanning::PlannedStructures, nil] nil while the structure projection is being rebuilt
-  def self.structures_unless_rebuilding(map)
-    ProjectionVersion.unless_rebuilding(OrgGraph::Projections::Structure::PROJECTION_NAME) { TeamPlanning::PlannedStructures.load(map) }
-  rescue ProjectionVersion::Rebuilding
-    nil
-  end
-  private_class_method :structures_unless_rebuilding
 
   PERSON_FACETS = [ ASSIGNMENT, LINE, LEVEL, DEPARTURE ].freeze
   REMOVED_UNIT = "A removed unit"

@@ -17,7 +17,7 @@ class OrgGraph::ChangeBackHandler
 
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
   WHOLE_STRUCTURE = "This came with a change to a unit's own structure, so change the whole change back"
-  MOVED_IN = "A move between structures can't be changed back"
+  WHOLE_MOVE = "This came with a move between structures, so change the whole change back"
 
   # @param actor [AuthorizationContext, Object] as for {OrgGraph::CommandHandler}
   # @param repository [OrgGraph::Repository]
@@ -86,7 +86,9 @@ class OrgGraph::ChangeBackHandler
     when "MembershipMoved"
       from, to = entry.after ? [ entry.unit_id, entry.other_unit_id ] : [ entry.other_unit_id, entry.unit_id ]
       authorize_move_membership!(entry.person_id, from, to)
-    when "UnitMoved" then authorize_move_unit!(entry.unit_id, entry.before["parent_id"])
+    when "UnitMoved"
+      authorize_move_unit!(entry.unit_id, entry.before["parent_id"])
+      authorize_move_back_across!(entry) if across?(entry)
     when "UnitKindChanged" then authorize_unit_kind!
     when "TaxonomyDefined" then authorize_structure_of!(entry.unit_id)
     else authorize_unit!(entry.unit_id)
@@ -103,6 +105,7 @@ class OrgGraph::ChangeBackHandler
       inverted(entries).each do |entry|
         options = { effective_on: (effective_on || entry.effective_on).to_s, changed_back_id: entry.event_id }
         next undo_structure(entry, options, entries) if entry.subject == "structure"
+        next undo_move_across(entry, options, entries) if across?(entry)
 
         send(:"undo_#{entry.event_type.underscore}", entry, options)
       end
@@ -110,11 +113,21 @@ class OrgGraph::ChangeBackHandler
     end
   end
 
-  # The entries whose inverse is issued directly: a structure's own, which
-  # sends the units it retyped back as well, or else each one.
+  # The entries whose inverse is issued directly: a structure's own or a move
+  # between structures, which sends the units it retyped back as well, or
+  # else each one.
   def inverted(entries)
     structure = entries.select { it.subject == "structure" }
-    structure.presence || entries.uniq(&:event_id)
+    structure.presence || entries.select { across?(it) }.uniq(&:event_id).presence || entries.uniq(&:event_id)
+  end
+
+  def across?(entry) = entry.event_type == "UnitMoved" && entry.after.to_h.key?("conversion")
+
+  # The rights the move back needs on the structure it leaves and the one it
+  # joins, read without the lock; the write checks them again under it.
+  def authorize_move_back_across!(entry)
+    structure = (@loaded_structure ||= @repository.load_structure)
+    authorize_move_across!(structure.structure_left_by(entry.unit_id), structure.structure_joined_beneath(entry.before["parent_id"]))
   end
 
   def build_handlers(cause_id:)
@@ -154,13 +167,15 @@ class OrgGraph::ChangeBackHandler
 
     causes = OrgUnitActivity.where(cause_id: entries.map(&:cause_id))
     structure_causes = causes.where(subject: "structure").distinct.pluck(:cause_id)
-    move_in_causes = causes.where(event_type: "UnitMoved").where("after ? 'conversion'").distinct.pluck(:cause_id)
+    move_causes = causes.where(event_type: "UnitMoved").where("after ? 'conversion'").distinct.pluck(:cause_id)
     structure = entries.find { it.subject == "structure" }
+    move = entries.find { across?(it) }
     ensure_structure_reversible!(structure, entries, apart_from:) if structure
+    ensure_move_reversible!(move, entries, apart_from:) if move && !structure
 
     entries.each do |entry|
       raise whole_structure_refusal(entry.cause_id) if !structure && structure_causes.include?(entry.cause_id)
-      raise MOVED_IN if move_in_causes.include?(entry.cause_id)
+      raise whole_refusal(entry.cause_id, WHOLE_MOVE) if !move && move_causes.include?(entry.cause_id)
       raise "#{entry.event_type.titleize} can't be changed back" unless entry == structure || entry.reversible?
       raise "This change has already been changed back" if entry.changed_back?
       raise "#{entry.provider} supplies this; change it there" unless (entry.provider || ESPALIA) == ESPALIA
@@ -185,8 +200,36 @@ class OrgGraph::ChangeBackHandler
     raise "A change to a structure's unit types can't be changed back yet"
   end
 
+  # A move between structures changes back whole: the move with every unit
+  # it retyped, as one change. A type change its conversion didn't make came
+  # with it in the same request, and changing it back would need its own
+  # inverse. A change back's conversion can be empty, as each unit took back
+  # its own type, so its type changes count when they undo the reversed move's.
+  def ensure_move_reversible!(move, entries, apart_from:)
+    raise whole_refusal(move.cause_id, WHOLE_MOVE) unless apart_from
+
+    conversion = Rails.configuration.event_store.read.event(move.event_id).data[:conversion].to_h.transform_keys(&:to_s)
+    restored = restored_kind_ids(move)
+    carried = lambda do |kind|
+      kind.event_type == "UnitKindChanged" &&
+        (conversion[kind.before&.dig("level_id").to_s] == kind.after&.dig("level_id") || restored.include?(kind.changes_back_id))
+    end
+    return if entries.all? { it.event_id == move.event_id || carried.(it) }
+
+    raise "This came with a move between structures, which can't be changed back yet"
+  end
+
+  def restored_kind_ids(move)
+    return [] unless move.changes_back_id
+
+    reversed = OrgUnitActivity.find_by(event_id: move.changes_back_id)
+    reversed ? OrgUnitActivity.where(cause_id: reversed.cause_id, event_type: "UnitKindChanged").pluck(:event_id) : []
+  end
+
   # Sends the caller to the whole change, unless that is refused too.
-  def whole_structure_refusal(cause_id) = refusal_for(OrgUnitActivity.caused_by(cause_id).to_a, apart_from: cause_id) || WHOLE_STRUCTURE
+  def whole_structure_refusal(cause_id) = whole_refusal(cause_id, WHOLE_STRUCTURE)
+
+  def whole_refusal(cause_id, refusal) = refusal_for(OrgUnitActivity.caused_by(cause_id).to_a, apart_from: cause_id) || refusal
 
   # A set dated before the membership it changed gave that membership an
   # earlier start. No command withdraws those days
@@ -207,6 +250,14 @@ class OrgGraph::ChangeBackHandler
 
     levels = Rails.configuration.event_store.read.event(entry.event_id).data[:previous_levels]
     @structure.change_withdrawal_back(entry.unit_id, levels:, kinds:, **options)
+  end
+
+  # Each unit that moved goes back to the type its own entry says it held.
+  def undo_move_across(entry, options, entries)
+    kinds = entries.select { it.event_type == "UnitKindChanged" }.to_h do |kind|
+      [ kind.unit_id, { level_id: kind.before["level_id"], changed_back_id: kind.event_id } ]
+    end
+    @structure.change_move_back(entry.unit_id, entry.before["parent_id"], kinds:, **options)
   end
 
   def undo_membership_set(entry, options)

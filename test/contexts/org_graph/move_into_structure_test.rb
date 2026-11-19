@@ -216,7 +216,7 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     assert_nil structure.structure_in_force(@ledger)
   end
 
-  should "share one cause outside a request, and refuse to change any part of it back" do
+  should "share one cause outside a request, and change back only as a whole" do
     move_in
     as_tenant do
       cause_id = OrgUnitActivity.find_by!(unit_id: @ledger, event_type: "UnitMoved").cause_id
@@ -225,10 +225,11 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
                    entries.map { [ it.unit_id, it.event_type ] }.sort
       change_back = OrgGraph::ChangeBackHandler.new(actor: SYSTEM)
       entries.each do |entry|
-        error = assert_raises(RuntimeError) { change_back.change_back(entry) }
-        assert_equal OrgGraph::ChangeBackHandler::MOVED_IN, error.message
+        error = assert_raises(RuntimeError) { OrgGraph::ChangeBackHandler.new(actor: admin_context).change_back(entry) }
+        assert_equal OrgGraph::ChangeBackHandler::WHOLE_MOVE, error.message
       end
-      assert_equal OrgGraph::ChangeBackHandler::MOVED_IN, change_back.group_refusal(cause_id)
+      assert_equal "Only a tenant admin can move a unit between structures", change_back.group_refusal(cause_id)
+      assert_nil OrgGraph::ChangeBackHandler.new(actor: admin_context).group_refusal(cause_id)
     end
   end
 

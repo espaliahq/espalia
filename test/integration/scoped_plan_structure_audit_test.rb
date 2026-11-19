@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../support/rebuild_lock"
 
 # A plan scoped beneath a unit with its own structure reads that structure's
 # types, and nothing of the unit that declared it or of another branch's
@@ -9,6 +10,8 @@ require "test_helper"
 # that needs a parameter this file has no value for fails until it gets one. The plan is walked open and again once its step
 # closes, and every read must reach a payload in one of the two.
 class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
+  include RebuildLock
+
   SYSTEM = OrgGraph::Authorization::SYSTEM
   KNOWN = %i[plan_id scenario_id unit_id ends_on rule].freeze
   # The scope picker lists every live unit an editor may cover, by design
@@ -130,6 +133,19 @@ class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
     assert_equal [ @group, @group ], [ units[:level_id], mapped[:level_id] ], "the plan reads Payments as a Group, as its checks do"
   end
 
+  should "say the units and scenario map didn't check unit types while the structure is rebuilt, and read the plan's own" do
+    read = lambda do
+      units = call(Operations::TeamPlanning::Units, plan_id: @plan_id)
+      mapped = call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id: @scenario_id)
+      [ units, mapped ].map { |payload| [ payload[:unchecked], (payload[:units].find { [ it[:unit_id], it[:id] ].include?(@payments) } || {})[:level_id] ] }
+    end
+    assert_equal [ [ [], @group ] ] * 2, read.call
+
+    while_rebuilding(@tenant, OrgGraph::Projections::Structure) do
+      assert_equal [ [ %w[unit_types], @squad ] ] * 2, read.call, "Payments reads as the Squad the plan's base held, and says so"
+    end
+  end
+
   should "refuse a parent outside the plan alike, whatever structure it declares or sits in" do
     refusals = [ @engineering, @sales, @emea ].flat_map do |parent_id|
       [ { name: "Ops", parent_id:, level_id: @pod }, { name: "Ops", parent_id:, level_id: @territory },
@@ -167,6 +183,60 @@ class ScopedPlanStructureAuditTest < ActiveSupport::TestCase
         items = JSON.parse(json).then { it["drift"] || it }.fetch("changes").select { it["kind"] == "structure_declared" }
         assert_equal [ [ nil, [ @payments ], 1, [ "unit_id" ] ], [ @payments, [ @cards ], 1, [] ] ],
                      items.map { it.values_at("unit_id", "unit_ids", "count", "outside") }, "#{tool} groups a structure's type changes"
+      end
+    end
+  end
+
+  context "a plan whose drift holds a move between structures" do
+    setup do
+      travel_to Time.utc(2026, 2, 3, 9)
+      call(Operations::OrgGraph::MoveUnit, unit_id: @payments, parent_id: @sales, conversion: { @group => @territory })
+      call(Operations::OrgGraph::MoveUnit, unit_id: @emea, parent_id: @engineering, conversion: { @territory => @group })
+    end
+
+    should "read the move as one change, hiding both structures it crossed, and nothing of one wholly outside the plan" do
+      payloads = walk("team_planning_step_outcome" => "This step isn't closed").compact
+      parted = payloads.select { |_tool, json| json.include?('"kind":"unit_kind_changed"') || json.include?('"kind":"unit_moved"') }.keys
+      crossing = payloads.select { |_tool, json| json.include?('"kind":"moved_between_structures"') }
+
+      assert_empty parted, "a read lists a move between structures in parts"
+      assert_includes crossing.keys, "team_planning_drift"
+      assert_includes crossing.keys, "team_planning_rebase_preview"
+      crossing.each do |tool, json|
+        items = JSON.parse(json).then { it["drift"] || it }.fetch("changes").select { it["kind"] == "moved_between_structures" }
+        assert_equal [ [ @payments, [ @payments ], 1, %w[before after], nil, nil ] ],
+                     items.map { [ *it.values_at("unit_id", "unit_ids", "count", "outside"), *[ it["before"], it["after"] ].pluck("structure_unit_id") ] },
+                     "#{tool} folds Payments' move into one change"
+      end
+    end
+  end
+
+  context "a plan whose drift holds a move between structures by a unit above it" do
+    setup do
+      @core, @ledger = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
+        structure.create_unit(@core, "Mesh Core", level_id: @group, parent_id: @engineering, effective_on: "2026-02-01")
+        structure.create_unit(@ledger, "Ledger", level_id: @pod, parent_id: @core, effective_on: "2026-02-01")
+      end
+      call(Operations::TeamPlanning::SetPlanScope, plan_id: @plan_id, unit_ids: [ @payments, @ledger ])
+      travel_to Time.utc(2026, 2, 3, 9)
+      call(Operations::OrgGraph::MoveUnit, unit_id: @core, parent_id: @sales, conversion: { @group => @territory, @pod => @region })
+    end
+
+    should "count the unit it carried, and name neither the mover nor either structure" do
+      crossing = walk("team_planning_step_outcome" => "This step isn't closed").compact
+                 .select { |_tool, json| json.include?('"kind":"moved_between_structures"') }
+      assert_includes crossing.keys, "team_planning_drift"
+
+      crossing.each do |tool, json|
+        drift = JSON.parse(json).then { it["drift"] || it }
+        items = drift.fetch("changes").select { it["kind"] == "moved_between_structures" }
+        assert_equal [ [ nil, [ @ledger ], 1, %w[unit_id before after] ] ], items.map { it.values_at("unit_id", "unit_ids", "count", "outside") }, tool
+        shown = [ items, drift.fetch("names") ].to_json
+        leaks = { "Mesh Core's id" => @core, "Mesh Core" => "Mesh Core", "Engineering's id" => @engineering,
+                  "Engineering" => "Engineering", "Sales' id" => @sales, "Sales" => "Sales" }.select { |_what, value| shown.include?(value) }.keys
+        assert_empty leaks, "#{tool} names what lies above the plan"
       end
     end
   end

@@ -294,9 +294,14 @@ the one it joins, or before any change to the units it moves. A move into the or
 structure must also fit its dated rules on the move's date and on every later change, and
 the refusal names the day that doesn't fit. The move needs the right to change both
 structures, and the refusal names neither. A conversion on a move that crosses no structure
-is refused, and a move that crosses one without a conversion is asked for one. Changing a
-move across structures back is refused; withdrawing the structure converts its units
-back into the structure above, though each stays where it sits.
+is refused, and a move that crosses one without a conversion is asked for one.
+
+A move across structures changes back as one group, needing the same rights. The unit goes
+back beneath its old parent, and it and each unit that moved with it go back to the type its
+own entry says it held, even where the conversion made two types one. A change back is
+refused once a unit has joined or left the moved units since, a later change has overtaken
+one, or the structure it goes back to no longer holds a type it held. One entry of the group
+can't be changed back alone.
 
 A plan judges its units against today's structures, and an Org Graph unit by the type it
 holds today: [team-planning-design.md](team-planning-design.md) says how a plan creates,

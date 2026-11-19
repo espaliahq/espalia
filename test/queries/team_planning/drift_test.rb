@@ -67,6 +67,8 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
 
   def kinds(report) = report.changes.map { [ it.change.kind, it.change.person_id ] }
 
+  def event_store = Rails.configuration.event_store
+
   should "read what the Org Graph learned from the base date on, and leave out what the baseline already held" do
     on(Time.utc(2026, 3, 1, 12)) { @org.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-01") }
     on(Time.utc(2026, 3, 2, 8)) { @org.change_title(@brook.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-02") }
@@ -175,7 +177,9 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
 
       assert_equal [ [ :structure_declared, @payments, [ @cards, @wallet ].sort ], [ :structure_withdrawn, @payments, [ @cards, @wallet ].sort ] ], items
       assert_equal report.changes.map { it.change.event_id }, drift.changes.map { it.change.event_id }
-      assert_equal report.changes.map { it.group.cause_id }, report.changes.map { it.change.event_id }
+      written = event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).to_a.last(2)
+      assert_equal written.map(&:event_id), report.changes.map { it.change.event_id }
+      assert_equal written.map { it.metadata[:correlation_id] }, report.changes.map { it.group.cause_id }
       assert_equal "Payments", report.names[@payments]
     end
 
@@ -184,7 +188,116 @@ class TeamPlanning::DriftTest < ActiveSupport::TestCase
 
       assert_equal({ kind: :structure_declared, effective_on: Date.new(2026, 3, 5), learned_at: Time.utc(2026, 3, 5, 9),
                      person_id: nil, unit_id: @payments, from_unit_id: nil, succession_id: nil, fact: nil, before: nil, after: nil,
-                     provider: "espalia", event_id: declared.group.cause_id, withdrawn: false }, declared.change.to_h)
+                     provider: "espalia", event_id: event_store.read.of_type(OrgGraph::Events::TaxonomyDefined).to_a[-2].event_id,
+                     withdrawn: false }, declared.change.to_h)
+    end
+  end
+
+  context "a move between structures since the base" do
+    setup do
+      @cards, @ledger, @tab = Array.new(3) { SecureRandom.uuid_v7 }
+      @pod, @tribe = Array.new(2) { SecureRandom.uuid_v7 }
+      @admin = OrgGraph::StructureCommandHandler.new(actor: context_for(@planner))
+      as_tenant do
+        @admin.set_kind_parents(@squads, parent_ids: [ @squads ], top: true, effective_on: "2026-01-01")
+        @admin.add_level(@tribe, "Tribe", parent_ids: [ @squads ], top: true, effective_on: "2026-01-01")
+        @admin.create_unit(@cards, "Cards", level_id: @squads, parent_id: @payments, effective_on: "2026-01-01")
+        @admin.create_unit(@ledger, "Ledger", level_id: @squads, effective_on: "2026-01-01")
+        @admin.create_unit(@tab, "Tab", level_id: @squads, parent_id: @ledger, effective_on: "2026-01-01")
+        @admin.declare_structure(@platform, levels: [ { level_id: @pod, name: "Pod", parent_level_ids: [ @pod ], top: true } ],
+                                            conversion: {}, effective_on: "2026-02-01")
+      end
+    end
+
+    should "read a move in and a move out each as one change, naming both sides and the units it retyped" do
+      on(Time.utc(2026, 3, 5, 9)) { @admin.move_unit(@payments, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod }) }
+      on(Time.utc(2026, 3, 9, 9)) { @admin.move_unit(@payments, nil, effective_on: "2026-03-09", conversion: { @pod => @squads }) }
+      report = drift
+
+      assert_equal [ [ :moved_between_structures, @payments, { "structure_unit_id" => nil }, { "structure_unit_id" => @platform }, [ @cards, @payments ].sort ],
+                     [ :moved_between_structures, @payments, { "structure_unit_id" => @platform }, { "structure_unit_id" => nil }, [ @cards, @payments ].sort ] ],
+                   report.changes.map { [ it.change.kind, it.change.unit_id, it.change.before, it.change.after, it.group.unit_ids.sort ] }
+      moves = event_store.read.of_type(OrgGraph::Events::UnitMoved).to_a.last(2)
+      assert_equal moves.map(&:event_id), report.changes.map { it.change.event_id }
+      assert_equal moves.map { it.metadata[:correlation_id] }, report.changes.map { it.group.cause_id }
+      assert_equal "Platform", report.names[@platform]
+    end
+
+    should "keep a type change written in the same request, but apart from the move, its own" do
+      on(Time.utc(2026, 3, 5, 9)) do
+        event_store.with_metadata(correlation_id: "one-request") do
+          @admin.move_unit(@payments, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod })
+          @admin.change_unit_kind(@tab, @tribe, effective_on: "2026-03-05")
+        end
+      end
+
+      assert_equal [ [ :moved_between_structures, @payments, [ @cards, @payments ].sort ], [ :unit_kind_changed, @tab, nil ] ],
+                   drift.changes.map { [ it.change.kind, it.change.unit_id, it.group&.unit_ids&.sort ] }
+    end
+
+    should "keep one row for each structure declared in one request, each counting its own units" do
+      lane, slot = Array.new(2) { SecureRandom.uuid_v7 }
+      on(Time.utc(2026, 3, 5, 9)) do
+        event_store.with_metadata(correlation_id: "one-request") do
+          @admin.declare_structure(@payments, levels: [ { level_id: lane, name: "Lane" } ], conversion: { @squads => lane }, effective_on: "2026-03-05")
+          @admin.declare_structure(@ledger, levels: [ { level_id: slot, name: "Slot" } ], conversion: { @squads => slot }, effective_on: "2026-03-05")
+        end
+      end
+
+      report = drift
+      assert_equal [ [ :structure_declared, @payments, [ @cards ] ], [ :structure_declared, @ledger, [ @tab ] ] ].sort,
+                   report.changes.map { [ it.change.kind, it.change.unit_id, it.group.unit_ids ] }.sort
+      assert_equal 2, report.changes.map { it.change.event_id }.uniq.size
+    end
+
+    should "read a unit that moved out of the plan as leaving it, and fold nothing" do
+      scoped = SecureRandom.uuid_v7
+      as_tenant { handler.create_plan(scoped, name: "Payments next year", base_on: BASE_ON, unit_ids: [ @payments ]) }
+      on(Time.utc(2026, 3, 5, 9)) { @admin.move_unit(@cards, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod }) }
+      report = as_tenant { TeamPlanning::Drift.new(context: context_for(@planner), plan: TeamPlanningPlan.find(scoped), today: Date.new(2026, 4, 1)).call }
+
+      moved = report.changes.sole
+      assert_equal [ :unit_moved, @cards, nil ], [ moved.change.kind, moved.change.unit_id, moved.group ]
+      assert_includes moved.outside, "after"
+    end
+
+    should "fold each write of one cause, though another request wrote between them" do
+      on(Time.utc(2026, 3, 5, 9)) do
+        event_store.with_metadata(correlation_id: "one-cause") { @admin.move_unit(@payments, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod }) }
+        @admin.rename_unit(@tab, "Tabs", effective_on: "2026-03-05")
+        event_store.with_metadata(correlation_id: "one-cause") { @admin.move_unit(@ledger, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod }) }
+      end
+
+      folds = drift.changes.select { it.change.kind == :moved_between_structures }
+      assert_equal [ [ @ledger, [ @ledger, @tab ].sort ], [ @payments, [ @cards, @payments ].sort ] ].sort,
+                   folds.map { [ it.change.unit_id, it.group.unit_ids.sort ] }.sort
+      assert_empty drift.changes.select { it.change.kind == :unit_kind_changed }
+    end
+
+    should "keep the mover named and hide the side before the base of a move dated before it" do
+      scoped = SecureRandom.uuid_v7
+      as_tenant { handler.create_plan(scoped, name: "Payments next year", base_on: BASE_ON, unit_ids: [ @payments, @platform ]) }
+      on(Time.utc(2026, 3, 5, 9)) { @admin.move_unit(@payments, @platform, effective_on: "2026-02-15", conversion: { @squads => @pod }) }
+
+      moved = as_tenant { TeamPlanning::Drift.new(context: context_for(@planner), plan: TeamPlanningPlan.find(scoped), today: Date.new(2026, 4, 1)).call }.changes.sole
+      assert_equal [ :moved_between_structures, @payments, nil, { "structure_unit_id" => @platform } ],
+                   [ moved.change.kind, moved.change.unit_id, moved.change.before, moved.change.after ]
+      assert_includes moved.outside, "before"
+    end
+
+    should "say only that it crossed when the move was written before it named the structures" do
+      on(Time.utc(2026, 3, 5, 9)) { @admin.move_unit(@payments, @platform, effective_on: "2026-03-05", conversion: { @squads => @pod }) }
+      query = as_tenant { TeamPlanning::Drift.new(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), today: Date.new(2026, 4, 1)) }
+      query.define_singleton_method(:events_by_id) do |ids|
+        super(ids).transform_values do |event|
+          next event unless event.is_a?(OrgGraph::Events::UnitMoved)
+
+          event.class.new(event_id: event.event_id, data: event.data.except(:structure_left_id, :structure_joined_id), metadata: event.metadata.to_h)
+        end
+      end
+
+      moved = as_tenant { query.call }.changes.sole
+      assert_equal [ :moved_between_structures, nil, nil, [ @cards, @payments ].sort ], [ moved.change.kind, moved.change.before, moved.change.after, moved.group.unit_ids.sort ]
     end
   end
 
