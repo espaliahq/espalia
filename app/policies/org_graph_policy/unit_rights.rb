@@ -98,9 +98,11 @@ class OrgGraphPolicy::UnitRights
   #
   # @return [Boolean]
   def root_conversion_choice?
+    return @root_conversion_choice if defined?(@root_conversion_choice)
+
     from = @overview.structure_unit_of(@unit)
-    !from.nil? && may_cross_from?(from) && may_edit_structure?(nil) && @policy.create_unit?(nil) &&
-      @overview.taxonomy_of(nil).kinds.any? { it.provider == OrgGraph::Taxonomy::ESPALIA && it.top? }
+    @root_conversion_choice = !from.nil? && may_cross_from?(from) && may_edit_structure?(nil) && @policy.create_unit?(nil) &&
+                              @overview.taxonomy_of(nil).kinds.any? { it.provider == OrgGraph::Taxonomy::ESPALIA && it.top? }
   end
 
   # @return [Boolean] whether the unit may sit at the root
