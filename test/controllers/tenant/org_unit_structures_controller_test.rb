@@ -151,5 +151,24 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to root_path
       assert_empty own_types(:checkout)
     end
+
+    should "neither withdraw a structure nor move a unit into one" do
+      sign_out @member_user
+      sign_in @admin_user
+      declare_fresh(:checkout, { @org[:squad] => "Group" })
+      group = overview.structures.fetch(@org[:checkout]).sole
+      sign_out @admin_user
+      sign_in @member_user
+
+      post tenant_org_unit_structure_withdrawal_path(@org[:checkout]), params: { conversion: { group.id => @org[:squad] } }
+      assert_redirected_to root_path
+      post tenant_org_unit_structure_move_path(@org[:platform]), params: { parent_id: @org[:checkout], conversion: { @org[:team] => group.id } }
+      assert_redirected_to root_path
+
+      assert_equal %w[Group], own_types(:checkout)
+      assert_equal "Group", type_of(:payments)
+      assert_not_equal @org[:checkout], overview.unit(@org[:platform]).parent_id
+      assert_equal "Team", type_of(:platform)
+    end
   end
 end
