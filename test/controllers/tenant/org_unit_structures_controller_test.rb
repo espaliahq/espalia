@@ -138,7 +138,7 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Team", type_of(:payments)
 
     get edit_tenant_org_unit_path(@org[:payments])
-    assert_equal %w[Engineering Platform], drawer.css("#org-unit-parent optgroup option").map { it.text.gsub(/[[:space:]]/, "") }
+    assert_equal %w[None(atthetop) Engineering Platform], drawer.css("#org-unit-parent optgroup option").map { it.text.gsub(/[[:space:]]/, "") }
 
     get new_tenant_org_unit_structure_move_path(@org[:payments], parent_id: @org[:platform])
     assert_includes drawer.text, "takes it out of Checkout's structure into the organisation's structure"
@@ -151,6 +151,23 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Moved Payments into the organisation's structure. Its type is now Squad.", flash[:notice]
     assert_equal @org[:platform], overview.unit(@org[:payments]).parent_id
     assert_equal @org[:squad], overview.unit(@org[:payments]).level_id
+  end
+
+  should "move a unit out of a structure to the top of the organisation's (#521)" do
+    declare_fresh(:checkout, { @org[:squad] => "Group" })
+    group = overview.structures.fetch(@org[:checkout]).sole
+
+    patch tenant_org_unit_path(@org[:payments]), params: { org_unit: { parent_id: "" } }
+    assert_redirected_to new_tenant_org_unit_structure_move_path(@org[:payments], parent_id: "")
+
+    get new_tenant_org_unit_structure_move_path(@org[:payments], parent_id: "")
+    assert_includes drawer.text, "Moving Payments to the top of the organisation's structure takes it out of Checkout's structure"
+    assert_equal "Squad", drawer.at_css("select[name='conversion[#{group.id}]'] option[selected]").text
+
+    post tenant_org_unit_structure_move_path(@org[:payments]), params: { parent_id: "", conversion: { group.id => @org[:squad] } }
+
+    assert_equal "Moved Payments into the organisation's structure. Its type is now Squad.", flash[:notice]
+    assert_equal [ nil, @org[:squad] ], overview.unit(@org[:payments]).then { [ it.parent_id, it.level_id ] }
   end
 
   should "move a unit that declares a structure into another, saying it keeps its own (#521)" do

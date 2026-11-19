@@ -144,9 +144,10 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   # A parent in another structure: choosing one leads to a step
   # that asks what each type becomes there.
   def conversion_choices
-    return if @rights.conversion_parent_choices.empty?
+    return if @rights.conversion_parent_choices.empty? && !@rights.root_conversion_choice?
 
     optgroup(label: "Into another structure, changing types") do
+      option(value: "") { "None (at the top)" } if @rights.root_conversion_choice?
       @rights.conversion_parent_choices.each { |unit| unit_option(unit) }
     end
   end

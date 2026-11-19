@@ -279,7 +279,9 @@ gives the unit one there, withdraws it, or opens its types, which Settings shows
 of their own (`LevelsPanel`, anchored on the unit). The drawer's parent list offers units in
 any other structure, the organisation's included, under "Into another structure, changing
 types", only to an admin who may edit both structures. A unit with a structure of its own is
-offered them too. The step it leads to names the structure the unit leaves and the one it
+offered them too. A unit in a unit's own structure is also offered "None (at the top)" there,
+when a type of the organisation's structure may sit at the top and the admin may add a unit
+there. The step it leads to names the structure the unit leaves and the one it
 joins, and asks what each type becomes. Each type comes preselected as the one its units
 last held in the structure they join, when they agree, so a move back puts each where it
 was; otherwise the type with the same name. The admin can change either.

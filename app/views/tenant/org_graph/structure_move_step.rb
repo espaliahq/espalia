@@ -5,7 +5,7 @@
 # type becomes. A type the units last held in the structure they join comes
 # preselected, so a move back puts each where it was.
 class Views::Tenant::OrgGraph::StructureMoveStep < Views::Tenant::OrgGraph::StructureStep
-  # @param parent [OrgUnit, nil] where it moves
+  # @param parent [OrgUnit, nil] where it moves; nil for the top of the organisation's structure
   def initialize(parent:, **)
     super(**)
     @parent = parent
@@ -15,7 +15,7 @@ class Views::Tenant::OrgGraph::StructureMoveStep < Views::Tenant::OrgGraph::Stru
 
   def title = "Move #{@unit.name}"
 
-  def allowed? = @parent && @rights.conversion_parent_choices.include?(@parent)
+  def allowed? = @parent ? @rights.conversion_parent_choices.include?(@parent) : @rights.root_conversion_choice?
 
   def not_allowed_because = "#{@unit.name} can't move into another structure from here. Choose a parent in its drawer."
 
@@ -27,13 +27,19 @@ class Views::Tenant::OrgGraph::StructureMoveStep < Views::Tenant::OrgGraph::Stru
 
   def body
     moved = @overview.converted_with(@unit)
+    taken = moved.one? ? "it" : "it and the #{moved.size - 1} #{'unit'.pluralize(moved.size - 1)} beneath it"
+    changes = moved.one? ? "it changes" : "each changes"
     p(class: "text-sm text-default") do
-      "Moving #{@unit.name} under #{@parent.name} takes #{moved.one? ? 'it' : "it and the #{moved.size - 1} #{'unit'.pluralize(moved.size - 1)} beneath it"} " \
-        "out of #{structure_name(from_id)} into #{structure_name(into_id)}, so #{moved.one? ? 'it changes' : 'each changes'} type."
+      if @parent
+        "Moving #{@unit.name} under #{@parent.name} takes #{taken} out of #{structure_name(from_id)} " \
+          "into #{structure_name(into_id)}, so #{changes} type."
+      else
+        "Moving #{@unit.name} to the top of #{structure_name(nil)} takes #{taken} out of #{structure_name(from_id)}, so #{changes} type."
+      end
     end
     keeping(moved)
     step_form(tenant_org_unit_structure_move_path(@unit), class: "space-y-4") do
-      input(type: "hidden", name: "parent_id", value: @parent.id)
+      input(type: "hidden", name: "parent_id", value: @parent&.id.to_s)
       conversion_fieldset(moved, "Each type in #{structure_name(from_id)} becomes a type in #{structure_name(into_id)}") do |type, id|
         type_select("conversion[#{type.id}]", id, into_kinds, selected: previous_type(moved, type) || same_name(type, into_kinds))
       end

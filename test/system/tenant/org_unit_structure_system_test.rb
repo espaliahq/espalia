@@ -97,6 +97,29 @@ class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
         assert_equal [ @org[:engineering], @org[:team] ], overview.unit(@org[:platform]).then { [ it.parent_id, it.level_id ] }
       end
 
+      should "move a unit out of a structure to the top of the organisation's (#521)" do
+        group = SecureRandom.uuid_v7
+        ActsAsTenant.with_tenant(@tenant) do
+          tenant_user = TenantUser.find_by!(user: @admin_user)
+          OrgGraph::StructureCommandHandler.new(actor: AuthorizationContext.new(user: @admin_user, tenant_user:, person: nil))
+                                           .declare_structure(@org[:checkout],
+                                                              levels: [ { level_id: group, name: "Group", parent_level_ids: [ group ], top: true } ],
+                                                              conversion: { @org[:squad] => group }, effective_on: Date.current)
+        end
+        visit edit_tenant_org_unit_path(@org[:payments])
+        assert_selector "#org-graph-drawer-title", text: "Payments"
+
+        select "None (at the top)", from: "org-unit-parent"
+        page.execute_script("document.getElementById('org-unit-parent').form.requestSubmit()")
+        assert_text "Moving Payments to the top of the organisation's structure takes it out of Checkout's structure"
+        assert_equal "Squad", find("select[name='conversion[#{group}]']").find("option[selected]").text
+        assert_no_sideways_overflow
+        screenshot("move_to_top_step_#{viewport}")
+
+        click_button_with_js_fallback "Move Payments", expect_text: "Moved Payments into the organisation's structure. Its type is now Squad."
+        assert_equal [ nil, @org[:squad] ], overview.unit(@org[:payments]).then { [ it.parent_id, it.level_id ] }
+      end
+
       # #494's worked example: a copy of the types in force, a unit moved into
       # it, and the tenant-wide type nothing holds any more removed.
       should "copy the structure in force, move a unit into it, and remove the tenant-wide type left behind" do
