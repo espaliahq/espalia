@@ -198,6 +198,18 @@ class Operations::TeamPlanning::StructuresTest < ActiveSupport::TestCase
       declare
     end
 
+    should "give each unit on the scenario map its own type, whatever order the rows come in" do
+      payload = Operations::TeamPlanning::MapPayload
+      payload.alias_method(:in_map_order, :units_payload)
+      payload.define_method(:units_payload) { |map| in_map_order(map).reverse }
+      levels = call(Operations::TeamPlanning::ScenarioMap, plan_id: @plan_id, scenario_id: @plan_id)[:units].to_h { it.values_at(:id, :level_id) }
+
+      assert_equal({ @engineering => @department, @payments => @group, @platform => @group }, levels)
+    ensure
+      payload.alias_method(:units_payload, :in_map_order)
+      payload.remove_method(:in_map_order)
+    end
+
     should "let the old type go" do
       call(Operations::OrgGraph::RemoveLevel, level_id: @squad)
 

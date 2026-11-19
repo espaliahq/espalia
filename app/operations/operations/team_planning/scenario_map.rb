@@ -40,6 +40,7 @@ class Operations::TeamPlanning::ScenarioMap < Operations::Base
 
   def units_payload(map)
     structures = ::TeamPlanning::PlannedStructures.load(map)
-    super.zip(map.units).map { |row, unit| row.merge(level_id: structures.level_of(unit)) }
+    units = map.units.index_by(&:id)
+    super.map { |row| row.merge(level_id: structures.level_of(units.fetch(row[:id]))) }
   end
 end
