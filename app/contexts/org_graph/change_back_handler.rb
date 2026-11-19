@@ -160,7 +160,7 @@ class OrgGraph::ChangeBackHandler
     ensure_structure_reversible!(structure, entries, apart_from:) if structure
 
     entries.each do |entry|
-      raise WHOLE_STRUCTURE if !structure && structure_causes.include?(entry.cause_id)
+      raise whole_structure_refusal(entry.cause_id) if !structure && structure_causes.include?(entry.cause_id)
       raise MOVED_IN if move_in_causes.include?(entry.cause_id)
       raise "#{entry.event_type.titleize} can't be changed back" unless entry == structure || entry.reversible?
       raise "This change has already been changed back" if entry.changed_back?
@@ -177,7 +177,7 @@ class OrgGraph::ChangeBackHandler
   # A unit's own structure changes back whole: its declaration or withdrawal
   # with every unit it retyped, as one change.
   def ensure_structure_reversible!(structure, entries, apart_from:)
-    raise WHOLE_STRUCTURE unless apart_from
+    raise whole_structure_refusal(structure.cause_id) unless apart_from
     unless entries.all? { it == structure || it.event_type == "UnitKindChanged" }
       raise "This came with a change to a unit's own structure, which can't be changed back yet"
     end
@@ -185,6 +185,9 @@ class OrgGraph::ChangeBackHandler
 
     raise "A change to a structure's unit types can't be changed back yet"
   end
+
+  # Sends the caller to the whole change, unless that is refused too.
+  def whole_structure_refusal(cause_id) = refusal_for(OrgUnitActivity.caused_by(cause_id).to_a, apart_from: cause_id) || WHOLE_STRUCTURE
 
   # A set dated before the membership it changed gave that membership an
   # earlier start. No command withdraws those days

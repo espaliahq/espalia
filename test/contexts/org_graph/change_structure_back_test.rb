@@ -79,6 +79,8 @@ class OrgGraph::ChangeStructureBackTest < ActiveSupport::TestCase
     as_tenant { @admin.add_level(SecureRandom.uuid_v7, "Lane", structure_unit_id: @payments, effective_on: @today) }
 
     assert_equal "A change to a structure's unit types can't be changed back yet", group_refusal(structure_cause)
+    assert_equal "A change to a structure's unit types can't be changed back yet",
+                 as_tenant { OrgGraph::ChangeBackHandler.new(actor: @admin_context).refusal(latest_structure_entry) }
     assert_equal "A later change has replaced this one; change that back first", group_refusal(declaration)
   end
 
