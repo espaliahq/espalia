@@ -57,6 +57,19 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Team", type_of(:checkout)
   end
 
+  should "give a unit a copy in which the types its own units hold can sit directly beneath it" do
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                       .set_kind_parents(@org[:squad], parent_ids: [ @org[:team] ], top: false, effective_on: Date.current)
+    end
+
+    post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } }
+
+    assert_redirected_to tenant_org_graph_settings_path(anchor: "org-graph-levels-#{@org[:checkout]}")
+    assert_equal %w[Department Team Squad], own_types(:checkout)
+    assert_equal "Squad", type_of(:payments)
+  end
+
   should "give a unit new types, each able to sit anywhere in it, and then say so in its drawer" do
     get new_tenant_org_unit_structure_declaration_path(@org[:checkout], fresh: 1)
     assert_equal "Every type can sit anywhere in it for now. Tighten that in Settings.",

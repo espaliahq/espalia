@@ -45,13 +45,16 @@ class Tenant::OrgUnitStructureDeclarationsController < ApplicationController
   end
 
   # A copy keeps each type's name and rules, and names the type it copies.
+  # The units directly beneath the declaring unit sit at the top of its
+  # structure, so a type that could sit beneath the unit's own type may too.
   def copied_declaration(overview)
     source = overview.structure_unit_of(@unit)
     kinds = overview.taxonomy_of(source).kinds
     names = kinds.to_h { [ it.id, it.name ] }
     { copied_from: source || "top",
       levels: kinds.map do |kind|
-        { name: kind.name, parent_names: kind.parent_ids.map { names.fetch(it) }, top: kind.top?, copied_from_level_id: kind.id }
+        { name: kind.name, parent_names: kind.parent_ids.map { names.fetch(it) },
+          top: kind.top? || kind.parent_ids.include?(@unit.level_id), copied_from_level_id: kind.id }
       end,
       conversion: params.fetch(:conversion, {}).to_unsafe_h.transform_values { names.fetch(it.to_s, it.to_s) } }
   end
