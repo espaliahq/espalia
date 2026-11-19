@@ -97,14 +97,14 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
       assert_equal "Checkout's structure last changed on #{(@today + 1).iso8601}, so date the change then or later", error.message
     end
 
-    should "refuse a move out of the structure, and one into it" do
+    should "refuse a move out of the structure, or into it, that doesn't say what each type becomes" do
       other = create_unit("Lending", @tribe)
       error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(@checkout, other, effective_on: @today) } }
-      assert_equal "Checkout can't move out of Payments's structure into the organisation's structure", error.message
+      assert_equal "Moving Checkout out of Payments's structure into the organisation's structure changes its type, so say what each type it moves becomes", error.message
 
       squad = create_unit("Squad A", @squad, parent_id: other)
       error = assert_raises(RuntimeError) { as_tenant { @handler.move_unit(squad, @checkout, effective_on: @today) } }
-      assert_equal "Squad A can't move out of the organisation's structure into Payments's structure", error.message
+      assert_equal "Moving Squad A out of the organisation's structure into Payments's structure changes its type, so say what each type it moves becomes", error.message
     end
 
     should "move a unit within its structure" do

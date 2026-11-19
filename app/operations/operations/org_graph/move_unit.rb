@@ -8,10 +8,10 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
   description "Move a unit in the Org Graph beneath another live unit of a kind its own kind can sit " \
               "under, or to the top when parent_id is omitted and its kind can sit there, from effective_on (today by default). Only a unit Espalia holds " \
               "can be moved here. Moving a unit changes who inherits its ownership, so the caller needs " \
-              "rights on the unit and where it lands. To move a unit from the organisation's structure into a unit's own " \
-              "structure, pass conversion, a type of that structure for each type the unit and those beneath it " \
-              "hold; each changes type in the same change. That needs a tenant admin, and is one-way until a unit " \
-              "can move out of a structure; withdrawing the structure converts its units back, where they stay."
+              "rights on the unit and where it lands. To move a unit into another structure (into a unit's own " \
+              "structure, out of one into the organisation's, or between two), pass conversion: a type of the " \
+              "structure it joins for each type the unit and those beneath it hold. Each changes type in the same " \
+              "change, and a unit with a structure of its own takes it along, nested. That needs a tenant admin."
   approval :in_app
 
   CONVERSION_SCHEMA = {
@@ -23,8 +23,6 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
   parameter :unit_id, String, required: true
   parameter :parent_id, String, allow_blank: false
   parameter :conversion, Hash, schema: CONVERSION_SCHEMA, allow_blank: false
-  dependent_required :conversion, requires: :parent_id,
-                                  message: "A move with a conversion needs parent_id: a unit at the top stays in the organisation's structure"
 
   # Checks the conversion here, so MCP saves no approval for one that can't run.
   #
@@ -38,7 +36,7 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
 
   # @return [Hash] `{ unit_id, parent_id, effective_on }`, and the conversion when given, as level_id => level_id
   def perform
-    return move_into_structure unless conversion_option.empty?
+    return move_across_structures unless conversion_option.empty?
 
     unit = live_unit!(:unit_id)
     parent = params[:parent_id] && live_unit!(:parent_id)
@@ -51,7 +49,7 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
 
   # A Structure rebuild empties org_units, so this path never reads them: the
   # command names a unit it can't find from its own state, under its lock.
-  def move_into_structure
+  def move_across_structures
     unit_id = uuid!(:unit_id).downcase
     parent_id = params[:parent_id] && uuid!(:parent_id).downcase
     on = effective_on
