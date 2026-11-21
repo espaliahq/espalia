@@ -83,7 +83,7 @@ GEM
       ruby_event_store (= 3.2.0)
     anonymous_loader (0.1.3)
       version_gem (~> 1.1, >= 1.1.14)
-    anthropic (2.8.0)
+    anthropic (2.10.0)
       base64 (~> 0.1)
       connection_pool (>= 2, < 4)
       opentelemetry-api (>= 1.2.4, < 2)
@@ -121,13 +121,15 @@ GEM
       rack-test (>= 0.6.3)
       regexp_parser (>= 1.5, < 3.0)
       xpath (~> 3.2)
+    commonmarker (2.10.1)
+      rb_sys (~> 0.9)
     commonmarker (2.10.1-aarch64-linux)
     commonmarker (2.10.1-aarch64-linux-musl)
     commonmarker (2.10.1-arm64-darwin)
     commonmarker (2.10.1-x86_64-linux)
     commonmarker (2.10.1-x86_64-linux-musl)
     concurrent-ruby (1.3.8)
-    connection_pool (3.0.2)
+    connection_pool (3.0.3)
     crass (1.0.8)
     css_parser (3.3.0)
       addressable
@@ -238,6 +240,7 @@ GEM
     marcel (1.2.1)
     matrix (0.4.3)
     mini_mime (1.1.5)
+    mini_portile2 (2.8.9)
     minitest (6.1.0)
       drb (~> 2.0)
       prism (>= 1.5, < 3)
@@ -258,6 +261,9 @@ GEM
     net-smtp (0.5.2)
       net-protocol
     nio4r (2.7.5)
+    nokogiri (1.19.7)
+      mini_portile2 (~> 2.8.2)
+      racc (~> 1.4)
     nokogiri (1.19.7-aarch64-linux-gnu)
       racc (~> 1.4)
     nokogiri (1.19.7-aarch64-linux-musl)
@@ -403,6 +409,9 @@ GEM
       zeitwerk (~> 2.6)
     rainbow (3.1.1)
     rake (13.4.2)
+    rake-compiler-dock (1.12.0)
+    rb_sys (0.9.130)
+      rake-compiler-dock (= 1.12.0)
     rbs (4.2.0)
       logger
       prism (>= 1.6.0)
@@ -494,7 +503,8 @@ GEM
       railties (>= 7.1)
       thor (>= 1.3.1)
     ssrf_filter (1.6.0)
-    standardwebhooks (1.1.0)
+    standardwebhooks (1.3.0)
+      base64 (~> 0.3.0)
     stimulus-rails (1.3.4)
       railties (>= 6.0.0)
     store_model (4.6.1)
@@ -503,6 +513,7 @@ GEM
     tailwindcss-rails (4.7.0)
       railties (>= 7.0.0)
       tailwindcss-ruby (~> 4.0)
+    tailwindcss-ruby (4.3.3)
     tailwindcss-ruby (4.3.3-aarch64-linux-gnu)
     tailwindcss-ruby (4.3.3-aarch64-linux-musl)
     tailwindcss-ruby (4.3.3-arm64-darwin)
@@ -562,7 +573,7 @@ PLATFORMS
 
 DEPENDENCIES
   acts_as_tenant (~> 1.0)
-  anthropic (~> 2.8)
+  anthropic (~> 2.10)
   bootsnap
   brakeman
   bundler-audit
