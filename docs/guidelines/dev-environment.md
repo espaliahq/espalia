@@ -11,7 +11,9 @@ place. The environment's setup script runs it as root from the checkout; run it 
 to restart anything that has stopped. It provides:
 
 - **Ruby from `.ruby-version`**, compiled by ruby-build into `/opt/rubies/<version>`. Bundler
-  insists on the exact patch, and the image carries Ruby 3.3, so nothing else will do.
+  insists on the exact patch, and the image carries Ruby 3.3, so nothing else will do. When the
+  image's ruby-build predates the patch, the script builds it from the tarball and checksum
+  `cache.ruby-lang.org` lists.
 - **Postgres from CI's `postgres:<major>` image tag**, using the image's own Ubuntu cluster on
   `localhost:5432`, with the `postgres`/`postgres` login `database.yml` expects.
 - **System tests on the local-Chrome branch** of `ApplicationSystemTestCase`, the one CI runs:

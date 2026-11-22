@@ -46,7 +46,20 @@ step "Ruby $ruby_version"
 RUBY_PREFIX="$RUBIES/$ruby_version"
 if [ ! -x "$RUBY_PREFIX/bin/ruby" ]; then
   mkdir -p "$RUBIES"
-  RUBY_CONFIGURE_OPTS="--disable-install-doc" MAKE_OPTS="-j$(nproc)" "$RUBY_BUILD" "$ruby_version" "$RUBY_PREFIX"
+  definition="$ruby_version"
+  # The image's ruby-build can predate a patch, so build one it doesn't know from the
+  # tarball and checksum ruby-lang.org lists.
+  if ! "$RUBY_BUILD" --definitions | grep -qx "$ruby_version"; then
+    tarball="$(curl -fsSL https://cache.ruby-lang.org/pub/ruby/index.txt |
+      awk -v name="ruby-$ruby_version" '$1 == name && $2 ~ /\.tar\.gz$/ { print $2 "#" $4 }')"
+    if [ -z "$tarball" ]; then
+      echo "cache.ruby-lang.org lists no Ruby $ruby_version." >&2
+      exit 1
+    fi
+    definition="$(mktemp)"
+    echo "install_package \"ruby-$ruby_version\" \"$tarball\" enable_shared standard" > "$definition"
+  fi
+  RUBY_CONFIGURE_OPTS="--disable-install-doc" MAKE_OPTS="-j$(nproc)" "$RUBY_BUILD" "$definition" "$RUBY_PREFIX"
 fi
 export PATH="$RUBY_PREFIX/bin:$PATH"
 mkdir -p "$LINK_DIR"
