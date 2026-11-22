@@ -12,8 +12,11 @@ to restart anything that has stopped. It provides:
 
 - **Ruby from `.ruby-version`**, compiled by ruby-build into `/opt/rubies/<version>`. Bundler
   insists on the exact patch, and the image carries Ruby 3.3, so nothing else will do. When the
-  image's ruby-build predates the patch, the script builds it from the tarball and checksum
-  `cache.ruby-lang.org` lists.
+  image's ruby-build predates the patch, the script builds it from the tarball and sha256 that
+  `cache.ruby-lang.org/pub/ruby/index.txt` lists. Both come from `cache.ruby-lang.org` over
+  HTTPS, the same trust ruby-build itself places, and ruby-build refuses the build on a checksum
+  mismatch. If the index lists no such version, the script stops with an error rather than fall
+  back to another Ruby.
 - **Postgres from CI's `postgres:<major>` image tag**, using the image's own Ubuntu cluster on
   `localhost:5432`, with the `postgres`/`postgres` login `database.yml` expects.
 - **System tests on the local-Chrome branch** of `ApplicationSystemTestCase`, the one CI runs:
