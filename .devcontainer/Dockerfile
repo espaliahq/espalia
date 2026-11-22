@@ -1,3 +1,5 @@
+# rails/devcontainer publishes no 4.0.10 image yet, so a fresh build fails at FROM.
+# Until it does, build Ruby inside an existing container: https://github.com/espaliahq/espalia/issues/536
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
 ARG RUBY_VERSION=4.0.10
 FROM ghcr.io/rails/devcontainer/images/ruby:$RUBY_VERSION

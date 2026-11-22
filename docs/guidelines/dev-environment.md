@@ -2,6 +2,8 @@
 
 > Read this when: setting up, running or debugging the app outside the usual devcontainer flow — a Claude Code cloud session, a second worktree, the macOS host — or measuring performance in development. The devcontainer itself is the documented path; [AGENTS.md](../../AGENTS.md) has its commands.
 
+> **A fresh devcontainer build fails at `FROM` until rails/devcontainer publishes a Ruby 4.0.10 image.** Keep an existing container and build Ruby 4.0.10 inside it, as [#536](https://github.com/espaliahq/espalia/issues/536) describes.
+
 ## Cloud sessions: `bin/cloud-setup`, not the devcontainer
 
 **A Claude Code cloud session runs the app natively, through `bin/cloud-setup`.** The
