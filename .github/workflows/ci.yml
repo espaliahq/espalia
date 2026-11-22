@@ -139,6 +139,9 @@ jobs:
           ruby-version: "4.0"
           bundler-cache: true
 
+      - name: Print the Ruby version
+        run: ruby -e 'puts RUBY_VERSION'
+
       - name: Run tests
         env:
           RAILS_ENV: test
