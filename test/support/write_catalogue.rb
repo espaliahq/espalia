@@ -10,6 +10,9 @@ require "fileutils"
 module WriteCatalogue
   DIR = Rails.root.join("tmp/write_catalogue")
   WRITE = /\A\s*(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+"?(\w+)"?/i
+  # A quoted string, an assigned column (quoted or bare), a quoted identifier,
+  # a parenthesis, or a keyword that ends a SET clause.
+  SET_TOKEN = /'(?:[^']|'')*'|"((?:[^"]|"")+)"\s*=(?!=)|"(?:[^"]|"")*"|(\w+)\s*=(?!=)|\(|\)|\b(?:WHERE|RETURNING)\b/i
   # Written by gems, never by our code.
   INFRASTRUCTURE = /\A(event_store_|solid_|ar_internal_metadata\z|schema_migrations\z)/
   SOURCE_ROOTS = [ Rails.root.join("app").to_s, Rails.root.join("lib").to_s ].freeze
@@ -89,17 +92,20 @@ module WriteCatalogue
       end
     end
 
+    # Quoted strings and identifiers are skipped whole, so a literal "(" or
+    # "WHERE" inside one can't end the clause early.
     def set_columns(clause)
       depth = 0
       names = []
-      clause.scan(/\(|\)|"?(\w+)"?\s*=(?!=)|\b(?:WHERE|RETURNING)\b/i) do
+      clause.scan(SET_TOKEN) do |quoted, bare|
         token = Regexp.last_match[0]
-        case token
-        when "(" then depth += 1
-        when ")" then depth -= 1
-        else
-          break if depth.zero? && token.match?(/\A(WHERE|RETURNING)\z/i)
-          names << Regexp.last_match[1] if depth.zero? && Regexp.last_match[1]
+        if token == "(" then depth += 1
+        elsif token == ")" then depth -= 1
+        elsif depth.zero?
+          break if token.match?(/\A(WHERE|RETURNING)\z/i)
+
+          name = quoted&.gsub('""', '"') || bare
+          names << name if name
         end
       end
       names.uniq.sort
