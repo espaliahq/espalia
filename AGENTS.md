@@ -200,6 +200,7 @@ Architecture docs are split into focused files — read on demand, not all at on
 | [reporting.md](docs/architecture/reporting.md) | Gap analysis, trend analysis, promotion readiness dashboards, growth plan freshness |
 | [integrations.md](docs/architecture/integrations.md) | HRIS sync, notification adapters, SSO/SAML |
 | [event-store.md](docs/architecture/event-store.md) | Event subscriptions, new projections, snapshots, async handlers |
+| [direct-writes.md](docs/architecture/direct-writes.md) | Writing a table outside a projection; deciding whether plain state should move to events |
 | [team-planning/](docs/team-planning/README.md) | Working on the Org Graph or Team Planning. Proposals with mockups and a plan; nothing is built yet |
 
 Other reference docs:
