@@ -11,7 +11,6 @@ namespace :account_grants do
       end
       recorded = report.added + report.removed
       puts "[#{tenant.id}] #{recorded.zero? ? "nothing to record" : "recorded #{report.added} already held, #{report.removed} removed"}"
-      puts "[#{tenant.id}] skipped #{report.skipped_ids.size} flagged with no person: #{report.skipped_ids.join(", ")}" if report.skipped_ids.any?
     rescue => e
       Rails.error.report(e, handled: true, context: { tenant_id: tenant.id })
       puts "[#{tenant.id}] failed: #{e.class}: #{e.message}"

@@ -56,6 +56,9 @@ class OrgGraph::ActivityFeed
   # @return [Boolean]
   def next_page? = entries.distinct.count(:cause_id) > page * PER_PAGE
 
+  # An account given a grant before it was linked to a person.
+  NO_PERSON = "an account with no person"
+
   # @return [Boolean] whether this is the organisation's own activity
   def organisation? = unit.nil?
 
@@ -93,7 +96,7 @@ class OrgGraph::ActivityFeed
   end
 
   def describe(entry)
-    person = entry.person&.name || Person::FORMER_MEMBER
+    person = entry.person&.name || (entry.person_id || !entry.grant? ? Person::FORMER_MEMBER : NO_PERSON)
     case entry.event_type
     when "MembershipSet" then entry.before ? "Changed #{person}'s terms" : "Added #{person}"
     when "MembershipEnded" then "Removed #{person}"
@@ -107,7 +110,7 @@ class OrgGraph::ActivityFeed
     when "UnitRetired" then "Retired the unit"
     when "TaxonomyDefined" then structure_change(entry)
     when "OrgGraphEditorAdded" then editor_added(entry, person)
-    when "OrgGraphEditorRemoved" then "#{person} is no longer an Org Graph editor"
+    when "OrgGraphEditorRemoved" then "#{person} is no longer an Org Graph editor".upcase_first
     else OrgUnitActivity::Group.new([ entry ]).summary.upcase_first
     end
   end
@@ -115,7 +118,7 @@ class OrgGraph::ActivityFeed
   def editor_added(entry, person)
     return "Made #{person} an Org Graph editor" unless entry.after["already_held"]
 
-    "#{person} was already an Org Graph editor on #{entry.effective_on.strftime('%-d %b %Y')}"
+    "#{person} was already an Org Graph editor on #{entry.effective_on.strftime('%-d %b %Y')}".upcase_first
   end
 
   def structure_change(entry)

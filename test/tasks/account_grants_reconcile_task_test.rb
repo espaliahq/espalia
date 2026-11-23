@@ -107,14 +107,17 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
     assert_equal [ true, false ], flags(@editor)
   end
 
-  should "skip and report a flagged account with no person" do
+  should "record a flagged account with no person, so a rebuild keeps its grant" do
     unlinked = as_tenant { create(:tenant_user, tenant: @tenant).tap { it.update_columns(org_graph_editor: true) } }
 
-    out = reconcile
+    assert_match "[#{@tenant.id}] recorded 3 already held, 0 removed", reconcile
+    assert_equal({ tenant_user_id: unlinked.id, person_id: nil, effective_on: @tenant.today.iso8601,
+                   added_by_id: nil, already_held: true }, events.find { it.data[:tenant_user_id] == unlinked.id }.data)
 
-    assert_match "[#{@tenant.id}] skipped 1 flagged with no person: #{unlinked.id}", out
-    assert_not holds?(:org_graph_editor, unlinked)
-    assert_equal 2, events.size
+    run_task("events:projections:rebuild", PROJECTION::PROJECTION_NAME)
+
+    assert_equal [ true, false ], flags(unlinked)
+    assert_match "nothing to record", reconcile
   end
 
   should "record the other tenants, then fail so the deploy stops before a rebuild clears the failed tenant's flags" do

@@ -197,7 +197,7 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
       assert_equal %w[OrgGraphEditorRemoved OrgGraphEditorAdded], [ removed.event_type, added.event_type ]
       assert_equal [ nil, nil ], [ removed.unit_id, added.unit_id ]
       assert_equal [ @lead.id, @lead.id ], [ removed.actor_id, added.actor_id ]
-      assert_equal [ "editor:#{@ada.id}", @ada.id ], [ added.subject, added.person_id ]
+      assert_equal [ "editor:#{@account.id}", @ada.id ], [ added.subject, added.person_id ]
       assert_equal [ { "editor" => true, "already_held" => false }, { "editor" => true } ], [ added.after, removed.before ]
       assert_equal Date.new(2026, 2, 1), added.effective_on
       assert_not added.reversible?

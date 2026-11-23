@@ -5,15 +5,16 @@
 # A flag set with no grant recorded becomes an `already_held` addition, and
 # a recorded grant whose flag is clear, or whose account was destroyed,
 # becomes a removal. Neither names an actor. A forgotten account is left as
-# it is, and a flagged account with no person is skipped and reported.
-# Writing only what differs makes a second run write nothing.
+# it is. A flagged account with no person is recorded too, with no person,
+# so a rebuild keeps its grant. Writing only what differs makes a second run
+# write nothing.
 #
 # @example
 #   AccountGrants::Reconciliation.new(tenant).call
-#   # => #<data Report added=1, removed=0, skipped_ids=[]>
+#   # => #<data Report added=1, removed=0>
 class AccountGrants::Reconciliation
-  # What a run recorded, and the flagged accounts it could not.
-  Report = Data.define(:added, :removed, :skipped_ids)
+  # What a run recorded.
+  Report = Data.define(:added, :removed)
 
   # @param tenant [Tenant]
   # @param repository [AccountGrants::Repository]
@@ -26,17 +27,14 @@ class AccountGrants::Reconciliation
   def call
     ActsAsTenant.with_tenant(@tenant) do
       added = removed = 0
-      skipped_ids = []
       @repository.with_grants do |aggregate|
         accounts = TenantUser.where(tenant_id: @tenant.id).to_a.index_by(&:id)
         AccountGrants::Aggregate::GRANTS.each do |grant|
-          flagged, unlinked = accounts.values.select { it.public_send(grant) }.partition(&:person_id)
-          skipped_ids |= unlinked.map(&:id)
-          added += record_held(aggregate, grant, flagged)
+          added += record_held(aggregate, grant, accounts.values.select { it.public_send(grant) })
           removed += record_cleared(aggregate, grant, accounts)
         end
       end
-      Report.new(added:, removed:, skipped_ids:)
+      Report.new(added:, removed:)
     end
   end
 

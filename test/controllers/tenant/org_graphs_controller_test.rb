@@ -167,6 +167,20 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_includes sidebar.text, "Can't change back: #{OrgGraph::ChangeBackHandler::GRANT}"
     end
 
+    should "name an account with no person in the organisation's activity" do
+      ActsAsTenant.with_tenant(@tenant) do
+        unlinked = create(:tenant_user, tenant: @tenant)
+        AccountGrants::CommandHandler.new.add(:org_graph_editor, unlinked)
+        AccountGrants::CommandHandler.new.remove(:org_graph_editor, tenant_user_id: unlinked.id, person_id: nil)
+      end
+
+      get tenant_org_graph_path
+
+      sidebar = Nokogiri::HTML5(response.body).at_css("##{Views::Tenant::OrgGraph::Sidebar::ID}")
+      assert_includes sidebar.text, "Made an account with no person an Org Graph editor"
+      assert_includes sidebar.text, "An account with no person is no longer an Org Graph editor"
+    end
+
     should "open the organisation's activity beside a unit, and link back to the unit's" do
       org = build_org_graph(@tenant)
 

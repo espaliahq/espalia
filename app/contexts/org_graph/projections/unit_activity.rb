@@ -117,7 +117,7 @@ class OrgGraph::Projections::UnitActivity
   end
 
   def editor(data, **values)
-    { subject: "editor:#{data[:person_id]}", person_id: data[:person_id], **values }
+    { subject: "editor:#{data[:tenant_user_id]}", person_id: data[:person_id], **values }
   end
 
   def membership(data, unit_id, position, after:, other_unit_id: nil)
