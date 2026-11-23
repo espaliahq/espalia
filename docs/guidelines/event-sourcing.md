@@ -81,6 +81,8 @@ Every projection in [lib/projections/registry.rb](../../lib/projections/registry
 
 **Each read-model table has exactly one projection writer.** This is the load-bearing rule for replays to be self-contained: dropping the table and replaying that projection's events must reproduce the same state — which is only true if no other projection contributes writes to the same table. See the anti-pattern entry below.
 
+**To check it, run the suite with `WRITE_CATALOGUE=1`, then `bin/rails development:write_catalogue`.** It reports every write to a projection's table or column made outside that projection. [direct-writes.md](../architecture/direct-writes.md) lists the tables no projection owns and who writes them.
+
 **Never decide a row from another projection's mutable table.** A rebuild replays your events against that table as it *ended*, not as it stood when each event was written, so an event from before a change is judged by the state after it. `CurrentAssessment` once read the enrollment snapshot to decide which alignment was the home one; after a mid-cycle transfer a rebuild re-homed history that live had filed correctly. Track the fact from your own events instead, as the projection now tracks `home_role_id`. A fact that never changes after it is written, such as a cycle's framework, is safe to read. Prove it with a round-trip test that moves the other table to its final state before the rebuild.
 
 `reset!` ownership rules:
