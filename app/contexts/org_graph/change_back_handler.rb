@@ -90,7 +90,7 @@ class OrgGraph::ChangeBackHandler
     when "UnitMoved"
       authorize_move_unit!(entry.unit_id, entry.before["parent_id"])
       authorize_move_back_across!(entry) if across?(entry)
-    when "UnitKindChanged" then authorize_unit_kind!
+    when "UnitKindChanged" then authorize_unit_kind!(entry.unit_id)
     when "TaxonomyDefined" then authorize_structure_of!(entry.unit_id)
     else authorize_unit!(entry.unit_id)
     end

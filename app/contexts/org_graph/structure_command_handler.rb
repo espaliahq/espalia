@@ -29,6 +29,13 @@ class OrgGraph::StructureCommandHandler
     @repository = repository
   end
 
+  # Refuses as every write to a structure does, so a caller can check before
+  # doing other work.
+  #
+  # @param unit_id [String, nil] the declaring unit, nil for the organisation's structure
+  # @raise [OrgGraph::Authorization::Refused] unless the actor may change that structure
+  def authorize_structure_change!(unit_id) = authorize_structure_of!(unit_id)
+
   # The history and the structure record each kind, so every change to the
   # kinds waits for their rebuilds, as a provider change does.
   #
@@ -205,7 +212,7 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#change_unit_kind
   def change_unit_kind(unit_id, level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
-    authorize_unit_kind!
+    authorize_unit_kind!(unit_id)
     with_structure(plan) { |structure| structure.change_unit_kind(unit_id, level_id, **attributed(options, :kind_changed_by_id)) }
   end
 

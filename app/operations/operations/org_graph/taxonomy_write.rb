@@ -8,16 +8,13 @@
 # ([#494](https://github.com/espaliahq/espalia/issues/494)) when
 # {#structure_unit} returns that unit.
 module Operations::OrgGraph::TaxonomyWrite
-  # Overrides UnitWrite's tenant-wide check, so include this after it.
+  # Overrides UnitWrite's tenant-wide check, so include this after it. The
+  # refusal is the command's own.
   #
   # @raise [Pundit::NotAuthorizedError] unless the caller may change the structure
   def policy_check
-    return authorize(:org_graph, :edit_taxonomy?) unless structure_unit
-
     authorize :org_graph, :show?
-    return if Pundit.policy!(context, :org_graph).edit_structure_of?(structure_unit)
-
-    raise Pundit::NotAuthorizedError, "Only a tenant admin can change #{structure_unit.name}'s structure"
+    structure_handler.authorize_structure_change!(structure_unit&.id)
   end
 
   private
