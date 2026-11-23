@@ -104,7 +104,8 @@ module WriteCatalogue
     end
 
     # Quoted strings and identifiers are skipped whole, so a literal "(" or
-    # "WHERE" inside one can't end the clause early.
+    # "WHERE" inside one can't end the clause early. A bare "IS DISTINCT FROM"
+    # still ends it, so columns after one are missed; Rails parenthesises it.
     def set_columns(clause)
       depth = 0
       names = []
