@@ -726,10 +726,11 @@ find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 - If you must use `within`, scope it to a container that is NOT replaced (e.g. the parent `tr` or a wrapper div that sits outside the Turbo Stream target)
 - This applies to any element inside a Turbo Stream replacement target: rating cells, scoring panels, category headers, contribution labels
 
-**Out of `assert_no_selector`, it means the node stayed for the whole wait.**
-Capybara swallows the error and polls again until its wait runs out, so one
-that escapes an absence assertion is a stall of ten seconds or more, not a
-Turbo race. Look for a paused machine first:
+**Out of `assert_no_selector`, it means the selector still matched when the
+wait ran out.** Capybara swallows the error and polls again until its wait runs
+out, so one that escapes an absence assertion says a match was there the whole
+time: a stall, or a re-render that keeps putting one back. With `wait: 0` it
+can escape on the first look. Look for a paused machine first:
 [dev-environment.md → A run where several workers error in the same second](dev-environment.md#a-run-where-several-workers-error-in-the-same-second).
 
 **`visit` itself can raise it when the page replaces itself while loading.**
