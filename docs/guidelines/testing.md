@@ -682,6 +682,25 @@ read 375 against 360 on CI, a scrollbar its own failure screenshot no longer
 showed. The helper polls until two reads in a row fit, so lasting overflow and
 a layout that keeps flipping both still fail.
 
+## A Test That Fails Only in the Full Run May Only Pass When Fast
+
+**Suspect a test that asserts and moves on before the page has settled.** The
+activity pane's Back and Forward test checked the overlay was open and closed
+it again, all inside the 100ms a stale fade took to hide the pane. Alone it won
+that race three times in four; in a full parallel run it lost both times
+([#542](https://github.com/espaliahq/espalia/issues/542)). The fault was in the
+controller, and the test had been hiding it.
+
+- **Add a `sleep` after the step you suspect.** A 0.4s pause after
+  `page.go_forward` failed that test every time. Take it out once the cause is
+  fixed; it is a probe, not a fix.
+- **Trace the page, not the test.** Push `popstate`, the `turbo:*` events and a
+  `MutationObserver` on the element into an array on `window`, which survives a
+  Turbo render, and print it when the test fails. Print it from
+  `before_teardown`: a `teardown` block runs after Capybara has reset the page.
+- **Then assert the settled state.** `assert_pane_settles "open"` waits until
+  the pane is open, shown and has no fade class left.
+
 ## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
 
 **Always assert visibility after triggering Stimulus actions before interacting with the resulting DOM.** Elements toggled by Stimulus controllers (dropdowns, modals, expanded rows) exist in the DOM as hidden elements. Capybara's `find` and `within` will locate hidden elements and fail — or worse, pass locally but fail on slower CI runners due to race conditions.

@@ -182,6 +182,32 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       visible: :all
   end
 
+  # The close fades out over several frames before it hides the pane, so a
+  # reopen in the same task lands while that fade is still running.
+  def close_and_reopen_pane_at_once
+    page.execute_script(<<~JS)
+      const wrapper = document.querySelector("[data-controller~='activity-pane']")
+      const pane = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-pane")
+      pane.close()
+      pane.open()
+    JS
+  end
+
+  # Open, shown and done fading, or closed, hidden and done fading.
+  def assert_pane_settles(state)
+    settled = <<~JS
+      (() => {
+        const pane = document.getElementById("assessment-activity-pane")
+        const hidden = pane.classList.contains("hidden")
+        const shown = !hidden && getComputedStyle(pane).opacity === "1"
+        return pane.dataset.paneState === arguments[0] && !pane.classList.contains("transition-opacity") &&
+          (arguments[0] === "open" ? shown : hidden)
+      })()
+    JS
+    assert wait_until_js { page.evaluate_script(settled, state) },
+      "the pane says #{state} but its fades left it otherwise, or still running"
+  end
+
   def pane_geometry
     page.evaluate_script(<<~JS)
       (() => {
@@ -379,6 +405,18 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         )
     end
 
+    should "stay on screen when it reopens while its close is still fading" do
+      open_loaded_activity_pane
+      close_and_reopen_pane_at_once
+      assert_pane_settles "open"
+
+      toggle_activity_pane
+      assert_pane_settles "closed"
+      # This close has nothing to fade, and must not swallow the open behind it.
+      close_and_reopen_pane_at_once
+      assert_pane_settles "open"
+    end
+
     should "push ?activity=open to the URL on toggle" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
@@ -424,6 +462,22 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         "expected the overlay to start at the top of the viewport, got #{geometry['top']}"
       assert_pane_within_viewport
       assert_last_entry_reachable
+    end
+
+    should "stay on screen when the overlay reopens while its close is still fading" do
+      mark_history_entry
+      # Stamped as a Turbo visit leaves it, so the close's Back is a restoration
+      # visit, and its render drops focus.
+      page.execute_script("Turbo.session.history.replace(new URL(location.href))")
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      hold_matrix_frame_loads
+      expect_a_back
+      close_and_reopen_pane_at_once
+      assert_back_landed
+      assert_pane_settles "open"
+      focus_in_pane = "document.querySelector('#assessment-activity-pane').contains(document.activeElement)"
+      assert wait_until_js { page.evaluate_script(focus_in_pane) }, "the reopened overlay lost focus"
     end
 
     should "close on outside click but stay open when click lands inside the pane" do
@@ -658,7 +712,7 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       go_back_and_wait_until_landed
       assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
       page.go_forward
-      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_pane_settles "open"
       assert wait_until_js { page.evaluate_script("history.state?.sidePanelOverlay === 'activity'") },
         "Forward left the overlay's entry without its marker"
       assert wait_until_js { page.evaluate_script("document.querySelector('#assessment-activity-pane').contains(document.activeElement)") },
@@ -667,7 +721,9 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       close_overlay_by_its_button
     end
 
-    # Back and Forward are Turbo restoration visits, and their render drops focus.
+    # The first Back and Forward make Turbo cache the page a moment into the fade
+    # each starts; the second pair are restoration visits that render those
+    # copies, and a render drops focus.
     should "keep focus on the toggle through Back and in the overlay through Forward" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       mark_history_entry
@@ -679,10 +735,10 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
 
       2.times do
         go_back_and_wait_until_landed
-        assert_selector "#assessment-activity-pane[data-pane-state='closed']", visible: :all
+        assert_pane_settles "closed"
         assert wait_until_js { page.evaluate_script(focus_on_toggle) }, "Back closed the overlay with focus lost"
         page.go_forward
-        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+        assert_pane_settles "open"
         assert wait_until_js { page.evaluate_script(focus_in_pane) }, "Forward reopened the overlay with focus lost"
       end
     end
