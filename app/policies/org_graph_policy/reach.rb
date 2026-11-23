@@ -41,9 +41,9 @@ class OrgGraphPolicy::Reach
     @owned_unit_ids ||= if @person&.status == "active"
                           subtree = [ @person.id, *@person.all_reports.ids ]
                           OrgUnitOwner.where(person_id: Person.active.where(id: subtree).select(:id)).distinct.pluck(:unit_id).to_set
-                        else
+    else
                           Set.new
-                        end
+    end
   end
 
   # The unit and every unit above it, nearest first. A cycle in the parents
