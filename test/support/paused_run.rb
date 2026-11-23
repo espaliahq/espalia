@@ -4,7 +4,7 @@
 # clock and has its wall clock corrected when it wakes, so the lead the wall
 # clock gains is the time spent paused.
 class PausedRun
-  # Large enough that a routine correction of the wall clock stays quiet.
+  # A floor: a smaller gap is not worth a notice.
   THRESHOLD_SECONDS = 10
 
   # @param wall [#call] seconds on the wall clock

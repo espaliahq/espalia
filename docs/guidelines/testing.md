@@ -729,9 +729,9 @@ find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 **Out of an `assert_no_selector` on the page, it means the wait ran out with
 no poll finding the page clear.** Capybara swallows the error and polls again
 until its wait runs out, and the assertion passes at the first poll that finds
-no match. So each poll found a match, or went stale while checking one: a
-request that took the whole wait, or a re-render that keeps putting a match
-back. With `wait: 0` it can escape on the first look. Inside a `within`,
+no match. So each poll found a match, and the error came from reading one for
+the failure message: a request that took the whole wait, or a re-render that
+keeps putting a match back. With `wait: 0` it can escape on the first look. Inside a `within`,
 Capybara finds a stale scope again where it can and raises the error when it
 cannot, which is the rule above. If several workers failed in the same second,
 look for a paused machine too:
