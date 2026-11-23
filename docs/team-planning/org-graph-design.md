@@ -345,8 +345,19 @@ holds is open to:
 - **A unit's owners.** A unit can have several, with none primary: a product manager and
   an engineering manager can both own a squad. An owner may edit the unit and the units
   beneath it. A unit with no owner of its own inherits its parent's.
+- **Anyone an owner reports to**, at any depth, as the reporting line stands now. Priya
+  owns Payments; Sam manages Priya and Lee manages Sam, so both hold Payments too. Once
+  Priya leaves or moves to another manager, they no longer do.
 - **A person's manager chain**, for that person's memberships only. A design lead can
   place their designer in a squad they do not own.
+
+A unit's own structure belongs to whoever holds the unit that declares it: its owners,
+anyone above them on the line, and anyone who owns a unit above it. They may add, change
+and remove its types, withdraw it, and retype the units that sit in it. Owning a unit
+inside the structure is not enough to retype it, since a type decides what may sit above
+and below it. The organisation's structure, the one no unit declares, stays with admins
+and editors. A move between two structures needs the right to change both
+([#537](https://github.com/espaliahq/espalia/issues/537)).
 
 Every Org Graph command checks this when a person runs it, and a refusal says who may
 make the change. The HRIS sync and the system's own work, such as a retirement moving

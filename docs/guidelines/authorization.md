@@ -165,19 +165,29 @@ Pundit's `authorize` passes none.
 |--------|-----|
 | See the Org Graph (`show?`) | Any tenant member |
 | The Units view, its activity sidebar (a unit's, or the organisation's own) and change it back, and `org_graph_units`, `org_graph_activity`, `org_graph_change_back` and `org_graph_change_back_group` (`show_units?`; a change-back also needs the rights to make the inverse change) | A tenant admin, until the Org Graph's screens are finished; it then opens to `show?` |
-| Add, rename or remove a unit type, or say where it can sit (`edit_taxonomy?`) | A tenant admin. Every unit has a type, so the structure's shape is a bigger call than a unit edit |
-| Give a unit a structure of its own, withdraw it, change its types, or move a unit into it (`edit_structure_of?(unit)`, [#494](https://github.com/espaliahq/espalia/issues/494)) | A tenant admin, for now. A move in also needs `move_unit?`, and its refusal names no unit. Step 6 of [#390](https://github.com/espaliahq/espalia/issues/390) widens this one predicate; nothing else names who may |
+| Add, rename or remove a type in the organisation's structure, or say where it can sit (`edit_taxonomy?`, which is `edit_structure_of?(nil)`) | A tenant admin or an Org Graph editor. Every unit has a type, so the structure's shape is a bigger call than a unit edit |
+| Give a unit a structure of its own, withdraw it, change its types, or move a unit into it (`edit_structure_of?(unit)`, [#494](https://github.com/espaliahq/espalia/issues/494), [#537](https://github.com/espaliahq/espalia/issues/537)) | A tenant admin, an Org Graph editor, or anyone whose reach covers the declaring unit. A move in also needs `move_unit?`, and its refusal names no unit |
 | Providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
-| Rename, retire or own a unit, or add a unit beneath it (`edit_unit?`, `create_unit?(parent)`) | The above, or an active owner of that unit or any unit above it |
-| Change a unit's type (`change_unit_kind?`), or change that back | A tenant admin or an Org Graph editor. An owner may move a unit but not change its type, since its type decides what may sit above and below it |
+| Rename, retire or own a unit, or add a unit beneath it (`edit_unit?`, `create_unit?(parent)`) | The above, or anyone whose reach covers the unit |
+| Change a unit's type (`change_unit_kind?(unit)`), or change that back | Whoever may change the structure the unit sits in, and whose reach covers the unit. In the organisation's structure that is a tenant admin or an Org Graph editor. Owning the unit alone is not enough, since its type decides what may sit above and below it |
 | Move a unit (`move_unit?(unit, new_parent)`) | Rights over the unit and over its new parent; a move to the root needs `edit_structure?` |
 | Record a succession (`record_succession?(units)`) | Rights over every unit it names |
-| Set, end or confirm a membership (`edit_membership?(member, unit)`) | Anyone in the member's manager chain, or whoever holds rights over the unit |
+| Place someone in a unit, or set, end or confirm a membership (`place?(member, unit)`, `edit_membership?(member, unit)`) | Anyone in the member's manager chain, or whoever holds rights over the unit |
 | Move a membership (`move_membership?(member, from, to)`) | The manager chain, or rights over both units |
 
-Ownership inherits downward: owning Payments gives rights over every squad
-beneath it, even one with owners of its own. Owners and managers lose their
-rights once their `Person` is no longer active. A unit or person the Org Graph
+**Reach** (`OrgGraphPolicy::Reach`) is the set of units a caller covers. It
+starts from the caller and everyone beneath them on `people.manager_id`, at any
+depth and as the line stands now, and takes the units those people own. A unit
+is covered when it or a unit above it is one of those. So owning Payments gives
+rights over every squad beneath it, even one with owners of its own, and
+whoever Priya reports to, and whoever they report to, holds Payments too. Owners
+and managers lose their rights once their `Person` is no longer active; a
+manager in between who has left still carries the line. The reach is read once
+per policy, and `reach.index(units)` lets a screen answer for a whole tree in a
+fixed number of queries.
+
+The structure a unit sits in is the one declared by the nearest unit above it
+that declares one, or the organisation's when none does. A unit or person the Org Graph
 doesn't hold is left to admins and editors, except that the manager chain can
 still end a membership of a unit that is gone.
 
@@ -207,8 +217,8 @@ a retirement moving its members, the HRIS fact claim, a rake task. Nobody is
 acting, so nothing is checked. A handler built with no actor, or with `nil`,
 raises `ArgumentError`, so a screen that forgets to pass one fails instead of
 skipping the check. Pass `SYSTEM` only where no person drives the write.
-`SYSTEM` can't move a unit between structures: the conversion is a
-tenant admin's call, and no sync or task makes one. The move needs the right to
+`SYSTEM` can't change a unit's own structure or move a unit between
+structures: no sync or task calls for either. The move needs the right to
 change both structures, and its refusal names neither.
 `TenantUser#ensure_person!` records a new person's stream as `SYSTEM` even when
 an admin triggers it, since provisioning a person for an account is the
