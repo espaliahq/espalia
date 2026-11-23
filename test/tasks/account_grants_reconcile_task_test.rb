@@ -56,6 +56,14 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
     assert_equal [ [ true, false ], [ false, true ], [ false, false ] ], [ @editor, @planner, @member ].map { flags(it) }
   end
 
+  should "give one run's events in a tenant one correlation, so the feed shows them as one change" do
+    reconcile
+
+    correlations = events.map { it.metadata[:correlation_id] }
+    assert_predicate correlations.first, :present?
+    assert_equal [ correlations.first ], correlations.uniq
+  end
+
   should "write nothing when run again" do
     reconcile
 
