@@ -34,7 +34,7 @@ class Views::Assessments::StartLensAlignmentModal < Views::Base
       ul(class: "list-disc pl-5 space-y-1 text-sm text-muted") do
         li { "#{@first_name} sees your ratings on the #{@lens.label} capabilities." }
         li { "Both of your ratings on those capabilities lock, including the ones #{@lens.home_code} shares." }
-        li { "Capabilities you already agree on are agreed automatically." }
+        li { "Ratings where you already match are agreed automatically, carried ones included." }
       end
       div(class: "flex justify-end gap-2 pt-1") do
         render Components::Kit::Button.new(variant: :outline, size: :sm,
