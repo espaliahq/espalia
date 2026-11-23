@@ -17,7 +17,8 @@ namespace :account_grants do
       failed << tenant.id
     end
     # Every other tenant is recorded first, but the deploy must stop: the
-    # rebuild that follows would clear a failed tenant's flags and replay nothing.
+    # rebuild that follows would set a failed tenant's flags from a stream
+    # that lacks the grants they hold.
     abort "account_grants:reconcile failed for #{failed.size} tenant(s): #{failed.join(", ")}" if failed.any?
   end
 end

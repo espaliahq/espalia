@@ -120,7 +120,7 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
     assert_match "nothing to record", reconcile
   end
 
-  should "record the other tenants, then fail so the deploy stops before a rebuild clears the failed tenant's flags" do
+  should "record the other tenants, then fail so the deploy stops before a rebuild sets the failed tenant's flags from its stream" do
     other = create(:tenant)
     outsider = ActsAsTenant.with_tenant(other) do
       create(:tenant_user, tenant: other, person: create(:person, tenant: other)).tap { it.update_columns(team_planner: true) }
