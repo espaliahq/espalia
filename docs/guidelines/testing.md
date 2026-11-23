@@ -726,12 +726,14 @@ find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 - If you must use `within`, scope it to a container that is NOT replaced (e.g. the parent `tr` or a wrapper div that sits outside the Turbo Stream target)
 - This applies to any element inside a Turbo Stream replacement target: rating cells, scoring panels, category headers, contribution labels
 
-**Out of `assert_no_selector`, it means the selector still matched when the
-wait ran out.** Capybara swallows the error and polls again until its wait runs
-out. The assertion passes at the first poll that finds no match, so an error
-that escapes says every poll until then found one: a stall, or a re-render
-that keeps putting one back. It says nothing of the time between polls, and
-with `wait: 0` it can escape on the first look. Look for a paused machine first:
+**Out of an `assert_no_selector` on the page, it means the selector still
+matched when the wait ran out.** Capybara swallows the error and polls again
+until its wait runs out. The assertion passes at the first poll that finds no
+match, so an error that escapes says every poll until then found one: a stall,
+or a re-render that keeps putting one back. It says nothing of the time
+between polls, and with `wait: 0` it can escape on the first look. Inside a
+`within`, a scope that has gone stale raises it at every poll whether or not
+anything matches: that is the rule above. Look for a paused machine first:
 [dev-environment.md → A run where several workers error in the same second](dev-environment.md#a-run-where-several-workers-error-in-the-same-second).
 
 **`visit` itself can raise it when the page replaces itself while loading.**
