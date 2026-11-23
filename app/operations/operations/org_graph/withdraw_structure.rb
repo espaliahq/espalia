@@ -17,7 +17,7 @@ class Operations::OrgGraph::WithdrawStructure < Operations::Base
               "it governs the units beneath it again. Every unit beneath it changes type in the same change, " \
               "by conversion. Refused, naming them, for units that wouldn't fit the structure above, and for a " \
               "date after today or before the structure or a unit beneath last changed. " \
-              "Refused unless the caller is a tenant admin."
+              "Needs a tenant admin, an Org Graph editor, an owner of the unit or a unit above it, or anyone they report to."
   approval :in_app
 
   parameter :unit_id, String, required: true, schema: { format: "uuid" }

@@ -11,7 +11,7 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
               "rights on the unit and where it lands. To move a unit between structures (into a unit's own " \
               "structure, out of one into the organisation's, or between two), pass conversion: a type of the " \
               "structure it joins for each type the unit and those beneath it hold. Each changes type in the same " \
-              "change, and a unit with a structure of its own takes it along, nested. That needs a tenant admin."
+              "change, and a unit with a structure of its own takes it along, nested. That needs the right to change both structures."
   approval :in_app
 
   CONVERSION_SCHEMA = {

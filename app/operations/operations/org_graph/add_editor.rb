@@ -8,8 +8,7 @@ class Operations::OrgGraph::AddEditor < Operations::Base
   include Operations::OrgGraph::EditorSupport
 
   description "Make an active person with an account in this organisation an Org Graph editor, so they may " \
-              "change its providers, units and people's facts. Admins already may, and only admins may add " \
-              "or remove unit types or say where they can sit. Returns the list as org_graph_editors reads it."
+              "change its providers, unit types, units and people's facts. Admins already may. Returns the list as org_graph_editors reads it."
   category :write
   approval :in_app
 

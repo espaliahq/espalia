@@ -38,7 +38,8 @@ class Operations::OrgGraph::DeclareStructure < Operations::Base
               "is \"top\" or a unit with a structure of its own, when the types copy that structure's. Refused, " \
               "naming them, for units that wouldn't fit, a unit an HRIS supplies beneath it, a unit that already " \
               "has a structure, and a date after today or before a change beneath. " \
-              "org_graph_withdraw_structure undoes it. Refused unless the caller is a tenant admin."
+              "org_graph_withdraw_structure undoes it. " \
+              "Needs a tenant admin, an Org Graph editor, an owner of the unit or a unit above it, or anyone they report to."
   approval :in_app
 
   parameter :unit_id, String, required: true, schema: { format: "uuid" }

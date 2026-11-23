@@ -11,7 +11,9 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
               "goes once no unit, retired units included, holds it on that date or after; reading an earlier " \
               "date still shows it. The refusal names the units that hold it, or the last day one did. " \
               "A level an HRIS provides is handed back to Espalia first. A level a live plan places a unit " \
-              "at stays until the plan changes or is archived. Refused unless the caller is a tenant admin."
+              "at stays until the plan changes or is archived. " \
+              "Changing the organisation's structure needs a tenant admin or an Org Graph editor. A unit's own structure " \
+              "can also be changed by an owner of that unit or a unit above it, or by anyone they report to."
   category :destructive
   approval :in_app
 

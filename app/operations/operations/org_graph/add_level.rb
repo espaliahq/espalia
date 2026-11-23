@@ -10,7 +10,9 @@ class Operations::OrgGraph::AddLevel < Operations::Base
               "level above it), and top whether it can sit at the top (by default, only when parent_ids is " \
               "empty, or when neither is given). org_graph_set_kind_parents changes these later. " \
               "Level names are unique, ignoring case, within a structure. structure_unit_id adds the type to that " \
-              "unit's own structure instead of the top one. Refused unless the caller is a tenant admin."
+              "unit's own structure instead of the top one. " \
+              "Changing the organisation's structure needs a tenant admin or an Org Graph editor. A unit's own structure " \
+              "can also be changed by an owner of that unit or a unit above it, or by anyone they report to."
   approval :in_app
 
   parameter :name, String, required: true, allow_blank: false
