@@ -30,6 +30,19 @@ class AccountGrants::Repository
     grants
   end
 
+  # Loads the tenant's grants under the stream's lock and yields them,
+  # storing nothing. A grant can't be written until the transaction ends.
+  #
+  # @yield [AccountGrants::Aggregate]
+  # @raise [ArgumentError] if no tenant context is available
+  def reading_locked
+    stream = EventStreamNaming.account_grants_stream(tenant: current_tenant!)
+    ActiveRecord::Base.transaction do
+      lock_stream(stream)
+      yield @repository.load(AccountGrants::Aggregate.new, stream)
+    end
+  end
+
   # Loads the tenant's grants to read, taking no lock and storing nothing.
   #
   # @return [AccountGrants::Aggregate]

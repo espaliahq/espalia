@@ -85,6 +85,21 @@ class AccountGrants::Projections::AccountFlagsTest < ActiveSupport::TestCase
     assert_equal [ false, false ], flags(@ada)
   end
 
+  should "hold the stream's lock from reading the stream until its flags are written, so no grant lands between" do
+    statements = []
+    record = ->(*, payload) { statements << payload[:sql] }
+
+    ActiveSupport::Notifications.subscribed(record, "sql.active_record") { PROJECTION.reset!(tenant: @tenant) }
+
+    lock = statements.index { it.include?("pg_advisory_xact_lock") }
+    read = statements.index { it.include?("event_store_events") }
+    write = statements.index { it.start_with?("UPDATE \"tenant_users\"") }
+    assert lock, "the reset took no lock"
+    assert_operator lock, :<, read, "the reset read the stream before taking its lock"
+    assert_operator read, :<, write
+    assert_includes statements[lock], EventStreamNaming.account_grants_stream(tenant: @tenant), "the reset locked another stream than grants take"
+  end
+
   should "ignore its events while replaying, as the reset already wrote where they end" do
     as_tenant do
       @handler.add(:org_graph_editor, @ada)

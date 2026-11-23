@@ -30,15 +30,17 @@ class AccountGrants::Projections::AccountFlags
   # Sets both grants on every live account of the tenant to what the stream
   # holds, in one statement. A reset that clears them instead would leave a
   # rebuild that stops before its replay with every flag clear, and the next
-  # deploy's reconcile would record each grant as removed.
+  # deploy's reconcile would record each grant as removed. It holds the
+  # stream's lock, so a grant written meanwhile can't be overwritten.
   #
   # @param tenant [Tenant]
   def self.reset!(tenant:)
     ActsAsTenant.with_tenant(tenant) do
-      grants = AccountGrants::Repository.new.load_grants
-      sets = COLUMNS.map { |column| "#{column} = COALESCE(id IN (:#{column}), false)" }.join(", ")
-      holders = AccountGrants::Aggregate::GRANTS.to_h { [ it, grants.holders(it).keys.presence || [ nil ] ] }
-      TenantUser.where(tenant_id: tenant.id).update_all([ sets, holders ])
+      AccountGrants::Repository.new.reading_locked do |grants|
+        sets = COLUMNS.map { |column| "#{column} = COALESCE(id IN (:#{column}), false)" }.join(", ")
+        holders = AccountGrants::Aggregate::GRANTS.to_h { [ it, grants.holders(it).keys.presence || [ nil ] ] }
+        TenantUser.where(tenant_id: tenant.id).update_all([ sets, holders ])
+      end
     end
   end
 
