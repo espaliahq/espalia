@@ -36,6 +36,15 @@ log "step 2: db:prepare (4 databases)"
 rake db:prepare
 log "step 2: done"
 
+# 2b. Record the editor and planner grants the account flags already hold as
+#     AccountGrants events, before step 3 or 4 can reset the flags their
+#     projection derives. Idempotent: a run that finds nothing new writes
+#     nothing. The previous release never reads the stream, so events left by
+#     a deploy that fails at verify are harmless.
+log "step 2b: account_grants:reconcile"
+rake account_grants:reconcile
+log "step 2b: done"
+
 # 3. Optional inline projection rebuild — only when explicitly authorized for
 #    this deploy. REBUILD_ON_DEPLOY is a comma-separated list of projection
 #    names from `events:projections:list`. Runs the rebuild against the new
@@ -77,4 +86,10 @@ log "step 4: done"
 #    the verify gate, so a failed deploy writes no events. Idempotent.
 log "step 5: org_graph:claim_hris_facts"
 rake org_graph:claim_hris_facts
-log "step 5: done — predeploy complete"
+log "step 5: done"
+
+# 6. Record any grant the previous release gave or took back through the flags
+#    since step 2b, while it was still serving.
+log "step 6: account_grants:reconcile"
+rake account_grants:reconcile
+log "step 6: done — predeploy complete"
