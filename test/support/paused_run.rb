@@ -4,7 +4,7 @@
 # clock and has its wall clock corrected when it wakes, so the lead the wall
 # clock gains is the time spent paused.
 class PausedRun
-  # Capybara's wait: a shorter pause cannot fail one on its own.
+  # Large enough that a routine correction of the wall clock stays quiet.
   THRESHOLD_SECONDS = 10
 
   # @param wall [#call] seconds on the wall clock
@@ -31,7 +31,7 @@ class PausedRun
 
       The wall clock gained #{duration(paused)} on the monotonic clock during this run, as it does
       when the machine is paused: a host that sleeps freezes the devcontainer's VM. Browser calls
-      in flight when it wakes fail together, in several workers in the same second, with
+      in flight when it wakes can fail together, in several workers in the same second, with
       "Timeout when executing request" or a stale element. If this run has failures like that,
       rerun it. What fails again is real; what passes may still be an intermittent defect
       (docs/guidelines/dev-environment.md).

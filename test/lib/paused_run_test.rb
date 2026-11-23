@@ -26,8 +26,14 @@ class PausedRunTest < ActiveSupport::TestCase
     assert_match(/gained 45 seconds on/, run_with(wall: [ 0, 145 ], monotonic: [ 0, 100 ]).notice)
   end
 
-  should "say nothing about a gap shorter than a Capybara wait" do
-    assert_nil run_with(wall: [ 0, 109 ], monotonic: [ 0, 100 ]).notice
+  should "speak from a gap of ten seconds, and not below it" do
+    assert_match(/gained 10 seconds on/, run_with(wall: [ 0.0, 110.0 ], monotonic: [ 0.0, 100.0 ]).notice)
+    assert_nil run_with(wall: [ 0.0, 109.99 ], monotonic: [ 0.0, 100.0 ]).notice
+  end
+
+  should "change from seconds to minutes at ninety seconds" do
+    assert_match(/gained 89 seconds on/, run_with(wall: [ 0, 189 ], monotonic: [ 0, 100 ]).notice)
+    assert_match(/gained about 2 minutes \(90s\) on/, run_with(wall: [ 0, 190 ], monotonic: [ 0, 100 ]).notice)
   end
 
   should "say nothing when the wall clock was set back" do
