@@ -172,7 +172,7 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
 
       visit assessment_path(@report_assignment)
       assert_selector "h1", text: "Report Alex"
-      assert_selector %(form[data-turbo-confirm*="agree every one where your ratings already match"] button),
+      assert_selector %(form[data-turbo-confirm*="agree every rating where you already match"] button),
         text: "Start alignment"
       auto_confirm do
         page.execute_script(<<~JS)
