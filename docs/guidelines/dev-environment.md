@@ -81,6 +81,18 @@ immune. When you change a custom cop in a nested worktree, lint with
 
 **In the devcontainer, hundreds of `Selenium::WebDriver::Error::WebDriverError: tab crashed` errors can mean the remote Selenium Grid's Chromium nodes ran out of memory — confirm that before treating it as infrastructure.** This applies to the devcontainer path, where `SELENIUM_HOST=selenium-hub` sends tests to the four `selenium-node-*` containers (`.devcontainer/compose.yaml`, 1 GB shm each); cloud sessions run a local Chromium instead (see above) and don't share this failure mode. Those containers share the OrbStack VM with every other session's containers, and when the VM is near its limit Chromium's renderers are killed mid-run: every later test then errors in `sign_in_as` or the first `fill_in`, and the summary reads like `720 runs, 280 assertions, 0 failures, 685 errors`. Treat it as memory pressure only with evidence: `free -h` shows the VM near its limit (~13 of 15 GB used, swap full, during the 5 Nov 2026 runs), the errors start at a sign-in rather than at your change's screens, and a re-run of `bin/rails test:system` once memory recovers is clean. A Grid status check (`curl -s http://selenium-hub:4444/status`: `ready: true`, four nodes `UP`) tells you the nodes are back, not why a renderer died. Anything that still fails on the re-run is a real failure.
 
+## A run where several workers error in the same second
+
+**A machine paused mid-run fails the browser calls in flight when it wakes. Rerun; they are not test failures.** A host that sleeps freezes the devcontainer's VM with the run inside it. On 23 Nov 2026 a precommit lost three system tests that way ([#543](https://github.com/espaliahq/espalia/issues/543), [#544](https://github.com/espaliahq/espalia/issues/544)): two `Selenium::WebDriver::Error::UnknownError: … Timeout when executing request` in a test's `setup`, and a `StaleElementReferenceError` out of an `assert_no_selector`. They were in three workers, their failure screenshots written within 0.54s of each other, and all three passed when rerun.
+
+**The run now says so itself.** A paused VM stops the monotonic clock and has its wall clock corrected when it wakes, so the wall clock gains on it by the length of the pause. `PausedRun` (`test/support/paused_run.rb`) compares the two and prints "This machine was paused for about 11 minutes during the run" after the summary of any test run that lost more than 30 seconds. You can do the sum by hand on an old log: that precommit took 1,778s on the wall, and its `Finished in` lines, which Minitest measures on the monotonic clock, add up to 1,078s, with about 35s more for the other steps. `CLOCK_BOOTTIME` does not show the pause; it reads the same as the monotonic clock afterwards.
+
+**It is not load, and it is not the Grid.** Two full precommits were sampled once a second. The heavier one swapped out 1.6 GB and peaked at a load of 18 on 12 cores; both kept the Selenium hub answering `/status` within 150ms, and both passed. For the out-of-memory failure, which looks different, see the section above.
+
+**That stale element means a 10-second stall, not a race.** `assert_no_selector` reads each match's text to build its failure message, and Capybara swallows the stale-element error that read can raise unless its wait has already run out. So the node was still on the page at every poll for the full wait. Without a pause, look for what held one request that long.
+
+Keep the host awake for a long run: on macOS, `caffeinate -i` in a host terminal for as long as it takes.
+
 ## Secrets in development
 
 **The seeded dev admin is `admin@example.com` / `password123`** — created by
