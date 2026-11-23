@@ -84,6 +84,8 @@ export default class extends BaseController {
 Common behaviors:
 - `useClickOutside` — close dropdowns/modals on outside click
 - `useTransition` — animated show/hide with CSS transition classes. Its `leave()` hides the element only once the transition ends, frames later, so don't use it for anything other code reads as open or closed (a menu, a popover): a toggle in that gap reads it wrongly.
+  - **Run `enter()` and `leave()` one at a time.** An `enter()` that starts before a `leave()` has ended is undone when it does: the leave adds the hidden class last, and the enter puts back any fade class it found on the element. The element then says open and shows nothing. `activity_pane_controller.js` queues them in `#animate` ([#542](https://github.com/espaliahq/espalia/issues/542)).
+  - **Strip the fade's classes in `connect()`, before `useTransition`.** Turbo's cached copy of a page keeps the classes of a fade in flight. On a Back or Forward to a history entry it has not stamped, Turbo caches the page one tick after `popstate`, so it always catches a fade a `popstate` listener starts. The next restore brings back an element stuck at `opacity-0`.
 - `useDebounce` / `useThrottle` — rate-limit actions
 - `useIntersection` — lazy loading / infinite scroll
 - `useHover` — hover interactions
