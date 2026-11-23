@@ -72,6 +72,8 @@ export default class extends BaseController {
   }
 
   #leaving = false
+  #wanted = null
+  #fading = null
 
   connect() {
     super.connect()
@@ -332,14 +334,20 @@ export default class extends BaseController {
     window.history.back()
   }
 
+  // One fade at a time: stimulus-use's leave() hides the pane only when its
+  // fade ends, which would hide a pane reopened in the meantime.
   #animate(state) {
-    if (state === "open") {
-      this.enter()
-      this.#scheduleFit()
-    } else {
-      // Fit once the fade-out ends, which clears the inline height.
-      Promise.resolve(this.leave()).finally(() => this.#scheduleFit())
+    this.#wanted = state
+    if (state === "open") this.#scheduleFit()
+    this.#fading ??= this.#fadeToWanted().finally(() => { this.#fading = null })
+  }
+
+  async #fadeToWanted() {
+    while (this.transitioned !== (this.#wanted === "open")) {
+      await (this.#wanted === "open" ? this.enter() : this.leave())
     }
+    // A fade-out clears the inline height only once it ends.
+    this.#scheduleFit()
   }
 
   #observeViewport() {

@@ -182,6 +182,29 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
       visible: :all
   end
 
+  # The close fades out over several frames before it hides the pane, so a
+  # reopen in the same task lands while that fade is still running.
+  def close_and_reopen_pane_at_once
+    page.execute_script(<<~JS)
+      const wrapper = document.querySelector("[data-controller~='activity-pane']")
+      const pane = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-pane")
+      pane.toggle()
+      pane.toggle()
+    JS
+  end
+
+  def assert_pane_settles_on_screen
+    settled = <<~JS
+      (() => {
+        const pane = document.getElementById("assessment-activity-pane")
+        return pane.dataset.paneState === "open" && !pane.classList.contains("transition-opacity") &&
+          !pane.classList.contains("hidden") && getComputedStyle(pane).opacity === "1"
+      })()
+    JS
+    assert wait_until_js { page.evaluate_script(settled) },
+      "the pane says open but its fades left it hidden, see-through or still running"
+  end
+
   def pane_geometry
     page.evaluate_script(<<~JS)
       (() => {
@@ -379,6 +402,12 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         )
     end
 
+    should "stay on screen when it reopens while its close is still fading" do
+      open_loaded_activity_pane
+      close_and_reopen_pane_at_once
+      assert_pane_settles_on_screen
+    end
+
     should "push ?activity=open to the URL on toggle" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
@@ -424,6 +453,14 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         "expected the overlay to start at the top of the viewport, got #{geometry['top']}"
       assert_pane_within_viewport
       assert_last_entry_reachable
+    end
+
+    should "stay on screen when the overlay reopens while its close is still fading" do
+      open_loaded_activity_pane
+      close_and_reopen_pane_at_once
+      assert_pane_settles_on_screen
+      assert page.evaluate_script("document.querySelector('#assessment-activity-pane').contains(document.activeElement)"),
+        "the reopened overlay lost focus"
     end
 
     should "close on outside click but stay open when click lands inside the pane" do
