@@ -19,7 +19,7 @@ It is off unless `WRITE_CATALOGUE=1`, so CI and the precommit don't pay for it. 
 
 **A finding** is a write from our code, outside a projection, to a table whose rows a projection writes, or an update to a column a projection writes. An upsert counts as an update to the columns its `ON CONFLICT … DO UPDATE` sets. The run checks that from what projections actually wrote, so it needs no list of owners. An insert names every column whether it sets it or not, so inserts into `people` and `tenant_users`, whose projections own only columns, are listed under their tables below rather than as findings.
 
-**Text search fills some of the gaps.** The task also searches `app/` and `lib/` for persistence calls (`save`, `update`, `create`, `destroy`, `upsert_all` and the rest) and lists those no recorded write ran beneath. These are marked *unreached* below: the suite never ran them, so only reading the code says what they write. The search misses calls written as `each(&:destroy!)` or through `public_send`, so its counts are a floor.
+**Text search fills some of the gaps.** The task also searches `app/` and `lib/` for persistence calls (`save`, `update`, `create`, `destroy`, `upsert_all` and the rest) and lists those no recorded write ran beneath. These are marked *unreached* below. The suite may still run such a call without writing, as a failed validation or an unchanged save writes nothing, so only reading the code says what it writes. The search misses calls written as `each(&:destroy!)` or through `public_send`, so its counts are a floor.
 
 | | Count |
 |---|---|
@@ -28,7 +28,7 @@ It is off unless `WRITE_CATALOGUE=1`, so CI and the precommit don't pay for it. 
 | Files with a persistence call | 80 |
 | Of those, files the run wrote through nowhere | 2 (`lib/tasks/admin.rake`, `lib/tasks/bench.rake`) |
 | Persistence calls found by text search | 368 |
-| Of those, never reached | 10 |
+| Of those, with no recorded write beneath them | 10 |
 
 The two unreached files are a console task that creates an admin and a benchmark. 1,075 files ran no write at all; most are views, components, policies and queries, which have nothing to write.
 
@@ -130,7 +130,7 @@ Every write goes through an Operation, so each carries the actor in its provenan
 | Table | Writers |
 |---|---|
 | `hris_sync_issues` | `HrisSyncIssue.replace_in_structure`; `Hris::LevelHandover#hand_back!` |
-| `hris_unit_parent_proposals` | `Hris::LevelMirror#reparent`, `#forget_unread_parents`, `#forget_parent_readings`, `#forget_every_parent_reading`; three `destroy!` calls the run never reached (*unreached*, lines 239, 242 and 327) |
+| `hris_unit_parent_proposals` | `Hris::LevelMirror#reparent`, `#forget_unread_parents`, `#forget_parent_readings`, `#forget_every_parent_reading`; three `destroy!` calls with no recorded write (*unreached*, lines 239, 242 and 327) |
 
 **Keep.** Each sync rebuilds them from what the HRIS reports; they are a to-do list, not a record. What an admin does about an issue already goes through Org Graph commands.
 
@@ -170,7 +170,7 @@ One open question for 2b: `decide!` records who dismissed a suggestion, and why,
 
 ## Unreached persistence calls
 
-Beyond those named above, the text search found these lines the suite never ran a write beneath:
+Beyond those named above, the text search found these lines with no recorded write beneath them:
 
 | Line | What it is |
 |---|---|
@@ -180,4 +180,4 @@ Beyond those named above, the text search found these lines the suite never ran 
 | `app/contexts/frameworks/projections/published_state.rb:434` | `PublishedState` writing a level's new ordinal. |
 | `app/contexts/person_development/projections/current_assessment.rb:296` | `CurrentAssessment` flagging ratings on a split capability. |
 
-The last two are projections' own writes, so they are not direct writes, but no test runs them.
+The last two are projections' own writes, so they are not direct writes, but no test recorded a write through them.

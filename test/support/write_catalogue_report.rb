@@ -4,7 +4,7 @@ require "json"
 
 # Reads what a WRITE_CATALOGUE=1 test run recorded (see write_catalogue.rb)
 # and answers who writes each table, which writes reach a projection's tables
-# from outside it, and which write-shaped lines the run never reached.
+# from outside it, and which write-shaped lines no recorded write ran beneath.
 class WriteCatalogueReport
   DIR = Rails.root.join("tmp/write_catalogue")
   TIMESTAMPS = %w[created_at updated_at].freeze
@@ -154,6 +154,6 @@ class WriteCatalogueReport
   end
 
   def unreached_section
-    "## Persistence calls the run never reached\n\n" + unreached.map { "- #{it}" }.join("\n")
+    "## Persistence calls with no recorded write beneath them\n\n" + unreached.map { "- #{it}" }.join("\n")
   end
 end
