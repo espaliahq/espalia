@@ -74,4 +74,45 @@ class Operations::OrgGraph::ActivityTest < ActiveSupport::TestCase
   should "refuse a member while the Org Graph is unfinished" do
     assert_raises(Pundit::NotAuthorizedError) { call({ unit_id: @org[:platform] }, tenant_user: @member) }
   end
+
+  context "with no unit" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @brook = create(:tenant_user, tenant: @tenant, person: @org[:brook])
+        @editor = create(:tenant_user, tenant: @tenant, person: @org[:cyril], org_graph_editor: true)
+        grants = AccountGrants::CommandHandler.new
+        grants.add(:org_graph_editor, @editor, already_held: true, effective_on: Date.new(2026, 11, 30))
+        grants.add(:org_graph_editor, @brook, added_by_id: @org[:ada].id)
+        grants.remove(:org_graph_editor, tenant_user_id: @brook.id, person_id: @org[:brook].id, removed_by_id: @org[:ada].id)
+      end
+    end
+
+    should "read the organisation's own activity, which can't be changed back here" do
+      result = call({})
+
+      assert_nil result[:unit_id]
+      assert_equal [ "Brook Tamsin is no longer an Org Graph editor", "Made Brook Tamsin an Org Graph editor",
+                     "Cyril Moss was already an Org Graph editor on 30 Nov 2026" ], result[:groups].map { it[:summary] }
+      assert_equal [ "Ada Quill", "Ada Quill", "Espalia" ], result[:groups].map { it[:by] }
+      assert result[:groups].none? { it[:can_change_back] }
+      assert_equal [ OrgGraph::ChangeBackHandler::GRANT ], result[:groups].map { it[:cannot_change_back_because] }.uniq
+    end
+
+    should "refuse a plain member, as for a unit" do
+      assert_raises(Pundit::NotAuthorizedError) { call({}, tenant_user: @member) }
+    end
+
+    should "refuse an Org Graph editor who isn't an admin, as for a unit" do
+      assert_raises(Pundit::NotAuthorizedError) { call({}, tenant_user: @editor) }
+    end
+
+    should "refuse to change a grant back" do
+      entry = ActsAsTenant.with_tenant(@tenant) { OrgUnitActivity.for_organisation.first }
+
+      error = assert_raises(RuntimeError) do
+        ActsAsTenant.with_tenant(@tenant) { OrgGraph::ChangeBackHandler.new(actor: context_for(@admin)).change_back(entry) }
+      end
+      assert_equal OrgGraph::ChangeBackHandler::GRANT, error.message
+    end
+  end
 end

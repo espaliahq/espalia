@@ -2,7 +2,8 @@
 
 # One unit's activity as the sidebar and its MCP read show it: a page of
 # groups, newest first, each with its parts in words and the reason, if any,
-# it can't be changed back by the person reading it.
+# it can't be changed back by the person reading it. With no unit it reads
+# the organisation's own activity, such as who was made an Org Graph editor.
 #
 # People are read through {Person}, so a forgotten person reads as
 # {Person::FORMER_MEMBER}.
@@ -40,7 +41,7 @@ class OrgGraph::ActivityFeed
 
   attr_reader :unit, :page
 
-  # @param unit [OrgUnit]
+  # @param unit [OrgUnit, nil] nil for the organisation's own activity
   # @param actor [AuthorizationContext] whose rights decide what can be changed back
   # @param page [Integer] from 1
   def initialize(unit:, actor:, page: 1)
@@ -53,7 +54,10 @@ class OrgGraph::ActivityFeed
   def items = @items ||= groups.map { |group| item(group) }
 
   # @return [Boolean]
-  def next_page? = OrgUnitActivity.for_unit(unit.id).distinct.count(:cause_id) > page * PER_PAGE
+  def next_page? = entries.distinct.count(:cause_id) > page * PER_PAGE
+
+  # @return [Boolean] whether this is the organisation's own activity
+  def organisation? = unit.nil?
 
   # @param part [OrgUnitActivity]
   # @return [String] the person who made the change, or the provider that supplied it
@@ -66,8 +70,10 @@ class OrgGraph::ActivityFeed
   private
 
   def groups
-    @groups ||= OrgUnitActivity.feed(unit.id, page:, per_page: PER_PAGE).tap { preload(it) }
+    @groups ||= OrgUnitActivity.feed(unit&.id, page:, per_page: PER_PAGE).tap { preload(it) }
   end
+
+  def entries = unit ? OrgUnitActivity.for_unit(unit.id) : OrgUnitActivity.for_organisation
 
   def unit_counts
     @unit_counts ||= OrgUnitActivity.where(cause_id: groups.map(&:cause_id)).group(:cause_id).distinct.count(:unit_id)
@@ -100,8 +106,16 @@ class OrgGraph::ActivityFeed
     when "UnitOwnerRemoved" then "Removed #{person} as an owner"
     when "UnitRetired" then "Retired the unit"
     when "TaxonomyDefined" then structure_change(entry)
+    when "OrgGraphEditorAdded" then editor_added(entry, person)
+    when "OrgGraphEditorRemoved" then "#{person} is no longer an Org Graph editor"
     else OrgUnitActivity::Group.new([ entry ]).summary.upcase_first
     end
+  end
+
+  def editor_added(entry, person)
+    return "Made #{person} an Org Graph editor" unless entry.after["already_held"]
+
+    "#{person} was already an Org Graph editor on #{entry.effective_on.strftime('%-d %b %Y')}"
   end
 
   def structure_change(entry)

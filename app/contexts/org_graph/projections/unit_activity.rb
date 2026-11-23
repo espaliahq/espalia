@@ -4,6 +4,8 @@
 # itself and to its memberships, from the structure and person streams. A
 # unit's own structure (#494), declared, edited or withdrawn, is an entry in
 # the declaring unit; the top structure belongs to no unit and has none.
+# Org Graph editor grants, from the AccountGrants stream, are entries of the
+# whole organisation: they belong to no unit.
 #
 # Writes `org_unit_activities`, and nothing else writes it. Rows are only ever
 # added, except that an entry someone changes back is marked with the change
@@ -30,7 +32,8 @@ class OrgGraph::Projections::UnitActivity
       OrgGraph::Events::UnitRetired, OrgGraph::Events::UnitSucceeded, OrgGraph::Events::UnitOwnerAdded,
       OrgGraph::Events::UnitOwnerRemoved, OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded,
       OrgGraph::Events::MembershipMoved, OrgGraph::Events::UnitHandedOver, OrgGraph::Events::UnitKindChanged,
-      OrgGraph::Events::TaxonomyDefined
+      OrgGraph::Events::TaxonomyDefined, AccountGrants::Events::OrgGraphEditorAdded,
+      AccountGrants::Events::OrgGraphEditorRemoved
     ]
   end
 
@@ -78,6 +81,10 @@ class OrgGraph::Projections::UnitActivity
       [ [ data[:unit_id], membership(data, data[:unit_id], position, after: terms(data)) ] ]
     when OrgGraph::Events::MembershipEnded
       [ [ data[:unit_id], membership(data, data[:unit_id], position, after: nil) ] ]
+    when AccountGrants::Events::OrgGraphEditorAdded
+      [ [ nil, editor(data, after: { editor: true, already_held: data[:already_held] == true }) ] ]
+    when AccountGrants::Events::OrgGraphEditorRemoved
+      [ [ nil, editor(data, before: { editor: true }) ] ]
     when OrgGraph::Events::MembershipMoved
       [ [ data[:from_unit_id], membership(data, data[:from_unit_id], position, after: nil, other_unit_id: data[:unit_id]) ],
         [ data[:unit_id], membership(data, data[:unit_id], position, after: terms(data), other_unit_id: data[:from_unit_id]) ] ]
@@ -109,6 +116,10 @@ class OrgGraph::Projections::UnitActivity
     { subject: "owner:#{data[:person_id]}", person_id: data[:person_id], **values }
   end
 
+  def editor(data, **values)
+    { subject: "editor:#{data[:person_id]}", person_id: data[:person_id], **values }
+  end
+
   def membership(data, unit_id, position, after:, other_unit_id: nil)
     subject = "membership:#{data[:person_id]}"
     { subject:, person_id: data[:person_id], other_unit_id:, before: terms_before(unit_id, subject, position), after: }
@@ -123,6 +134,7 @@ class OrgGraph::Projections::UnitActivity
   def record(event, position, unit_id, attributes)
     data = event.data
     row = OrgUnitActivity.find_or_initialize_by(event_id: event.event_id, unit_id: unit_id)
+    row.id ||= OrgUnitActivity.organisation_wide_id(event.event_id) unless unit_id
     row.update!(
       event_type: event.class.name.demodulize,
       position:,

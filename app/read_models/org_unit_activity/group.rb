@@ -105,7 +105,9 @@ class OrgUnitActivity::Group
       owners_phrase("added", types["UnitOwnerAdded"]),
       owners_phrase("removed", types["UnitOwnerRemoved"]),
       structure_phrase,
-      ("retired the unit" if types["UnitRetired"])
+      ("retired the unit" if types["UnitRetired"]),
+      editors_phrase("made", types["OrgGraphEditorAdded"]),
+      editors_phrase("removed", types["OrgGraphEditorRemoved"])
     ].compact
   end
 
@@ -130,6 +132,10 @@ class OrgUnitActivity::Group
     return "handed it back to #{label}" if provider == OrgGraph::StructureAggregate::ESPALIA
 
     "handed it to #{label}, read from #{field}"
+  end
+
+  def editors_phrase(verb, count)
+    "#{verb} #{count} Org Graph #{'editor'.pluralize(count)}" if count
   end
 
   def owners_phrase(verb, count)

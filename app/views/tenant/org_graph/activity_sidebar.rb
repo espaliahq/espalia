@@ -4,34 +4,57 @@
 # cause, newest first, saying who made it, what it did, when it took effect
 # and when the Org Graph learned it. A group of several parts opens to show
 # them. "Change it back" appears where the reader may, and the reason where
-# they may not.
+# they may not. With no unit open, or when asked, it shows the organisation's
+# own activity instead, such as who was made an Org Graph editor.
 class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Views::Tenant::OrgGraph::KeepsComparison
 
   UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
+  # The `activity` param that opens the organisation's activity beside a unit.
+  ORGANISATION = "organisation"
+
   # @param feed [OrgGraph::ActivityFeed]
-  def initialize(feed:)
+  # @param open_unit [OrgUnit, nil] the unit open beside it, which the organisation's feed links back to
+  def initialize(feed:, open_unit: feed.unit)
     @feed = feed
+    @open_unit = open_unit
   end
 
   def view_template
-    render Views::Tenant::OrgGraph::Sidebar.new(title: "Activity") do
+    render Views::Tenant::OrgGraph::Sidebar.new(title: @feed.organisation? ? "Organisation activity" : "Activity") do
       if @feed.items.empty?
-        render Components::Kit::EmptyState.new(title: "No activity yet", size: :panel) do
-          "Changes to #{@feed.unit.name} appear here as the Org Graph learns of them."
-        end
+        render Components::Kit::EmptyState.new(title: "No activity yet", size: :panel) { empty_text }
       else
-        ol(class: "divide-y divide-subtle", aria: { label: "Activity in #{@feed.unit.name}, newest first" }) do
+        ol(class: "divide-y divide-subtle", aria: { label: "#{list_name}, newest first" }) do
           @feed.items.each { |item| group_row(item) }
         end
       end
       pages
+      switch_link
     end
   end
 
   private
+
+  def empty_text
+    return "Changes to who may edit the Org Graph appear here." if @feed.organisation?
+
+    "Changes to #{@feed.unit.name} appear here as the Org Graph learns of them."
+  end
+
+  def list_name = @feed.organisation? ? "Organisation activity" : "Activity in #{@feed.unit.name}"
+
+  def switch_link
+    return unless @open_unit
+
+    label, params = @feed.organisation? ? [ "Back to #{@open_unit.name}'s activity", {} ] : [ "Organisation activity", { activity: ORGANISATION } ]
+    p(class: "mt-4 text-sm") do
+      a(href: tenant_org_graph_path(unit: @open_unit.id, **params, **compared),
+        class: "text-link hover:text-link-hover underline") { label }
+    end
+  end
 
   def group_row(item)
     group = item.group
@@ -122,7 +145,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   def change_back_form(label, entry_id: nil, cause_id: nil)
     form(action: change_back_tenant_org_graph_path, method: "post", class: "mt-1") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      input(type: "hidden", name: "unit", value: @feed.unit.id)
+      input(type: "hidden", name: "unit", value: @open_unit&.id)
       input(type: "hidden", name: "activity_page", value: @feed.page) if @feed.page > 1
       comparison_fields
       if entry_id
@@ -148,7 +171,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   end
 
   def page_link(label, page, css: "")
-    a(href: tenant_org_graph_path(unit: @feed.unit.id, activity_page: page, **compared),
+    a(href: tenant_org_graph_path(unit: @open_unit&.id, activity: (ORGANISATION if @feed.organisation?), activity_page: page, **compared),
       class: "#{css} text-link hover:text-link-hover underline") { label }
   end
 

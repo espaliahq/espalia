@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
-# One unit's activity feed (#137), the read behind the Units view's sidebar.
-# People are named through {Person}, so a forgotten person reads as a former
-# member.
+# One unit's activity feed (#137), the read behind the Units view's sidebar,
+# or with no unit the organisation's own: who was made an Org Graph editor,
+# and who stopped being one. Both sit behind the same check. People are named
+# through {Person}, so a forgotten person reads as a former member.
 class Operations::OrgGraph::Activity < Operations::Base
-  description "Read one Org Graph unit's activity, newest first, 25 groups a page. A group is every " \
+  description "Read one Org Graph unit's activity, newest first, 25 groups a page. Leave out unit_id to " \
+              "read the organisation's own activity instead: who was made an Org Graph editor, and who " \
+              "stopped being one. These can't be changed back here. A group is every " \
               "change made under one cause, such as one request or one approved plan change. Each " \
               "group has its summary, who made it (a person's name, or the provider that supplied it), " \
               "when it took effect, when the Org Graph learned it, any plan reference, its parts and " \
@@ -14,24 +17,28 @@ class Operations::OrgGraph::Activity < Operations::Base
   category :read
   approval :none
 
-  parameter :unit_id, String, required: true, allow_blank: false, schema: { format: "uuid" }
+  parameter :unit_id, String, required: false, allow_blank: false, schema: { format: "uuid" }
   parameter :page, Integer, required: false
 
   def policy_check
     authorize :org_graph, :show_units?
   end
 
-  # @return [Hash] `:unit_id`, `:page`, `:next_page` and `:groups`
+  # @return [Hash] `:unit_id` (nil for the organisation), `:page`, `:next_page` and `:groups`
   # @raise [Operations::Base::ParameterError] for a unit the Org Graph doesn't hold
   def perform
-    unit = OrgUnit.find_by(id: params[:unit_id].to_s.downcase) or
-      raise ParameterError, "unit_id names no unit in the Org Graph"
     feed = ::OrgGraph::ActivityFeed.new(unit:, actor: context, page: params[:page] || 1)
 
-    { unit_id: unit.id, page: feed.page, next_page: feed.next_page?, groups: feed.items.map { group_payload(it) } }
+    { unit_id: feed.unit&.id, page: feed.page, next_page: feed.next_page?, groups: feed.items.map { group_payload(it) } }
   end
 
   private
+
+  def unit
+    return if params[:unit_id].nil?
+
+    OrgUnit.find_by(id: params[:unit_id].to_s.downcase) or raise ParameterError, "unit_id names no unit in the Org Graph"
+  end
 
   def group_payload(item)
     group = item.group

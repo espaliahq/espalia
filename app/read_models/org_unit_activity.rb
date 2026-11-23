@@ -4,6 +4,9 @@
 # provider, what changed from and to, when it took effect, and when the Org
 # Graph learned of it. A move between units is an entry in each.
 #
+# An entry with no unit belongs to the whole organisation, such as an Org
+# Graph editor grant.
+#
 # Projected by {OrgGraph::Projections::UnitActivity}, and nothing else writes
 # it. The id derives from the event and the unit, so a rebuild keeps it.
 #
@@ -16,6 +19,9 @@ class OrgUnitActivity < ApplicationRecord
   REVERSIBLE = %w[
     MembershipSet MembershipEnded MembershipMoved UnitRenamed UnitMoved UnitKindChanged UnitOwnerAdded UnitOwnerRemoved
   ].freeze
+
+  # Who may edit changes in the Org Graph's settings, so the feed only reports it.
+  GRANTS = %w[OrgGraphEditorAdded OrgGraphEditorRemoved].freeze
 
   acts_as_tenant :tenant
 
@@ -37,17 +43,34 @@ class OrgUnitActivity < ApplicationRecord
     where(unit_id: unit_id.to_s.downcase).order(position: :desc)
   end
 
+  # The organisation's own activity, which belongs to no unit, newest first.
+  #
+  # @return [ActiveRecord::Relation<OrgUnitActivity>]
+  def self.for_organisation
+    where(unit_id: nil).order(position: :desc)
+  end
+
+  # The id {DeterministicId} would give, which skips a row with a blank unit:
+  # a rebuild then keeps an organisation-wide entry's id too.
+  #
+  # @param event_id [String]
+  # @return [String]
+  def self.organisation_wide_id(event_id)
+    Digest::UUID.uuid_v5(DeterministicId::NAMESPACE, "#{name}:#{event_id}/")
+  end
+
   # A unit's activity with the entries of one cause folded into one group,
   # newest first by each group's latest entry. A page never splits a group.
   #
-  # @param unit_id [String]
+  # @param unit_id [String, nil] nil for the organisation's own activity
   # @param page [Integer] from 1; anything lower reads as 1
   # @param per_page [Integer] groups per page
   # @return [Array<OrgUnitActivity::Group>]
   def self.feed(unit_id, page: 1, per_page: 25)
-    causes = for_unit(unit_id).reorder(Arel.sql("MAX(position) DESC")).group(:cause_id)
-                              .offset((page.to_i.clamp(1..) - 1) * per_page).limit(per_page).pluck(:cause_id)
-    parts = for_unit(unit_id).where(cause_id: causes).group_by(&:cause_id)
+    entries = unit_id ? for_unit(unit_id) : for_organisation
+    causes = entries.reorder(Arel.sql("MAX(position) DESC")).group(:cause_id)
+                    .offset((page.to_i.clamp(1..) - 1) * per_page).limit(per_page).pluck(:cause_id)
+    parts = entries.where(cause_id: causes).group_by(&:cause_id)
     causes.map { |cause| OrgUnitActivity::Group.new(parts.fetch(cause)) }
   end
 
@@ -61,6 +84,9 @@ class OrgUnitActivity < ApplicationRecord
 
   # @return [Boolean]
   def reversible? = REVERSIBLE.include?(event_type)
+
+  # @return [Boolean]
+  def grant? = GRANTS.include?(event_type)
 
   # @param apart_from [String, nil] a cause whose own later changes don't count
   # @return [Boolean] true when nothing has changed the same fact since

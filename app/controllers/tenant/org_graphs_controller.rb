@@ -2,7 +2,9 @@
 
 # The Org Graph's Units view (#80): the unit tree, the members of the unit
 # opened, the people in no team, and the opened unit's activity beside them,
-# where a change can be changed back (#137). With a date picked it marks what
+# where a change can be changed back (#137). With no unit open, or with
+# `activity=organisation`, the sidebar shows the organisation's own activity
+# instead, behind the same check as the rest. With a date picked it marks what
 # changed since (#139).
 #
 class Tenant::OrgGraphsController < ApplicationController
@@ -41,10 +43,10 @@ class Tenant::OrgGraphsController < ApplicationController
   def activity_path = tenant_org_graph_path(unit: params[:unit], activity_page: params[:activity_page].presence, **comparison_params)
 
   def activity_sidebar(overview)
-    return unless overview.selected
-
-    feed = OrgGraph::ActivityFeed.new(unit: overview.selected, actor: pundit_user, page: params[:activity_page] || 1)
-    Views::Tenant::OrgGraph::ActivitySidebar.new(feed:)
+    organisation = overview.selected.nil? || params[:activity] == Views::Tenant::OrgGraph::ActivitySidebar::ORGANISATION
+    feed = OrgGraph::ActivityFeed.new(unit: (overview.selected unless organisation), actor: pundit_user,
+                                      page: params[:activity_page] || 1)
+    Views::Tenant::OrgGraph::ActivitySidebar.new(feed:, open_unit: overview.selected)
   end
 
   # @return [Array<Tenant>]

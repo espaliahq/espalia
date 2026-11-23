@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_19_022934) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_23_075316) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -929,7 +929,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_022934) do
 
   create_table "org_unit_activities", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
-    t.uuid "unit_id", null: false
+    t.uuid "unit_id"
     t.uuid "event_id", null: false
     t.string "event_type", null: false
     t.bigint "position", null: false
@@ -953,6 +953,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_022934) do
     t.string "cause_id"
     t.index ["tenant_id", "cause_id"], name: "index_org_unit_activities_on_tenant_id_and_cause_id"
     t.index ["tenant_id", "event_id", "unit_id"], name: "idx_on_tenant_id_event_id_unit_id_e1d30b18ce", unique: true
+    t.index ["tenant_id", "event_id"], name: "index_org_unit_activities_organisation_wide", unique: true, where: "(unit_id IS NULL)"
     t.index ["tenant_id", "unit_id", "cause_id"], name: "idx_on_tenant_id_unit_id_cause_id_edeaf670d0"
     t.index ["tenant_id", "unit_id", "position"], name: "idx_on_tenant_id_unit_id_position_0480dd5559"
     t.index ["tenant_id", "unit_id", "subject", "position"], name: "idx_on_tenant_id_unit_id_subject_position_932e79679d"

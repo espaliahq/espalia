@@ -28,6 +28,10 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
 
+  def grants = AccountGrants::CommandHandler.new
+
+  def organisation = as_tenant { OrgUnitActivity.for_organisation.to_a }
+
   def feed(unit_id)
     as_tenant { OrgUnitActivity.for_unit(unit_id).to_a }
   end
@@ -176,6 +180,58 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
     end
 
     assert_equal({ "provider" => "hibob", "field" => "work.team" }, feed(@payments).first.after)
+  end
+
+  context "with Org Graph editor grants" do
+    setup do
+      as_tenant { @account = create(:tenant_user, tenant: @tenant, person: @ada) }
+    end
+
+    should "record an editor added and removed as the organisation's, naming who did it" do
+      as_tenant do
+        grants.add(:org_graph_editor, @account, added_by_id: @lead.id, effective_on: Date.new(2026, 2, 1))
+        grants.remove(:org_graph_editor, tenant_user_id: @account.id, person_id: @ada.id, removed_by_id: @lead.id)
+      end
+
+      removed, added = organisation
+      assert_equal %w[OrgGraphEditorRemoved OrgGraphEditorAdded], [ removed.event_type, added.event_type ]
+      assert_equal [ nil, nil ], [ removed.unit_id, added.unit_id ]
+      assert_equal [ @lead.id, @lead.id ], [ removed.actor_id, added.actor_id ]
+      assert_equal [ "editor:#{@ada.id}", @ada.id ], [ added.subject, added.person_id ]
+      assert_equal [ { "editor" => true, "already_held" => false }, { "editor" => true } ], [ added.after, removed.before ]
+      assert_equal Date.new(2026, 2, 1), added.effective_on
+      assert_not added.reversible?
+      assert added.grant?
+      assert_equal [ "UnitCreated" ], feed(@payments).map(&:event_type), "a unit's feed leaves out the organisation's entries"
+    end
+
+    should "record a grant held before it was an event with no actor" do
+      as_tenant { grants.add(:org_graph_editor, @account, already_held: true) }
+
+      held = organisation.sole
+      assert_nil held.actor_id
+      assert held.after["already_held"]
+    end
+
+    should "leave a planner grant out of the Org Graph's activity" do
+      as_tenant { grants.add(:team_planner, @account, added_by_id: @lead.id) }
+
+      assert_empty organisation
+    end
+
+    should "keep each organisation-wide entry's id across reset! + replay" do
+      as_tenant do
+        grants.add(:org_graph_editor, @account, added_by_id: @lead.id)
+        grants.remove(:org_graph_editor, tenant_user_id: @account.id, person_id: @ada.id)
+      end
+      before = snapshot_read_models(OrgGraph::Projections::UnitActivity, @tenant)
+
+      OrgGraph::Projections::UnitActivity.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: OrgGraph::Projections::UnitActivity, tenant: @tenant)
+
+      assert_equal before, snapshot_read_models(OrgGraph::Projections::UnitActivity, @tenant)
+      assert_equal 2, before[:unit_activities].count { it["unit_id"].nil? }
+    end
   end
 
   context "rebuild contract" do
