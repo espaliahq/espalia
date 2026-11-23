@@ -12,7 +12,9 @@ A new MCP read must join the audit with a file of its own in `test/integration/f
 
 ## What is not erased
 
-Free text people wrote is untouched: evidence, comments, feedback and alignment notes can name the person, and they live in clear in Person Development events. Erasing them needs shreddable fields ([#110](https://github.com/espaliahq/espalia/issues/110)). Until that lands, forgetting erases identifiers, not every mention.
+Text people wrote stays, by design. Evidence, feedback, comments and alignment notes each belong to two people: the person who wrote them and the person they are about. Forgetting one of them removes that person's identity and leaves the words, because erasing them would also erase the other person's record. The reason someone gives for dismissing an evidence suggestion follows the same rule as a comment. All of it lives in clear in Person Development events.
+
+One limit is known and accepted for now: when both people have been forgotten, the text stays in the events, tied to neither of them.
 
 Operational facts stay too: title, level, department, positions and dates. In a small team they can still point to one person.
 

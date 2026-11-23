@@ -1011,7 +1011,8 @@ result for each kind of id separately.
   forgetting one person on request stays off MCP. Operating it, the key and what a restore
   undoes: [org-graph-forgetting.md](../runbooks/org-graph-forgetting.md).
 - Free text that names the person, in evidence, comments, feedback and alignment notes, is
-  not erased until shreddable fields land ([#110](https://github.com/espaliahq/espalia/issues/110)).
+  kept. It belongs to its author as much as its subject, so forgetting one of them leaves
+  it for the other ([org-graph-forgetting.md](../runbooks/org-graph-forgetting.md#what-is-not-erased)).
 - The sync must not undo it. An HRIS often keeps returning a person long after they
   leave, and a sync that upserts every row it is given would write the name back. The
   row keeps a keyed hash of the external id, enough to recognise the person and nothing
