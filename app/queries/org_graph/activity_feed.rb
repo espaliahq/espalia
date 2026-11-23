@@ -87,7 +87,7 @@ class OrgGraph::ActivityFeed
     parts = group.parts.map do |entry|
       Part.new(entry:, description: describe(entry), by: self.class.by(entry), refusal: @change_back.refusal(entry))
     end
-    unit_count = unit_counts.fetch(group.cause_id, 1)
+    unit_count = organisation? ? 1 : unit_counts.fetch(group.cause_id, 1)
     refusal = Item.whole_cause?(parts, unit_count) ? @change_back.group_refusal(group.cause_id) : parts.first.refusal
     Item.new(group:, parts:, refusal:, unit_count:)
   end

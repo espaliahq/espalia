@@ -4,8 +4,8 @@
 # cause, newest first, saying who made it, what it did, when it took effect
 # and when the Org Graph learned it. A group of several parts opens to show
 # them. "Change it back" appears where the reader may, and the reason where
-# they may not. With no unit open, or when asked, it shows the organisation's
-# own activity instead, such as who was made an Org Graph editor.
+# they may not. When asked, or in a tenant with no units yet, it shows the
+# organisation's own activity instead, such as who was made an Org Graph editor.
 class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Views::Tenant::OrgGraph::KeepsComparison
@@ -146,6 +146,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
     form(action: change_back_tenant_org_graph_path, method: "post", class: "mt-1") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "unit", value: @open_unit&.id)
+      input(type: "hidden", name: "activity", value: ORGANISATION) if @feed.organisation?
       input(type: "hidden", name: "activity_page", value: @feed.page) if @feed.page > 1
       comparison_fields
       if entry_id

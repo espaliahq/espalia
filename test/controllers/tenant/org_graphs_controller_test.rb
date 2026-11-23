@@ -153,7 +153,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Unit Created can't be changed back", flash[:alert]
     end
 
-    should "show the organisation's activity in the sidebar when no unit is open" do
+    should "show the organisation's activity in the sidebar of a tenant with no units yet" do
       ActsAsTenant.with_tenant(@tenant) do
         editor = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant, name: "Brook Tamsin"))
         AccountGrants::CommandHandler.new.add(:org_graph_editor, editor)
@@ -180,6 +180,20 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Organisation activity", sidebar.at_css("h2").text
       assert_includes sidebar.text, "No activity yet"
       assert_includes sidebar.text, "Back to Platform's activity"
+    end
+
+    should "return to the organisation's activity when one of its changes can't be changed back" do
+      org = build_org_graph(@tenant)
+      entry = ActsAsTenant.with_tenant(@tenant) do
+        editor = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant))
+        AccountGrants::CommandHandler.new.add(:org_graph_editor, editor)
+        OrgUnitActivity.for_organisation.last
+      end
+
+      post change_back_tenant_org_graph_path, params: { entry_id: entry.id, unit: org[:platform], activity: "organisation" }
+
+      assert_redirected_to tenant_org_graph_path(unit: org[:platform], activity: "organisation")
+      assert_equal OrgGraph::ChangeBackHandler::GRANT, flash[:alert].delete_prefix("Can't change back: ")
     end
 
     should "say so when the tenant has no units" do
