@@ -16,9 +16,14 @@ module WriteCatalogue
   TEST_ROOT = Rails.root.join("test").to_s
 
   class << self
+    # @return [Boolean] whether this run records writes
     def enabled? = ENV["WRITE_CATALOGUE"] == "1"
 
+    # Clears the last run's files, then records writes until the run ends.
+    # Called once, before parallel workers fork.
+    # @return [void]
     def install!
+      FileUtils.rm_rf(DIR)
       @writes = Hash.new(0)
       @reached = Set.new
       @mutex = Mutex.new
@@ -33,6 +38,9 @@ module WriteCatalogue
     # @return [String, nil] the projection whose code is running on this thread
     def projection = Thread.current[:write_catalogue_projections]&.last
 
+    # Marks the block's writes as made by the projection.
+    # @param projection_name [String]
+    # @return [Object] the block's value
     def within(projection_name)
       stack = (Thread.current[:write_catalogue_projections] ||= [])
       stack.push(projection_name)
@@ -41,6 +49,8 @@ module WriteCatalogue
       stack.pop
     end
 
+    # Writes this process's recorded writes to DIR.
+    # @return [void]
     def dump
       FileUtils.mkdir_p(DIR)
       rows, reached = @mutex.synchronize { [ @writes.map { |key, count| key.merge(count:) }, @reached.to_a ] }
@@ -56,7 +66,8 @@ module WriteCatalogue
       return if INFRASTRUCTURE.match?(match[2])
 
       frames = our_frames
-      key = { table: match[2], op: operation(match[1], payload[:sql]), columns: columns(payload[:sql]),
+      verb = match[1].split.first.downcase
+      key = { table: match[2], op: operation(verb, payload[:sql]), columns: columns(verb, payload[:sql]),
               projection:, site: site(frames) }
       @mutex.synchronize do
         @writes[key] += 1
@@ -65,18 +76,33 @@ module WriteCatalogue
     end
 
     def operation(verb, sql)
-      return "upsert" if verb.start_with?("INSERT") && sql.match?(/ON CONFLICT[^;]*DO UPDATE/i)
-
-      verb.split.first.downcase
+      verb == "insert" && sql.match?(/ON CONFLICT[^;]*DO UPDATE/i) ? "upsert" : verb
     end
 
-    def columns(sql)
-      list = if sql.start_with?("INSERT")
-        sql[/\A[^(]*\(([^)]*)\)/, 1]
-      elsif sql.start_with?("UPDATE")
-        sql[/\bSET\s+(.*?)(?:\s+WHERE\b|\s+RETURNING\b|\z)/mi, 1]&.scan(/(?:\A|,)\s*"?(\w+)"?\s*=/)&.join(",")
+    # A SET clause's columns are the names before each top-level "=", so a
+    # subquery's WHERE doesn't end the clause.
+    def columns(verb, sql)
+      case verb
+      when "insert" then sql[/\A[^(]*\(([^)]*)\)/, 1].to_s.scan(/\w+/).uniq.sort
+      when "update" then set_columns(sql[/\bSET\s+(.*)\z/mi, 1].to_s)
+      else []
       end
-      list.to_s.scan(/\w+/).uniq.sort
+    end
+
+    def set_columns(clause)
+      depth = 0
+      names = []
+      clause.scan(/\(|\)|"?(\w+)"?\s*=(?!=)|\b(?:WHERE|RETURNING)\b/i) do
+        token = Regexp.last_match[0]
+        case token
+        when "(" then depth += 1
+        when ")" then depth -= 1
+        else
+          break if depth.zero? && token.match?(/\A(WHERE|RETURNING)\z/i)
+          names << Regexp.last_match[1] if depth.zero? && Regexp.last_match[1]
+        end
+      end
+      names.uniq.sort
     end
 
     def our_frames
