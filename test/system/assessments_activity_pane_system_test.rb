@@ -188,8 +188,8 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     page.execute_script(<<~JS)
       const wrapper = document.querySelector("[data-controller~='activity-pane']")
       const pane = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-pane")
-      pane.toggle()
-      pane.toggle()
+      pane.close()
+      pane.open()
     JS
   end
 
@@ -407,6 +407,12 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
 
     should "stay on screen when it reopens while its close is still fading" do
       open_loaded_activity_pane
+      close_and_reopen_pane_at_once
+      assert_pane_settles "open"
+
+      toggle_activity_pane
+      assert_pane_settles "closed"
+      # This close has nothing to fade, and must not swallow the open behind it.
       close_and_reopen_pane_at_once
       assert_pane_settles "open"
     end

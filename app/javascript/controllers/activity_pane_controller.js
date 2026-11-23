@@ -83,7 +83,7 @@ export default class extends BaseController {
 
   #leaving = false
   #wanted = null
-  #fading = null
+  #fading = false
 
   connect() {
     super.connect()
@@ -123,6 +123,7 @@ export default class extends BaseController {
     document.removeEventListener("turbo:before-visit", this.onBeforeVisit)
     this.narrowQuery.removeEventListener("change", this.onNarrowChange)
     this.#unobserveViewport()
+    this.#wanted = null
     super.disconnect()
   }
 
@@ -341,12 +342,17 @@ export default class extends BaseController {
   #animate(state) {
     this.#wanted = state
     if (state === "open") this.#scheduleFit()
-    this.#fading ??= this.#fadeToWanted().finally(() => { this.#fading = null })
+    if (!this.#fading) this.#fadeToWanted()
   }
 
   async #fadeToWanted() {
-    while (this.transitioned !== (this.#wanted === "open")) {
-      await (this.#wanted === "open" ? this.enter() : this.leave())
+    this.#fading = true
+    try {
+      while (this.#wanted && this.transitioned !== (this.#wanted === "open")) {
+        await (this.#wanted === "open" ? this.enter() : this.leave())
+      }
+    } finally {
+      this.#fading = false
     }
     // A fade-out clears the inline height only once it ends.
     this.#scheduleFit()
