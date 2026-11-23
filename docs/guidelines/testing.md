@@ -698,7 +698,7 @@ controller, and the test had been hiding it.
   `MutationObserver` on the element into an array on `window`, which survives a
   Turbo render, and print it when the test fails. Print it from
   `before_teardown`: a `teardown` block runs after Capybara has reset the page.
-- **Then assert the settled state.** `assert_pane_settles_on_screen` waits until
+- **Then assert the settled state.** `assert_pane_settles "open"` waits until
   the pane is open, shown and has no fade class left.
 
 ## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
