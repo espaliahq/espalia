@@ -91,7 +91,7 @@ You can do the sum by hand on an old log: that precommit took 1,778s on the wall
 
 **It is not load, and it is not the Grid.** Two full precommits were sampled once a second. The heavier one swapped out 1.6 GB and peaked at a load of 18 on 12 cores; both kept the Selenium hub answering `/status` within 150ms, and both passed. For the out-of-memory failure, which looks different, see the section above.
 
-**That stale element means the selector still matched when the wait ran out.** `assert_no_selector` reads each match's text to build its failure message, and Capybara swallows the stale-element error that read can raise unless its wait has already run out. So a match was on the page at every poll for the full wait, and the assertion was about to fail anyway. A pause does that. Without one, look for a request that took that long, or a re-render that keeps putting a match back. With `wait: 0` the error can escape on the first look, and says none of this.
+**That stale element means the selector still matched when the wait ran out.** `assert_no_selector` reads each match's text to build its failure message, and Capybara swallows the stale-element error that read can raise unless its wait has already run out. The assertion passes at the first poll that finds no match, so every poll until the wait ran out found one, and the assertion was about to fail anyway. A pause does that. Without one, look for a request that took that long, or a re-render that keeps putting a match back. With `wait: 0` the error can escape on the first look, and says none of this.
 
 Keep the host awake for a long run: on macOS, `caffeinate -i` in a host terminal for as long as it takes.
 

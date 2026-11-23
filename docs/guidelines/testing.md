@@ -728,9 +728,10 @@ find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 
 **Out of `assert_no_selector`, it means the selector still matched when the
 wait ran out.** Capybara swallows the error and polls again until its wait runs
-out, so one that escapes an absence assertion says a match was there the whole
-time: a stall, or a re-render that keeps putting one back. With `wait: 0` it
-can escape on the first look. Look for a paused machine first:
+out. The assertion passes at the first poll that finds no match, so an error
+that escapes says every poll until then found one: a stall, or a re-render
+that keeps putting one back. It says nothing of the time between polls, and
+with `wait: 0` it can escape on the first look. Look for a paused machine first:
 [dev-environment.md → A run where several workers error in the same second](dev-environment.md#a-run-where-several-workers-error-in-the-same-second).
 
 **`visit` itself can raise it when the page replaces itself while loading.**
