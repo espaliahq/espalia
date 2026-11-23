@@ -11,6 +11,9 @@ require_relative "support/org_graph_fixture"
 require_relative "support/feedback_exchange_producer_helpers"
 require_relative "support/offline_hibob"
 require_relative "support/pay_figure_assertions"
+require_relative "support/test_database_autovacuum"
+
+TestDatabaseAutovacuum.turn_off
 
 OmniAuth.config.test_mode = true
 OmniAuth.config.logger = Rails.logger
@@ -19,6 +22,7 @@ module ActiveSupport
   class TestCase
     # Run tests in parallel with specified workers
     parallelize(workers: :number_of_processors)
+    parallelize_setup { TestDatabaseAutovacuum.turn_off }
 
     include FactoryBot::Syntax::Methods
 
