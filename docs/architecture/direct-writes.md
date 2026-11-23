@@ -17,7 +17,7 @@ bin/rails development:write_catalogue
 
 It is off unless `WRITE_CATALOGUE=1`, so CI and the precommit don't pay for it. Turned on, it cost about 4% on the non-system suite (349s against 336s). The run behind this page covered every test, system tests included.
 
-**A finding** is a write from our code, outside a projection, to a table whose rows a projection writes, or an update to a column a projection writes. The run checks that from what projections actually wrote, so it needs no list of owners. An insert names every column whether it sets it or not, so inserts into `people` and `tenant_users`, whose projections own only columns, are listed under their tables below rather than as findings.
+**A finding** is a write from our code, outside a projection, to a table whose rows a projection writes, or an update to a column a projection writes. An upsert counts as an update to the columns its `ON CONFLICT … DO UPDATE` sets. The run checks that from what projections actually wrote, so it needs no list of owners. An insert names every column whether it sets it or not, so inserts into `people` and `tenant_users`, whose projections own only columns, are listed under their tables below rather than as findings.
 
 **Text search fills some of the gaps.** The task also searches `app/` and `lib/` for persistence calls (`save`, `update`, `create`, `destroy`, `upsert_all` and the rest) and lists those no recorded write ran beneath. These are marked *unreached* below: the suite never ran them, so only reading the code says what they write. The search misses calls written as `each(&:destroy!)` or through `public_send`, so its counts are a floor.
 

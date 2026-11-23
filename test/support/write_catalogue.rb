@@ -70,7 +70,8 @@ module WriteCatalogue
 
       frames = our_frames
       verb = match[1].split.first.downcase
-      key = { table: match[2], op: operation(verb, payload[:sql]), columns: columns(verb, payload[:sql]),
+      op = operation(verb, payload[:sql])
+      key = { table: match[2], op:, columns: columns(verb, payload[:sql]), updates: conflict_updates(op, payload[:sql]),
               projection:, site: site(frames) }
       @mutex.synchronize do
         @writes[key] += 1
@@ -94,6 +95,12 @@ module WriteCatalogue
 
     # Quoted strings and identifiers are skipped whole, so a literal "(" or
     # "WHERE" inside one can't end the clause early.
+    # The columns an upsert changes on a row that already exists, which with
+    # update_only can be fewer than the columns it inserts.
+    def conflict_updates(op, sql)
+      op == "upsert" ? set_columns(sql[/\bDO\s+UPDATE\s+SET\s+(.*)\z/mi, 1].to_s) : []
+    end
+
     def set_columns(clause)
       depth = 0
       names = []

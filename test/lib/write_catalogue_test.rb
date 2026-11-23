@@ -20,4 +20,13 @@ class WriteCatalogueTest < ActiveSupport::TestCase
   should "read a quoted column name that holds an escaped quote" do
     assert_equal [ 'a"b' ], set_columns('UPDATE t SET "a""b" = 1')
   end
+
+  should "record the columns an upsert updates on conflict, not every column it inserts" do
+    sql = 'INSERT INTO "people" ("id","manager_id","name") VALUES ($1, $2, $3) ON CONFLICT ("id") DO UPDATE SET ' \
+          'updated_at=(CASE WHEN ("people"."name" IS NOT DISTINCT FROM excluded."name") THEN "people".updated_at ' \
+          'ELSE CURRENT_TIMESTAMP END),"name"=excluded."name" RETURNING "id"'
+
+    assert_equal %w[name updated_at], WriteCatalogue.send(:conflict_updates, "upsert", sql)
+    assert_empty WriteCatalogue.send(:conflict_updates, "insert", 'INSERT INTO "people" ("id") VALUES ($1)')
+  end
 end

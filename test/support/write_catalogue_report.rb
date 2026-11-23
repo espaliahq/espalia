@@ -19,7 +19,7 @@ class WriteCatalogueReport
   NOT_PERSISTENCE = /turbo_stream\.update|messages\.create|params\.update/
   SEARCHED = %w[app lib].freeze
 
-  Write = Struct.new(:table, :op, :columns, :projection, :site, :count, keyword_init: true)
+  Write = Struct.new(:table, :op, :columns, :updates, :projection, :site, :count, keyword_init: true)
 
   # @return [WriteCatalogueReport] built from every worker's files in DIR
   def self.load
@@ -61,11 +61,11 @@ class WriteCatalogueReport
       next unless owner
       next if owner[:projections].include?(write.projection)
 
-      touched = write.columns - TIMESTAMPS
+      owned = updated_columns(write) & owner[:columns]
       reason = if owner[:rows]
         "#{write.op} on a table #{owner[:projections].join(' and ')} writes"
-      elsif write.op == "update" && (touched & owner[:columns]).any?
-        "updates #{(touched & owner[:columns]).join(', ')}, which #{owner[:projections].join(' and ')} writes"
+      elsif owned.any?
+        "updates #{owned.join(', ')}, which #{owner[:projections].join(' and ')} writes"
       elsif write.op == "delete"
         "deletes rows whose columns #{owner[:projections].join(' and ')} writes"
       end
@@ -120,6 +120,14 @@ class WriteCatalogueReport
   end
 
   private
+
+  def updated_columns(write)
+    case write.op
+    when "update" then write.columns - TIMESTAMPS
+    when "upsert" then Array(write.updates) - TIMESTAMPS
+    else []
+    end
+  end
 
   def source_files
     @source_files ||= Dir.chdir(Rails.root) { SEARCHED.flat_map { Dir["#{it}/**/*.{rb,rake}"] }.sort }

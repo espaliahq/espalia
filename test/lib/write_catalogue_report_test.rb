@@ -4,8 +4,9 @@ require "test_helper"
 require_relative "../support/write_catalogue_report"
 
 class WriteCatalogueReportTest < ActiveSupport::TestCase
-  def write(table, op, columns: [], projection: nil, site: "app/models/x.rb:1 save")
-    { "table" => table, "op" => op, "columns" => columns, "projection" => projection, "site" => site, "count" => 1 }
+  def write(table, op, columns: [], updates: [], projection: nil, site: "app/models/x.rb:1 save")
+    { "table" => table, "op" => op, "columns" => columns, "updates" => updates, "projection" => projection,
+      "site" => site, "count" => 1 }
   end
 
   def findings(*rows) = WriteCatalogueReport.new(rows).findings.map { it.slice(:table, :site, :reason) }
@@ -22,6 +23,15 @@ class WriteCatalogueReportTest < ActiveSupport::TestCase
     rows = [ write("people", "update", columns: %w[manager_id], projection: "org/people", site: nil),
              write("people", "update", columns: %w[manager_id updated_at], site: "a.rb:1 x"),
              write("people", "update", columns: %w[name updated_at], site: "b.rb:2 y") ]
+
+    assert_equal [ { table: "people", site: "a.rb:1 x", reason: "updates manager_id, which org/people writes" } ],
+                 findings(*rows)
+  end
+
+  should "report an upsert that updates an owned column, and not one that only inserts it" do
+    rows = [ write("people", "update", columns: %w[manager_id], projection: "org/people", site: nil),
+             write("people", "upsert", columns: %w[manager_id name], updates: %w[manager_id], site: "a.rb:1 x"),
+             write("people", "upsert", columns: %w[manager_id name], updates: %w[name], site: "b.rb:2 y") ]
 
     assert_equal [ { table: "people", site: "a.rb:1 x", reason: "updates manager_id, which org/people writes" } ],
                  findings(*rows)
