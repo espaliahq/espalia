@@ -339,7 +339,9 @@ The whole tenant can see the Org Graph, as it can an org chart. Editing the fact
 holds is open to:
 
 - **A tenant admin**, always.
-- **An Org Graph editor.** A tenant-level role for the people team.
+- **An Org Graph editor.** A tenant-level role for the people team. An admin gives it,
+  and each grant is an event in the tenant's `AccountGrants` stream that says who gave it
+  and when.
 - **A unit's owners.** A unit can have several, with none primary: a product manager and
   an engineering manager can both own a squad. An owner may edit the unit and the units
   beneath it. A unit with no owner of its own inherits its parent's.
@@ -435,6 +437,11 @@ shows the reason instead. A group that touched other units says how many it chan
 A refusal only the write can find, such as a person who has since left, still comes back
 as a flash. The same feed is `org_graph_activity` over MCP, and `org_graph_change_back` and
 `org_graph_change_back_group` write the inverses.
+
+Who was made an Org Graph editor, and who stopped being one, belongs to no unit. It shows
+in the organisation's own activity: the sidebar shows it when the tenant has no units yet,
+and a link beside a unit's feed opens it. Over MCP it is `org_graph_activity` with no
+`unit_id`. A grant can't be changed back from there; the entry says to use the settings.
 
 ### Keeping a fact current
 
@@ -871,7 +878,8 @@ screen and MCP share one implementation.
 - **Forgetting.** The retention period, who reaches their date today, and the schedule.
   Without a forgetting key the panel says forgetting isn't set up and offers no switch.
   There is no button to forget one person.
-- **Who may edit.** The Org Graph editors, added and removed by name.
+- **Who may edit.** The Org Graph editors, added and removed by name, each with the date
+  it took effect and who added them.
 
 Frames that read the HRIS load eagerly, so the page never waits on it.
 
