@@ -616,6 +616,36 @@ reset and fails if its cookie survives.
 lands on a page the test didn't visit, or finds a session already signed in,
 suspect a response from the previous test before the helpers.
 
+## Autovacuum Is Off in the Test Databases
+
+**`test_helper.rb` turns autovacuum off on every table of every test database
+(`TestDatabaseAutovacuum`), so keep it off.** The setting stops autoanalyze
+too. Neither counts rows a transaction has yet to commit, and a test never
+commits. One that lands mid-test records the tables the test has filled as empty (`reltuples = 0` in
+`pg_class`), and the planner then nests loops over thousands of rows it
+believes are one. `StressSeedTest` hung a precommit that way, on a single
+`DELETE` that ran over six minutes
+([#546](https://github.com/espaliahq/espalia/issues/546)). A table no vacuum has
+visited has `reltuples = -1`, and the planner estimates it from its size.
+
+**Dead rows now stay until the database is next emptied.** Each parallel run
+truncates its worker databases, or rebuilds them when the schema has changed,
+and `db:test:prepare`, which precommit runs, rebuilds the base one. Runs of
+under 50 tests use the base database and add to its dead rows in between. A
+rebuilt database has lost the setting, which is why the helper runs at every
+start. The one vacuum the setting cannot stop guards against transaction-id
+wraparound, 200 million transactions on; a test database never gets there.
+
+**A test's ActiveRecord connection cancels any statement after two minutes**
+(`statement_timeout` in `config/database.yml`), so a query that hangs for any
+reason fails its test with the SQL in the error. A connection a test opens
+itself with `PG.connect` has no such limit. Before that the tell was one
+query `active` for minutes with no wait event and nothing blocking it
+(`pg_stat_activity`, `pg_blocking_pids`), in a run where the other workers had
+finished. To reproduce the bad plan, run `VACUUM` from a second connection
+part-way through the test: a vacuum or analyse run by hand does the same
+damage whatever the setting.
+
 ## Clear Any CDP Emulation You Set
 
 **A CDP emulation outlives the test that set it.** Capybara reuses one browser

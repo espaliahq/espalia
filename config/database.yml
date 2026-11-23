@@ -13,6 +13,9 @@ development:
 test:
   <<: *default
   database: growth_os_test
+  # A query that hangs fails its test and names itself, instead of hanging the run.
+  variables:
+    statement_timeout: 2min
 
 production:
   primary:
