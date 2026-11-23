@@ -141,7 +141,7 @@ class EventsReconcileTaskTest < ActiveSupport::TestCase
     assert_equal [ outsider.id ], events(other).map { it.data[:tenant_user_id] }
     assert_nil ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME), "a failed run adopts nothing"
   ensure
-    AccountGrants::Reconciliation.define_method(:call, real)
+    AccountGrants::Reconciliation.send(:remove_method, :call)
   end
 
   context "a deploy of the never-stamped projection" do
