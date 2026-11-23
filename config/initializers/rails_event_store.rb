@@ -143,6 +143,11 @@ Rails.configuration.to_prepare do
     to: TeamPlanning::Projections::History.handled_events
   )
 
+  event_store.subscribe(
+    AccountGrants::Projections::AccountFlags.new,
+    to: AccountGrants::Projections::AccountFlags.handled_events
+  )
+
   # ── Synchronous cross-stream sync handlers ──
   # NOTE: PersonEnrollmentSync dispatches PersonDevelopment commands,
   # so it MUST NOT be registered as a projection — running it twice

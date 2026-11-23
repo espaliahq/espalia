@@ -16,8 +16,8 @@ class Tenant::OrgGraphSettings::EditorsControllerTest < ActionDispatch::Integrat
       @member = create(:person, tenant: @tenant, name: "Mo Member")
       @member_account = create(:tenant_user, tenant: @tenant, person: @member, role: :member)
       @editor = create(:person, tenant: @tenant, name: "Eve Editor")
-      @editor_account = create(:tenant_user, tenant: @tenant, user: @editor_user, person: @editor, role: :member,
-                                             org_graph_editor: true)
+      @editor_account = create(:tenant_user, tenant: @tenant, user: @editor_user, person: @editor, role: :member)
+      AccountGrants::CommandHandler.new.add(:org_graph_editor, @editor_account)
     end
   end
 

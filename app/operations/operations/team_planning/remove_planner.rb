@@ -23,7 +23,6 @@ class Operations::TeamPlanning::RemovePlanner < Operations::Base
 
     grant_handler.remove(:team_planner, tenant_user_id: account.id, person_id: account.person_id,
                                         removed_by_id: context.person&.id)
-    account.update!(team_planner: false)
     planners_payload
   end
 end

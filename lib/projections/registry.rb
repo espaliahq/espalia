@@ -41,7 +41,8 @@ module Projections::Registry
     "team_planning/plan_members"             => "TeamPlanning::Projections::PlanMembers",
     "team_planning/scenarios"                => "TeamPlanning::Projections::Scenarios",
     "team_planning/overrides"                => "TeamPlanning::Projections::Overrides",
-    "team_planning/history"                  => "TeamPlanning::Projections::History"
+    "team_planning/history"                  => "TeamPlanning::Projections::History",
+    "account_grants/account_flags"           => "AccountGrants::Projections::AccountFlags"
   }.freeze
 
   # @return [Array<String>] the registered projection names

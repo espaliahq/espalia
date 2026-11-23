@@ -23,7 +23,6 @@ class Operations::TeamPlanning::AddPlanner < Operations::Base
     raise ParameterError, "person_id: only someone still in the organisation can be a planner" unless account.person&.status == "active"
 
     grant_handler.add(:team_planner, account, added_by_id: context.person&.id)
-    account.update!(team_planner: true)
     planners_payload
   end
 end

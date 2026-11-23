@@ -23,7 +23,6 @@ class Operations::OrgGraph::AddEditor < Operations::Base
     raise ParameterError, "person_id: only someone still in the organisation can be an editor" unless account.person&.status == "active"
 
     grant_handler.add(:org_graph_editor, account, added_by_id: context.person&.id)
-    account.update!(org_graph_editor: true)
     editors_payload
   end
 end
