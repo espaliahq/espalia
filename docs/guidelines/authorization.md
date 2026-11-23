@@ -257,10 +257,15 @@ operations do.
 
 `account_grants:reconcile` treats the flag as the truth. A flag set with no
 grant recorded becomes an `already_held` addition with no grantor. A recorded
-grant whose flag is clear, or whose account is gone, becomes a removal.
+grant whose flag is clear, or whose account is gone, becomes a removal. An
+account with no person is recorded too, with no person. A destroyed account's
+removal is only recorded at the next deploy's reconcile, and a flag written
+outside the operations reads as `already_held` with no grantor.
 Predeploy runs it before and after a rebuild of the flags
 ([projection-rebuild.md](../runbooks/projection-rebuild.md)), and a failure for
-any tenant fails the deploy. Each grant or removal first records what the
+any tenant fails the deploy. The projection's reset writes the stream's
+holders rather than clearing the flags, so a rebuild that stops before its
+replay loses no grant. Each grant or removal first records what the
 account's flag says when the stream disagrees, since a release before the
 stream changed only the flag.
 

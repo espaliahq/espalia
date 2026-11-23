@@ -50,12 +50,51 @@ class AccountGrants::Projections::AccountFlagsTest < ActiveSupport::TestCase
     before = snapshot_read_models(PROJECTION, @tenant)
 
     PROJECTION.reset!(tenant: @tenant)
-    assert_equal [ false, false ], flags(@ada)
+    assert_equal before, snapshot_read_models(PROJECTION, @tenant), "the reset alone leaves the flags as the stream ends"
     Projections::Replayer.replay(projection_class: PROJECTION, tenant: @tenant)
 
     assert_equal before, snapshot_read_models(PROJECTION, @tenant)
     assert_equal [ [ true, false ], [ false, true ], [ false, false ] ], [ @ada, @bo, @cy ].map { flags(it) }
     assert_equal [ true, false ], flags(@forgotten)
+  end
+
+  should "keep every grant through a rebuild that stops after its reset, so reconcile records no removal" do
+    as_tenant do
+      @handler.add(:org_graph_editor, @ada)
+      @handler.add(:team_planner, @bo)
+      @handler.add(:org_graph_editor, @cy)
+      remove(:org_graph_editor, @cy)
+      @handler.add(:org_graph_editor, @cy)
+    end
+    stream = EventStreamNaming.account_grants_stream(tenant: @tenant)
+    written = Rails.configuration.event_store.read.stream(stream).count
+
+    PROJECTION.reset!(tenant: @tenant)
+    report = AccountGrants::Reconciliation.new(@tenant).call
+
+    assert_equal [ 0, 0 ], [ report.added, report.removed ]
+    assert_equal written, Rails.configuration.event_store.read.stream(stream).count
+    assert_equal [ [ true, false ], [ false, true ], [ true, false ] ], [ @ada, @bo, @cy ].map { flags(it) }
+  end
+
+  should "clear a flag the stream doesn't hold, even with no grants in the tenant" do
+    as_tenant { @ada.update_columns(org_graph_editor: true) }
+
+    PROJECTION.reset!(tenant: @tenant)
+
+    assert_equal [ false, false ], flags(@ada)
+  end
+
+  should "ignore its events while replaying, as the reset already wrote where they end" do
+    as_tenant do
+      @handler.add(:org_graph_editor, @ada)
+      remove(:org_graph_editor, @ada)
+    end
+    added = Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant: @tenant)).first
+
+    as_tenant { Projections::Replayer.with_replay_mode { PROJECTION.new.call(added) } }
+
+    assert_equal [ false, false ], flags(@ada)
   end
 
   should "write nothing for an account destroyed since its grant" do

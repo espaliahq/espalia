@@ -99,13 +99,11 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection is new and now the only writer of `tenant_users.org_graph_editor` and `tenant_users.team_planner`.
 
-Predeploy step 2b, `account_grants:reconcile`, first records each flag already set as an `already_held` event with no grantor. The rebuild then resets both flags on every live account and replays those events, so they come back as they were. Step 6 runs the task again and records any grant the previous release gave or took back after the rebuild. If the task fails for any tenant, it fails the deploy before the rebuild can clear that tenant's flags.
+Predeploy step 2b, `account_grants:reconcile`, first records each flag already set as an `already_held` event with no grantor, an account with no person included. The rebuild's reset then sets both flags on every live account to what the stream holds, in one statement, and its replay changes nothing. So no grant is ever cleared, and a rebuild that stops part way leaves the flags right. Step 6 runs the task again and records any grant the previous release gave or took back after the rebuild. If the task fails for any tenant, it fails the deploy before the rebuild.
 
-**Nobody may add or remove an editor or a planner from step 2b to the end of the rebuild.** The rebuild sets the flags from the events step 2b wrote, so a change the previous release makes in that window is undone: someone removed comes back, and someone added loses the grant. After the rebuild, a change the previous release makes is safe. Step 6 records it, and a later command on that account first records what its flag says.
+**On this first deploy, nobody may add or remove an editor or a planner between step 2b and step 3.** The previous release writes only the flag, and the reset sets the flags from the events step 2b wrote, so a change in those seconds is undone. After step 3 it is safe: step 6 records it, and a later command on that account first records what its flag says. Later deploys don't need the rule, since the release they replace writes events.
 
 Forgetting the variable is safe. Step 4 finds events for a projection that was never stamped, so it resets nothing, `verify` fails and the previous release keeps serving. Set the variable and deploy again.
-
-While the rebuild runs, an editor or a planner reads as neither for a moment, as the reset lands before the replay. Deploy when nobody is changing the Org Graph, its editors or the planners, or creating a plan.
 
 #### Recorded: `org_graph/structure` v3 (a copied type remembers its source, [#494](https://github.com/espaliahq/espalia/issues/494))
 
