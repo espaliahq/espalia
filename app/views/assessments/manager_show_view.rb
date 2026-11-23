@@ -186,7 +186,8 @@ class Views::Assessments::ManagerShowView < Views::Base
 
   def start_alignment_button
     code = @matrix_data[:lens]&.home_code || "#{@matrix_data[:role].code}#{@matrix_data[:person_level]}"
-    confirm_msg = "Starting alignment will lock self and manager ratings on #{code}'s capabilities. " \
+    confirm_msg = "Starting alignment will lock self and manager ratings on #{code}'s capabilities " \
+      "and agree every one where your ratings already match. " \
       "You and #{@assessee.name} can still record agreed values together. Continue?"
     form(
       action: assessment_alignment_start_path(@assignment),
