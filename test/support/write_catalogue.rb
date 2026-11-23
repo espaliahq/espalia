@@ -93,14 +93,14 @@ module WriteCatalogue
       end
     end
 
-    # Quoted strings and identifiers are skipped whole, so a literal "(" or
-    # "WHERE" inside one can't end the clause early.
     # The columns an upsert changes on a row that already exists, which with
     # update_only can be fewer than the columns it inserts.
     def conflict_updates(op, sql)
       op == "upsert" ? set_columns(sql[/\bDO\s+UPDATE\s+SET\s+(.*)\z/mi, 1].to_s) : []
     end
 
+    # Quoted strings and identifiers are skipped whole, so a literal "(" or
+    # "WHERE" inside one can't end the clause early.
     def set_columns(clause)
       depth = 0
       names = []
