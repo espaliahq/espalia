@@ -200,7 +200,7 @@ export default class extends BaseController {
     }
     this.#recordInHistory(state, screen)
     if (state === "open") {
-      if (screen) this.paneTarget.focus({ preventScroll: true })
+      if (screen) this.#focusAcrossRestore(this.#currentPane())
     } else if (screen) {
       const pane = this.#currentPane()
       this.#focusAcrossRestore(() => this.#visibleToggleAround(pane()))

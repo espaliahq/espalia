@@ -459,11 +459,19 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     end
 
     should "stay on screen when the overlay reopens while its close is still fading" do
-      open_loaded_activity_pane
+      mark_history_entry
+      # Stamped as a Turbo visit leaves it, so the close's Back is a restoration
+      # visit, and its render drops focus.
+      page.execute_script("Turbo.session.history.replace(new URL(location.href))")
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      hold_matrix_frame_loads
+      expect_a_back
       close_and_reopen_pane_at_once
+      assert_back_landed
       assert_pane_settles "open"
-      assert page.evaluate_script("document.querySelector('#assessment-activity-pane').contains(document.activeElement)"),
-        "the reopened overlay lost focus"
+      focus_in_pane = "document.querySelector('#assessment-activity-pane').contains(document.activeElement)"
+      assert wait_until_js { page.evaluate_script(focus_in_pane) }, "the reopened overlay lost focus"
     end
 
     should "close on outside click but stay open when click lands inside the pane" do
