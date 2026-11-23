@@ -15,22 +15,24 @@ class WriteCatalogueReport
                        upsert_all|upsert|delete_all|delete_by|destroy!?|destroy_all|destroy_by|touch|touch_all|
                        increment!|decrement!|toggle!|find_or_create_by!?|create_or_find_by!?|first_or_create!?|
                        update_counters|increment_counter)(?=[\s(!]|$)/x
+  # Calls that share a name with a persistence call and write nothing.
+  NOT_PERSISTENCE = /turbo_stream\.update|messages\.create|params\.update/
   SEARCHED = %w[app lib].freeze
 
-  Write = Struct.new(:table, :op, :columns, :projection, :site, :count, keyword_init: true) do
-    def file = site&.split(":")&.first
-    def line = site && site[/\A[^ ]+/]
-  end
+  Write = Struct.new(:table, :op, :columns, :projection, :site, :count, keyword_init: true)
 
   def self.load
-    rows = Dir[DIR.join("*.json")].flat_map { |path| JSON.parse(File.read(path)) }
+    rows = Dir[DIR.join("[0-9]*[0-9].json")].flat_map { |path| JSON.parse(File.read(path)) }
     raise "No recorded writes in #{DIR}. Run the suite with WRITE_CATALOGUE=1 first." if rows.empty?
 
-    new(rows)
+    reached = Dir[DIR.join("*.reached.json")].flat_map { |path| JSON.parse(File.read(path)) }
+    new(rows, reached:)
   end
 
   # @param rows [Array<Hash>] recorded writes, one hash per distinct write per worker
-  def initialize(rows)
+  # @param reached [Array<String>] "path:line" of every frame of ours any write ran beneath
+  def initialize(rows, reached: [])
+    @reached = reached.to_set
     merged = rows.group_by { it.except("count") }.map { |key, group| key.merge("count" => group.sum { it["count"] }) }
     @writes = merged.map { Write.new(**it.transform_keys(&:to_sym)) }
   end
@@ -70,23 +72,29 @@ class WriteCatalogueReport
     shared = owners.select { |_, owner| owner[:projections].size > 1 }.map do |table, owner|
       { table:, site: nil, projection: nil, reason: "written by #{owner[:projections].join(' and ')}", count: 0 }
     end
-    shared + strays.sort_by { [ it[:table], it[:site] ] }
+    merged = strays.group_by { it.slice(:table, :site, :projection) }.map do |key, group|
+      key.merge(reason: group.map { it[:reason] }.uniq.join("; "), count: group.sum { it[:count] })
+    end
+    shared + merged.sort_by { [ it[:table], it[:site] ] }
   end
 
-  # @return [Hash{String => Array<Write>}] writes to tables no projection writes
+  # @return [Hash{String => Array<Write>}] writes outside projections to the
+  #   tables whose rows no projection writes, such as people's identifiers
   def plain_tables
-    writes.reject { owners.key?(it.table) }.group_by(&:table).sort.to_h
+    writes.reject { it.projection || owners.dig(it.table, :rows) }.group_by(&:table).sort.to_h
   end
 
-  # @return [Array<String>] "path:line" of persistence calls the run never reached
+  # @return [Array<String>] "path:line" of persistence calls no write ran beneath
   def unreached
-    @unreached ||= persistence_calls - writes.filter_map(&:line)
+    @unreached ||= persistence_calls.reject { @reached.include?(it) }
   end
 
   def persistence_calls
     @persistence_calls ||= source_files.flat_map do |path|
       File.foreach(path).with_index(1).filter_map do |text, lineno|
-        "#{path}:#{lineno}" if !text.lstrip.start_with?("#") && PERSISTENCE_CALL.match?(text)
+        next if text.lstrip.start_with?("#") || NOT_PERSISTENCE.match?(text)
+
+        "#{path}:#{lineno}" if PERSISTENCE_CALL.match?(text)
       end
     end
   end
@@ -94,9 +102,10 @@ class WriteCatalogueReport
   # @return [Hash] how much of the code the run reached
   def coverage
     called = persistence_calls.map { it.split(":").first }.uniq
-    written = writes.filter_map(&:file).uniq
+    reached_files = @reached.map { it.split(":").first }.to_set
     { files: source_files.size, files_with_persistence_calls: called.size,
-      files_with_a_write: written.size, files_with_calls_but_no_write: (called - written).size,
+      files_any_write_ran_through: reached_files.size,
+      files_with_calls_but_no_write: called.count { !reached_files.include?(it) },
       persistence_calls: persistence_calls.size, unreached_calls: unreached.size }
   end
 
@@ -127,7 +136,7 @@ class WriteCatalogueReport
       setup = group.reject(&:site).sum(&:count)
       "### #{table}\n\nTest setup writes: #{setup}\n\n| Site | Ops | Columns | Writes |\n|---|---|---|---|\n" + sited.join("\n")
     end
-    "## Tables no projection writes\n\n" + tables.join("\n\n")
+    "## Writes outside projections, to tables whose rows no projection writes\n\n" + tables.join("\n\n")
   end
 
   def unreached_section
