@@ -142,6 +142,15 @@ The per-side `Complete` is a **projected, event-sourced fact**: [`CurrentAssessm
 
 **Auto-alignment on start.** Inside the same RES transaction as `AlignmentStarted`, `PersonDevelopment::CommandHandler#start_alignment` emits an `AssessmentAligned` event for every (capability × level) cell **of the role being started, not already agreed,** where both `self_rated_frequency` and `manager_rated_frequency` are explicitly recorded **and equal**. The conversation in alignment mode then focuses on disagreements and unrated cells. Default-fallback agreements are NOT auto-aligned. Auto-aligned events carry the comment "Auto-aligned: self and manager already agreed".
 
+**A carried rating is not an explicit one.** A cell auto-aligns only when both sides are human-owned this cycle: the aggregate skips any cell where either side's source is still `seeded`. Seeding gives both sides of a previously agreed cell the same value (ADR-20), so without the check a start would formalise every carried cell nobody looked at. The cost is a surprise. When one party confirms their carried ratings and the other never opens theirs, every cell shows two matching ratings and none of them is agreed, and the pair has to agree each one by hand. The "Start alignment" confirmation doesn't say how many of the other side's ratings are still carried; the Self and Manager chips on `/assessments` do (`To confirm`).
+
+**Diagnosing "our ratings matched but didn't auto-align".** Read the stream's facts before the code:
+
+- Auto-aligned `AssessmentAligned` events share the `AlignmentStarted` timestamp. A matching cell agreed seconds or minutes later was skipped at the start.
+- `assessments_capability_get` shows why: the cell's `ratings` carry `self_carried` / `manager_carried`. Either one true means the carried rule skipped it.
+- `assessments_timeline` shows the same from the other side: no `self_assessment_completed` (or `manager_assessment_completed`) milestone before `alignment_started` means that side never vetted its ratings.
+- If neither side is carried, check for a framework publish during the cycle that mapped the capability as `evolved`. The read model re-keys the ratings to the survivor's stable id; the aggregate's rating maps stay under the retired id, so the start's `cell_keys` (survivor ids) never match them. This is a gap, not a design.
+
 **Cross-cycle seeding (carry-forward, ADR-20).** When a person enrols in a
 new cycle, their ratings are pre-populated from their **most recent prior
 participation** in the framework — aligned or not — with **per-cell
