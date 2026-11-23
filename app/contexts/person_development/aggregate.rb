@@ -665,7 +665,7 @@ class PersonDevelopment::Aggregate
       cell_keys: cells
     }))
 
-    # Auto-align cells where self and manager explicitly recorded the same
+    # Auto-align cells where self and manager hold the same recorded
     # frequency. Derived from the aggregate's own state (`@self_ratings`
     # and `@manager_ratings`) so we're guaranteed consistent with the
     # event stream this aggregate was loaded from — unlike a read-model
