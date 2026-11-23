@@ -21,6 +21,7 @@ class WriteCatalogueReport
 
   Write = Struct.new(:table, :op, :columns, :projection, :site, :count, keyword_init: true)
 
+  # @return [WriteCatalogueReport] built from every worker's files in DIR
   def self.load
     rows = Dir[DIR.join("[0-9]*[0-9].json")].flat_map { |path| JSON.parse(File.read(path)) }
     raise "No recorded writes in #{DIR}. Run the suite with WRITE_CATALOGUE=1 first." if rows.empty?
@@ -50,12 +51,15 @@ class WriteCatalogueReport
   end
 
   # Writes from our code to a table, or a column, a projection writes, made
-  # outside that projection; and tables more than one projection writes.
+  # outside that projection; and tables more than one projection writes. An
+  # insert names every column, set or not, so on a table whose projection
+  # writes only columns, inserts are listed under plain_tables instead.
+  # @return [Array<Hash>] table, site, projection, reason and count of each
   def findings
     strays = writes.select(&:site).filter_map do |write|
       owner = owners[write.table]
       next unless owner
-      next if owner[:projections] == [ write.projection ]
+      next if owner[:projections].include?(write.projection)
 
       touched = write.columns - TIMESTAMPS
       reason = if owner[:rows]
@@ -89,6 +93,7 @@ class WriteCatalogueReport
     @unreached ||= persistence_calls.reject { @reached.include?(it) }
   end
 
+  # @return [Array<String>] "path:line" of every persistence call a text search finds
   def persistence_calls
     @persistence_calls ||= source_files.flat_map do |path|
       File.foreach(path).with_index(1).filter_map do |text, lineno|
@@ -109,6 +114,7 @@ class WriteCatalogueReport
       persistence_calls: persistence_calls.size, unreached_calls: unreached.size }
   end
 
+  # @return [String] the report, as written to tmp/write_catalogue/report.md
   def to_markdown
     [ coverage_section, findings_section, plain_section, unreached_section ].join("\n\n")
   end
