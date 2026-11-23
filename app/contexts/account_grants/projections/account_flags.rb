@@ -31,7 +31,7 @@ class AccountGrants::Projections::AccountFlags
   # holds, in one statement. A reset that clears them instead would leave a
   # rebuild that stops before its replay with every flag clear, and the next
   # deploy's reconcile would record each grant as removed. It holds the
-  # stream's lock, so a grant written meanwhile can't be overwritten.
+  # stream's lock, so a grant a command writes meanwhile can't be overwritten.
   #
   # @param tenant [Tenant]
   def self.reset!(tenant:)

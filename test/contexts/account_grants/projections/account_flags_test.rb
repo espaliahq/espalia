@@ -95,6 +95,7 @@ class AccountGrants::Projections::AccountFlagsTest < ActiveSupport::TestCase
     read = statements.index { it.include?("event_store_events") }
     write = statements.index { it.start_with?("UPDATE \"tenant_users\"") }
     assert lock, "the reset took no lock"
+    assert write, "the reset wrote no flags"
     assert_operator lock, :<, read, "the reset read the stream before taking its lock"
     assert_operator read, :<, write
     assert_includes statements[lock], EventStreamNaming.account_grants_stream(tenant: @tenant), "the reset locked another stream than grants take"

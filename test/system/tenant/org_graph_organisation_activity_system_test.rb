@@ -52,6 +52,7 @@ class Tenant::OrgGraphOrganisationActivitySystemTest < ApplicationSystemTestCase
       assert_operator find("#org-graph-unit").rect.x, :<, find(SIDEBAR).rect.x, "the sidebar stays beside the unit"
 
       click_with_retry(expect_text: "Added Ada Quill") { within(SIDEBAR) { click_link "Back to Platform's activity" } }
+      within(SIDEBAR) { assert_text "Added Ada Quill" }
     end
   end
 
