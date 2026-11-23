@@ -2,6 +2,8 @@
 
 > Read this when: setting up, running or debugging the app outside the usual devcontainer flow — a Claude Code cloud session, a second worktree, the macOS host — or measuring performance in development. The devcontainer itself is the documented path; [AGENTS.md](../../AGENTS.md) has its commands.
 
+> **A fresh devcontainer build fails at `FROM` until rails/devcontainer publishes a Ruby 4.0.10 image.** Keep an existing container and build Ruby 4.0.10 inside it, as [#536](https://github.com/espaliahq/espalia/issues/536) describes.
+
 ## Cloud sessions: `bin/cloud-setup`, not the devcontainer
 
 **A Claude Code cloud session runs the app natively, through `bin/cloud-setup`.** The
@@ -11,7 +13,12 @@ place. The environment's setup script runs it as root from the checkout; run it 
 to restart anything that has stopped. It provides:
 
 - **Ruby from `.ruby-version`**, compiled by ruby-build into `/opt/rubies/<version>`. Bundler
-  insists on the exact patch, and the image carries Ruby 3.3, so nothing else will do.
+  insists on the exact patch, and the image carries Ruby 3.3, so nothing else will do. When the
+  image's ruby-build predates the patch, the script builds it from the tarball and sha256 that
+  `cache.ruby-lang.org/pub/ruby/index.txt` lists. Both come from `cache.ruby-lang.org` over
+  HTTPS, the same trust ruby-build itself places, and ruby-build refuses the build on a checksum
+  mismatch. If the index lists no such version, the script stops with an error rather than fall
+  back to another Ruby.
 - **Postgres from CI's `postgres:<major>` image tag**, using the image's own Ubuntu cluster on
   `localhost:5432`, with the `postgres`/`postgres` login `database.yml` expects.
 - **System tests on the local-Chrome branch** of `ApplicationSystemTestCase`, the one CI runs:

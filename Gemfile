@@ -5,8 +5,9 @@ git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
 # Dev and production pin the exact patch via .ruby-version and the
 # Dockerfile; CI floats within the series because GitHub-hosted runners
-# only carry each series' latest patch.
-ruby ">= 4.0.1", "< 4.1"
+# only carry each series' latest patch. The floor is the first patch
+# without the Regexp and String vulnerabilities of November 2026.
+ruby ">= 4.0.10", "< 4.1"
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem "rails", "~> 8.1.0"
