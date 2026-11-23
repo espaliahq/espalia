@@ -107,6 +107,8 @@ Predeploy step 2b, `account_grants:reconcile` (since renamed `events:reconcile`)
 
 Forgetting the variable is safe. Step 4 finds events for a projection that was never stamped, so it resets nothing, `verify` fails and the previous release keeps serving. Set the variable and deploy again.
 
+**Since `events:reconcile`, a database that still lacks this stamp needs neither the variable nor the rule.** Step 2b records the flags and then adopts the projection, stamping it without a reset, so step 3 logs that it is already current and skips the rebuild. Step 6 records any change the previous release made in between.
+
 #### Recorded: `org_graph/structure` v3 (a copied type remembers its source, [#494](https://github.com/espaliahq/espalia/issues/494))
 
 Path A: `REBUILD_ON_DEPLOY=org_graph/structure`, removed once the deploy is live. The migration adds `org_taxonomy_levels.copied_from_level_id`, and the rebuild fills it from each declaration that copied a structure. A plan then names the copy a misfit unit would take: "Here its type would be Crew". Every other column is unchanged.
