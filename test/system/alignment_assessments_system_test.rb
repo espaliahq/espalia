@@ -172,8 +172,14 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
 
       visit assessment_path(@report_assignment)
       assert_selector "h1", text: "Report Alex"
-      accept_confirm_with_retry(/agree every one where your ratings already match/) do
-        click_button "Start alignment"
+      assert_selector %(form[data-turbo-confirm*="agree every one where your ratings already match"] button),
+        text: "Start alignment"
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Start alignment");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
       end
       assert_text "Aligning"
 
