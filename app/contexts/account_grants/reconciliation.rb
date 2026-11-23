@@ -4,59 +4,42 @@
 #
 # A flag set with no grant recorded becomes an `already_held` addition, and
 # a recorded grant whose flag is clear, or whose account was destroyed,
-# becomes a removal. Neither names an actor. A forgotten account is left as
-# it is. A flagged account with no person is recorded too, with no person,
-# so a rebuild keeps its grant. Writing only what differs makes a second run
-# write nothing.
+# becomes a removal. A forgotten account is left as it is. A flagged account
+# with no person is recorded too, with no person, so a rebuild keeps its
+# grant.
 #
 # @example
 #   AccountGrants::Reconciliation.new(tenant).call
 #   # => #<data Report added=1, removed=0>
-class AccountGrants::Reconciliation
-  # What a run recorded.
-  Report = Data.define(:added, :removed)
-
-  # @param tenant [Tenant]
-  # @param repository [AccountGrants::Repository]
-  def initialize(tenant, repository: AccountGrants::Repository.new)
-    @tenant = tenant
-    @repository = repository
-  end
-
-  # @return [Report]
-  def call
-    ActsAsTenant.with_tenant(@tenant) do
-      added = removed = 0
-      @repository.with_grants do |aggregate|
-        accounts = TenantUser.where(tenant_id: @tenant.id).to_a.index_by(&:id)
-        AccountGrants::Aggregate::GRANTS.each do |grant|
-          added += record_held(aggregate, grant, accounts.values.select { it.public_send(grant) })
-          removed += record_cleared(aggregate, grant, accounts)
-        end
-      end
-      Report.new(added:, removed:)
-    end
-  end
+class AccountGrants::Reconciliation < TenantStreams::Reconciliation
+  # @return [AccountGrants::Repository]
+  def self.repository = AccountGrants::Repository.new
 
   private
 
-  def record_held(aggregate, grant, flagged)
-    missing = flagged.reject { aggregate.holds?(grant, it.id) }
-    missing.each do |account|
-      aggregate.add(grant, tenant_user_id: account.id, person_id: account.person_id, effective_on: today, already_held: true)
+  def held_in_table
+    accounts = TenantUser.where(tenant_id: @tenant.id).to_a
+    AccountGrants::Aggregate::GRANTS.each_with_object({}) do |grant, held|
+      accounts.each { |account| held[[ grant, account.id ]] = account if account.public_send(grant) }
     end
-    missing.size
   end
 
-  def record_cleared(aggregate, grant, accounts)
-    holders = aggregate.holders(grant).dup
-    forgotten = TenantUser.unscoped.where(id: holders.keys).where.not(forgotten_at: nil).pluck(:id)
-    cleared = holders.reject { |id, _| forgotten.include?(id) || accounts[id]&.public_send(grant) }
-    cleared.each { |id, person_id| aggregate.remove(grant, tenant_user_id: id, person_id:, effective_on: today) }
-    cleared.size
+  def held_in_stream(aggregate)
+    AccountGrants::Aggregate::GRANTS.each_with_object({}) do |grant, held|
+      aggregate.holders(grant).each { |id, person_id| held[[ grant, id ]] = person_id }
+    end
   end
 
-  def today
-    @today ||= @tenant.today
+  def forgotten(keys)
+    ids = TenantUser.unscoped.where(id: keys.map(&:last)).where.not(forgotten_at: nil).pluck(:id)
+    keys.select { |_, id| ids.include?(id) }
+  end
+
+  def record_held(aggregate, (grant, _), account)
+    aggregate.add(grant, tenant_user_id: account.id, person_id: account.person_id, effective_on: today, already_held: true)
+  end
+
+  def record_removed(aggregate, (grant, id), person_id)
+    aggregate.remove(grant, tenant_user_id: id, person_id:, effective_on: today)
   end
 end
