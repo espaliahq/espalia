@@ -118,33 +118,34 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     end
   end
 
-  context "the taxonomy" do
-    setup { @levels = [ { level_id: @team, name: "Team" }, { level_id: @department, name: "Department" } ] }
+  context "the organisation's structure" do
+    setup do
+      @levels = [ { level_id: @team, name: "Team" }, { level_id: @department, name: "Department" } ]
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01")
+    end
 
-    should "be left to a tenant admin, even over an Org Graph editor" do
+    should "be left to a tenant admin or an Org Graph editor, never an owner of a unit in it" do
       error = assert_raises(OrgGraph::Authorization::Refused) do
-        structure(context_for(@other, org_graph_editor: true)).define_taxonomy(@levels.reverse + [ { level_id: SecureRandom.uuid_v7, name: "Squad" } ],
-                                                                               effective_on: "2026-02-01")
+        structure(context_for(@other)).define_taxonomy(@levels.reverse + [ { level_id: SecureRandom.uuid_v7, name: "Squad" } ],
+                                                       effective_on: "2026-02-01")
       end
 
-      assert_equal "Only a tenant admin can change the taxonomy's levels", error.message
+      assert_equal "Only a tenant admin or an Org Graph editor can change the organisation's structure", error.message
       assert_equal %w[Department Team], OrgTaxonomyLevel.top_structure.pluck(:name)
 
-      structure(context_for(@lead, role: :admin)).define_taxonomy(@levels.reverse + [ { level_id: SecureRandom.uuid_v7, name: "Squad" } ],
-                                                                  effective_on: "2026-02-01")
+      structure(context_for(@lead, org_graph_editor: true)).define_taxonomy(@levels.reverse + [ { level_id: SecureRandom.uuid_v7, name: "Squad" } ],
+                                                                            effective_on: "2026-02-01")
       assert_equal %w[Department Team Squad], OrgTaxonomyLevel.top_structure.pluck(:name)
     end
 
-    should "leave removing a level to a tenant admin" do
+    should "let an Org Graph editor remove a level, and refuse an owner" do
       squad = SecureRandom.uuid_v7
       structure(context_for(@lead, role: :admin)).add_level(squad, "Squad", effective_on: "2026-02-01")
 
-      error = assert_raises(OrgGraph::Authorization::Refused) do
-        structure(context_for(@other, org_graph_editor: true)).remove_level(squad, effective_on: "2026-02-01")
-      end
+      error = assert_raises(OrgGraph::Authorization::Refused) { structure(context_for(@other)).remove_level(squad, effective_on: "2026-02-01") }
 
-      assert_equal "Only a tenant admin can change the taxonomy's levels", error.message
-      structure(context_for(@lead, role: :admin)).remove_level(squad, effective_on: "2026-02-01")
+      assert_equal "Only a tenant admin or an Org Graph editor can change the organisation's structure", error.message
+      structure(context_for(@report, org_graph_editor: true)).remove_level(squad, effective_on: "2026-02-01")
       assert_equal %w[Department Team], OrgTaxonomyLevel.top_structure.pluck(:name)
     end
   end
@@ -153,28 +154,34 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     setup do
       @group = SecureRandom.uuid_v7
       @declaration = { levels: [ { level_id: @group, name: "Group" } ], conversion: { @team => @group }, effective_on: "2026-02-01" }
-      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01")
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@engineering_id, @report.id, effective_on: "2026-01-01")
     end
 
-    should "be left to a tenant admin, even over an Org Graph editor or the unit's owner" do
-      [ context_for(@other), context_for(@lead, org_graph_editor: true) ].each do |actor|
-        error = assert_raises(OrgGraph::Authorization::Refused) { structure(actor).declare_structure(@engineering_id, **@declaration) }
-        assert_equal "Only a tenant admin can change Engineering's structure", error.message
-      end
+    should "be left to the unit's owners, the line above them and Org Graph editors" do
+      refusal = "You can change Engineering's structure if you own Engineering or a unit above it, " \
+                "report to someone who does, or are an Org Graph editor"
+      error = assert_raises(OrgGraph::Authorization::Refused) { structure(context_for(@other)).declare_structure(@engineering_id, **@declaration) }
+      assert_equal refusal, error.message
 
-      admin = structure(context_for(@lead, role: :admin))
-      admin.declare_structure(@engineering_id, **@declaration)
-      error = assert_raises(OrgGraph::Authorization::Refused) do
-        structure(context_for(@other)).add_level(SecureRandom.uuid_v7, "Lane", structure_unit_id: @engineering_id, effective_on: "2026-02-01")
-      end
-      assert_equal "Only a tenant admin can change Engineering's structure", error.message
-
+      structure(context_for(@lead)).declare_structure(@engineering_id, **@declaration)
+      lane = SecureRandom.uuid_v7
+      structure(context_for(@report)).add_level(lane, "Lane", structure_unit_id: @engineering_id, effective_on: "2026-02-01")
+      structure(context_for(@other, org_graph_editor: true)).remove_level(lane, structure_unit_id: @engineering_id, effective_on: "2026-02-01")
       error = assert_raises(OrgGraph::Authorization::Refused) do
         structure(context_for(@other)).withdraw_structure(@engineering_id, conversion: { @group => @team }, effective_on: "2026-02-01")
       end
-      assert_equal "Only a tenant admin can change Engineering's structure", error.message
-      admin.withdraw_structure(@engineering_id, conversion: { @group => @team }, effective_on: "2026-02-01")
+      assert_equal refusal, error.message
+
+      structure(context_for(@lead)).withdraw_structure(@engineering_id, conversion: { @group => @team }, effective_on: "2026-02-01")
       assert_equal @team, OrgUnit.find(@payments_id).level_id
+    end
+
+    should "not reach a unit's structure from an owner of a unit beneath it" do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@payments_id, @other.id, effective_on: "2026-01-01")
+
+      error = assert_raises(OrgGraph::Authorization::Refused) { structure(context_for(@other)).declare_structure(@engineering_id, **@declaration) }
+
+      assert_match(/\AYou can change Engineering's structure if/, error.message)
     end
   end
 

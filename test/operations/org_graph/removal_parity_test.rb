@@ -97,15 +97,15 @@ class Operations::OrgGraph::RemovalParityTest < ActiveSupport::TestCase
     assert_parity("Guild" => false)
   end
 
-  should "offer an editor nothing to remove, without replaying the structure" do
+  should "offer an editor the same types to remove as an admin" do
     editor = as_tenant { create(:tenant_user, tenant: @tenant, role: :member, org_graph_editor: true) }
     context = AuthorizationContext.new(user: editor.user, tenant_user: editor, person: nil)
-    sources = OrgGraph::Repository.stub(:new, -> { flunk "loaded the structure for an editor" }) do
-      as_tenant { Operations::OrgGraph::Sources.call(context:, params: {}) }
-    end
+    removable = ->(sources) { sources[:levels].map { [ it[:name], it[:removable] ] } }
 
-    assert sources[:levels].any?
-    assert sources[:levels].none? { it[:removable] }
+    offered = removable.call(as_tenant { Operations::OrgGraph::Sources.call(context:, params: {}) })
+
+    assert offered.any? { it.last }
+    assert_equal removable.call(call(Operations::OrgGraph::Sources)), offered
   end
 
   should "judge a unit's own structure by its own units" do

@@ -16,6 +16,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       @admin = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
       @editor = create(:tenant_user, tenant: @tenant, role: :member, org_graph_editor: true,
                                      person: create(:person, tenant: @tenant))
+      @member = create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant))
     end
   end
 
@@ -102,11 +103,13 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       end
     end
 
-    should "leave a unit's structure to a tenant admin" do
-      error = assert_raises(Pundit::NotAuthorizedError) { declare(as: @editor) }
+    should "leave a unit's structure to those who hold it" do
+      error = assert_raises(Pundit::NotAuthorizedError) { declare(as: @member) }
 
-      assert_equal "Only a tenant admin can change Checkout's structure", error.message
+      assert_equal "You can change Checkout's structure if you own Checkout or a unit above it, report to someone who does, or are an Org Graph editor", error.message
       assert_equal @org[:squad], level_of(:payments)
+      declare(as: @editor)
+      assert_not_equal @org[:squad], level_of(:payments)
     end
   end
 
@@ -151,11 +154,12 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       assert_equal %w[Department Team Squad], ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_structure.pluck(:name) }
     end
 
-    should "leave its types to a tenant admin" do
+    should "leave its types to those who hold it" do
       error = assert_raises(Pundit::NotAuthorizedError) do
-        call(Operations::OrgGraph::AddLevel, as: @editor, name: "Pod", structure_unit_id: @org[:checkout])
+        call(Operations::OrgGraph::AddLevel, as: @member, name: "Pod", structure_unit_id: @org[:checkout])
       end
-      assert_equal "Only a tenant admin can change Checkout's structure", error.message
+      assert_equal "You can change Checkout's structure if you own Checkout or a unit above it, report to someone who does, or are an Org Graph editor", error.message
+      call(Operations::OrgGraph::AddLevel, as: @editor, name: "Pod", structure_unit_id: @org[:checkout])
     end
 
     should "withdraw it, converting the units beneath it back" do
@@ -192,7 +196,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
 
       assert_equal [ @org[:checkout], "Checkout" ], structure.values_at(:unit_id, :name)
       assert_equal [ [ "Stream", 1, false ], [ "Lane", 0, true ] ], structure[:levels].map { it.values_at(:name, :live_units, :removable) }
-      assert_equal [ false, false ], call(Operations::OrgGraph::Sources, as: @editor)[:structures].sole[:levels].pluck(:removable)
+      assert_equal [ false, true ], call(Operations::OrgGraph::Sources, as: @editor)[:structures].sole[:levels].pluck(:removable)
     end
 
     should "read the structure in force on a date, even narrowed to a unit beneath it" do
@@ -311,12 +315,16 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         assert_equal [ @org[:checkout], @stream ], known.call(moved.timestamp, on)
       end
 
-      should "refuse a misfit as a parameter error, and leave the move to a tenant admin" do
+      should "refuse a misfit as a parameter error, and the move to a caller without both structures" do
         error = assert_raises(Operations::Base::ParameterError) { move_in(conversion: { @org[:team] => @lane }) }
         assert_equal "These units wouldn't fit Checkout's structure: Platform (Lane at the top)", error.message
 
-        error = assert_raises(OrgGraph::Authorization::Refused) { move_in(as: @editor) }
-        assert_equal "Only a tenant admin can move a unit between structures", error.message
+        ActsAsTenant.with_tenant(@tenant) do
+          system = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          [ :platform, :checkout ].each { system.add_unit_owner(@org[it], @member.person.id, effective_on: Tenant.today.iso8601) }
+        end
+        error = assert_raises(OrgGraph::Authorization::Refused) { move_in(as: @member) }
+        assert_equal "You need the right to change both structures to move a unit between them", error.message
         assert_equal @org[:team], level_of(:platform)
       end
 
@@ -385,8 +393,10 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
         move = ->(as, unit_id, parent_id) { call(Operations::OrgGraph::MoveUnit, as:, unit_id:, parent_id:, conversion: { @org[:team] => @stream }) }
         [ SecureRandom.uuid_v7, elsewhere[:platform] ].each do |stranger|
           [ [ stranger, @org[:checkout] ], [ @org[:platform], stranger ] ].each do |unit_id, parent_id|
-            error = assert_raises(OrgGraph::Authorization::Refused) { move.call(@editor, unit_id, parent_id) }
-            assert_equal "Only a tenant admin can move a unit between structures", error.message
+            error = assert_raises(OrgGraph::Authorization::Refused) { move.call(@member, unit_id, parent_id) }
+            moved = unit_id == stranger ? "this unit" : "Platform"
+            assert_equal "Only a tenant admin, an Org Graph editor or an owner of #{moved} or a unit above it, " \
+                         "or someone they report to can move #{moved}", error.message
 
             error = assert_raises(Operations::Base::ParameterError) { move.call(@admin, unit_id, parent_id) }
             named = unit_id == stranger ? "unit_id" : "parent_id"

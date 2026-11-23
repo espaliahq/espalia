@@ -202,7 +202,7 @@ class OrgGraph::ChangeMoveBackTest < ActiveSupport::TestCase
       assert_raises(OrgGraph::Authorization::Refused) { OrgGraph::ChangeBackHandler.new(actor: context).change_back_group(cause_id) }
 
       error = assert_raises(OrgGraph::Authorization::Refused) { OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back_group(cause_id) }
-      assert_equal "Only a tenant admin can move a unit between structures", error.message
+      assert_equal "The system cannot move a unit between structures", error.message
     end
     assert_equal @platform, structure.unit(@payments).parent_id
   end

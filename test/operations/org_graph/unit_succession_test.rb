@@ -144,11 +144,12 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
                            conversion: { @org[:squad] => group }, effective_on: "2026-01-05"
         )
       end
-      ledger = own_two_squads(@tenant, @org, @owner.person)
-      owner = AuthorizationContext.new(user: @owner.user, tenant_user: @owner, person: @owner.person)
-      assert_not OrgGraphPolicy.new(owner, :org_graph).edit_structure_of?(unit(@org[:checkout]))
+      squads_owner = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)) }
+      ledger = own_two_squads(@tenant, @org, squads_owner.person)
+      rights = OrgGraphPolicy.new(AuthorizationContext.new(user: squads_owner.user, tenant_user: squads_owner, person: squads_owner.person), :org_graph)
+      assert_not ActsAsTenant.with_tenant(@tenant) { rights.edit_structure_of?(unit(@org[:checkout])) || rights.edit_taxonomy? }
 
-      result = call(Operations::OrgGraph::MergeUnit, as: @owner, unit_id: @org[:payments], into_unit_id: ledger,
+      result = call(Operations::OrgGraph::MergeUnit, as: squads_owner, unit_id: @org[:payments], into_unit_id: ledger,
                                                      effective_on: Date.current.iso8601)
 
       assert_equal 1, result[:memberships_moved]

@@ -155,31 +155,32 @@ class OrgGraph::MoveOutOfStructureTest < ActiveSupport::TestCase
     setup { @lending = declare_lending }
 
     should "need the right to change both structures, naming neither to a caller without one" do
-      [ [ @payments ], [ @lending ] ].each do |allowed|
+      lane = create_unit("Lane A", @lane, parent_id: @lending, on: @today + 1)
+      source_only = owner_of(@payments, lane)
+      destination_only = owner_of(@ledger, @lending)
+      [ [ source_only, lane ], [ destination_only, @lending ] ].each do |caller, parent_id|
         error = assert_raises(OrgGraph::Authorization::Refused) do
-          move_out(as: allowed_to_change(allowed), parent_id: @lending, conversion: { @group => @lane, @stream => @track })
+          move_out(as: caller, parent_id:, conversion: { @group => @lane, @stream => @track })
         end
-        assert_equal "Only a tenant admin can move a unit between structures", error.message
+        assert_equal "You need the right to change both structures to move a unit between them", error.message
       end
       assert_equal @payments, structure.structure_in_force(@ledger)
 
-      move_out(as: allowed_to_change([ @payments, @lending ]), parent_id: @lending, conversion: { @group => @lane, @stream => @track })
+      move_out(as: owner_of(@payments, @lending), parent_id: @lending, conversion: { @group => @lane, @stream => @track })
       assert_equal @lending, structure.structure_in_force(@ledger)
     end
 
     should "need the right to change the organisation's structure for a move out" do
-      [ [ @payments ], [ nil ] ].each do |allowed|
-        error = assert_raises(OrgGraph::Authorization::Refused) { move_out(as: allowed_to_change(allowed)) }
-        assert_equal "Only a tenant admin can move a unit between structures", error.message
-      end
+      error = assert_raises(OrgGraph::Authorization::Refused) { move_out(as: owner_of(@payments, @core)) }
+      assert_equal "You need the right to change both structures to move a unit between them", error.message
 
-      move_out(as: allowed_to_change([ @payments, nil ]))
+      move_out(as: editor)
       assert_nil structure.structure_in_force(@ledger)
     end
 
     should "refuse the system" do
       error = assert_raises(OrgGraph::Authorization::Refused) { move_out(as: @system) }
-      assert_equal "Only a tenant admin can move a unit between structures", error.message
+      assert_equal "The system cannot move a unit between structures", error.message
     end
   end
 
@@ -199,14 +200,23 @@ class OrgGraph::MoveOutOfStructureTest < ActiveSupport::TestCase
     lending
   end
 
-  # An admin whose right to change a structure holds only for those listed,
-  # nil standing for the organisation's: today every such right is an admin's.
-  def allowed_to_change(structure_unit_ids)
-    policy = Class.new(SimpleDelegator) do
-      define_method(:edit_taxonomy?) { structure_unit_ids.include?(nil) }
-      define_method(:edit_structure_of?) { |unit| structure_unit_ids.include?(unit&.id) }
-    end.new(OrgGraphPolicy.new(@admin_context, :org_graph))
-    OrgGraph::StructureCommandHandler.new(actor: @admin_context).tap { it.instance_variable_set(:@policy, policy) }
+  # A member who owns each unit given, and nothing else.
+  def owner_of(*unit_ids)
+    as_tenant do
+      person = create(:person, tenant: @tenant)
+      OrgGraph::CommandHandler.new(actor: SYSTEM).record_person(person.id, provider: "espalia", effective_on: @today.iso8601,
+                                                                           employment_status: "employed")
+      unit_ids.each { @system.add_unit_owner(it, person.id, effective_on: @today) }
+      tenant_user = create(:tenant_user, tenant: @tenant, role: :member, person:)
+      OrgGraph::StructureCommandHandler.new(actor: AuthorizationContext.new(user: tenant_user.user, tenant_user:, person:))
+    end
+  end
+
+  def editor
+    as_tenant do
+      tenant_user = create(:tenant_user, tenant: @tenant, role: :member, org_graph_editor: true)
+      OrgGraph::StructureCommandHandler.new(actor: AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: nil))
+    end
   end
 
   def event_store = Rails.configuration.event_store

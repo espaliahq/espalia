@@ -240,20 +240,20 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
   context "as an Org Graph editor" do
     setup { sign_in @editor_user }
 
-    should "refuse to add, change or remove a unit type, and offer none of it" do
+    should "add, change and remove a unit type, though the settings page stays an admin's" do
       post tenant_org_graph_settings_levels_path, params: { name: "Guild" }
-      assert_equal "You are not authorized to perform this action.", flash[:alert]
+      assert_match(/\AGuild is a unit type now/, flash[:notice])
 
       patch tenant_org_graph_settings_kind_parent_path(@squad_id), params: { parent_ids: [ @tribe_id ], top: "0" }
-      assert_equal "You are not authorized to perform this action.", flash[:alert]
+      assert_equal "Saved where Squad can sit.", flash[:notice]
 
-      delete tenant_org_graph_settings_level_path(@squad_id)
-      assert_equal "You are not authorized to perform this action.", flash[:alert]
+      guild_id = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_structure.find_by!(name: "Guild").id }
+      delete tenant_org_graph_settings_level_path(guild_id)
+      assert_equal "Guild is no longer a unit type.", flash[:notice]
       assert_equal %w[Tribe Squad Team], level_names
 
       get tenant_org_graph_settings_path
-      assert_select "#org-graph-level-remove-#{@squad_id}", count: 0
-      assert_select "#org-graph-level-menu-#{@squad_id}", count: 0
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
   end
 end

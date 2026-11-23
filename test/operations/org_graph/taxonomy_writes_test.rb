@@ -76,11 +76,13 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       assert_equal %w[Department Team Squad], level_names
     end
 
-    should "leave the taxonomy to a tenant admin" do
-      [ @editor, @member ].each do |caller|
-        assert_raises(Pundit::NotAuthorizedError) { call(Operations::OrgGraph::AddLevel, as: caller, name: "Guild") }
-      end
+    should "leave the organisation's structure to a tenant admin or an Org Graph editor" do
+      error = assert_raises(Pundit::NotAuthorizedError) { call(Operations::OrgGraph::AddLevel, as: @member, name: "Guild") }
+      assert_equal "Only a tenant admin or an Org Graph editor can change the organisation's structure", error.message
       assert_equal %w[Department Team Squad], level_names
+
+      call(Operations::OrgGraph::AddLevel, as: @editor, name: "Guild")
+      assert_equal %w[Department Team Squad Guild], level_names
     end
   end
 
@@ -151,12 +153,14 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       assert_equal [ [], true ], kind_rules(@department)
     end
 
-    should "leave the rules to a tenant admin" do
-      [ @editor, @member ].each do |caller|
-        assert_raises(Pundit::NotAuthorizedError) do
-          call(Operations::OrgGraph::SetKindParents, as: caller, level_id: @guild, parent_ids: [], top: true)
-        end
+    should "leave the rules to a tenant admin or an Org Graph editor" do
+      error = assert_raises(Pundit::NotAuthorizedError) do
+        call(Operations::OrgGraph::SetKindParents, as: @member, level_id: @guild, parent_ids: [], top: true)
       end
+      assert_equal "Only a tenant admin or an Org Graph editor can change the organisation's structure", error.message
+
+      call(Operations::OrgGraph::SetKindParents, as: @editor, level_id: @guild, parent_ids: [], top: true)
+      assert_equal [ [], true ], kind_rules(@guild)
     end
   end
 
@@ -313,11 +317,12 @@ class Operations::OrgGraph::TaxonomyWritesTest < ActiveSupport::TestCase
       assert_equal "That unit type doesn't exist", error.message
     end
 
-    should "leave the taxonomy to a tenant admin" do
-      [ @editor, @member ].each do |caller|
-        assert_raises(Pundit::NotAuthorizedError) { call(Operations::OrgGraph::RemoveLevel, as: caller, level_id: @guild) }
-      end
+    should "leave the organisation's structure to a tenant admin or an Org Graph editor" do
+      assert_raises(Pundit::NotAuthorizedError) { call(Operations::OrgGraph::RemoveLevel, as: @member, level_id: @guild) }
       assert_includes level_names, "Guild"
+
+      call(Operations::OrgGraph::RemoveLevel, as: @editor, level_id: @guild)
+      assert_not_includes level_names, "Guild"
     end
   end
 end

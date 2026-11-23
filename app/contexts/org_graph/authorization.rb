@@ -67,7 +67,7 @@ module OrgGraph::Authorization
 
     unit = unit_for(unit_id)
     authorize!(:change_unit_kind?, unit) do
-      next "Only a tenant admin or an Org Graph editor can change #{unit_name(unit)}'s type" unless in_declared_structure?(unit)
+      next "Only a tenant admin or an Org Graph editor can change a unit's type" unless in_declared_structure?(unit)
 
       "You can change #{unit_name(unit)}'s type if you own the unit whose structure it sits in or a unit above " \
         "that, report to someone who does, or are an Org Graph editor"
@@ -116,7 +116,8 @@ module OrgGraph::Authorization
 
     units = unit_ids.flatten.compact.map { |unit_id| unit_for(unit_id) }
     authorize!(:record_succession?, units) do
-      refused = units.find { |unit| !policy.edit_unit?(unit) }
+      rights = policy
+      refused = units.find { |unit| !rights.edit_unit?(unit) }
       "#{only_owners_of(refused)} can name #{unit_name(refused)} in a succession"
     end
   end
@@ -156,9 +157,8 @@ module OrgGraph::Authorization
     actor_id ? { key => actor_id }.merge(options) : options
   end
 
-  def policy
-    @policy ||= OrgGraphPolicy.new(@actor, :org_graph)
-  end
+  # Fresh for every check: a handler can outlive a change to who owns what.
+  def policy = OrgGraphPolicy.new(@actor, :org_graph)
 
   def unit_for(unit_id)
     OrgUnit.find_by(id: unit_id.to_s.downcase)
