@@ -17,6 +17,12 @@ class WriteCatalogueTest < ActiveSupport::TestCase
     assert_equal %w[manager_id name], set_columns(%q{UPDATE people SET name = 'it''s (', manager_id = 42})
   end
 
+  should "not read a comparison inside a value as a column" do
+    sql = %q(UPDATE people SET name = CASE WHEN manager_id = 42 THEN 'A' ELSE 'B' END, status = 1 WHERE id = 1)
+
+    assert_equal %w[name status], set_columns(sql)
+  end
+
   should "read a quoted column name that holds an escaped quote" do
     assert_equal [ 'a"b' ], set_columns('UPDATE t SET "a""b" = 1')
   end

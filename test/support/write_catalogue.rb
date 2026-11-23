@@ -11,8 +11,8 @@ module WriteCatalogue
   DIR = Rails.root.join("tmp/write_catalogue")
   WRITE = /\A\s*(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+"?(\w+)"?/i
   # A quoted string, an assigned column (quoted or bare), a quoted identifier,
-  # a parenthesis, or a keyword that ends a SET clause.
-  SET_TOKEN = /'(?:[^']|'')*'|"((?:[^"]|"")+)"\s*=(?!=)|"(?:[^"]|"")*"|(\w+)\s*=(?!=)|\(|\)|\b(?:FROM|WHERE|RETURNING)\b/i
+  # a parenthesis, a comma, or a keyword that ends a SET clause.
+  SET_TOKEN = /'(?:[^']|'')*'|"((?:[^"]|"")+)"\s*=(?!=)|"(?:[^"]|"")*"|(\w+)\s*=(?!=)|\(|\)|,|\b(?:FROM|WHERE|RETURNING)\b/i
   # Written by gems, never by our code.
   INFRASTRUCTURE = /\A(event_store_|solid_|ar_internal_metadata\z|schema_migrations\z)/
   SOURCE_ROOTS = [ Rails.root.join("app").to_s, Rails.root.join("lib").to_s ].freeze
@@ -106,8 +106,11 @@ module WriteCatalogue
     # Quoted strings and identifiers are skipped whole, so a literal "(" or
     # "WHERE" inside one can't end the clause early. A bare "IS DISTINCT FROM"
     # still ends it, so columns after one are missed; Rails parenthesises it.
+    # Only a name that opens the clause or follows a top-level comma is a
+    # column, so "CASE WHEN manager_id = 42" in a value is not.
     def set_columns(clause)
       depth = 0
+      target = true
       names = []
       clause.scan(SET_TOKEN) do |quoted, bare|
         token = Regexp.last_match[0]
@@ -117,7 +120,8 @@ module WriteCatalogue
           break if token.match?(/\A(FROM|WHERE|RETURNING)\z/i)
 
           name = quoted&.gsub('""', '"') || bare
-          names << name if name
+          names << name if name && target
+          target = token == ","
         end
       end
       names.uniq.sort
