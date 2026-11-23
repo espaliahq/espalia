@@ -21,6 +21,8 @@ class Operations::TeamPlanning::RemovePlanner < Operations::Base
     account = account!
     raise ParameterError, "person_id: an admin may always create plans" if account.admin?
 
+    grant_handler.remove(:team_planner, tenant_user_id: account.id, person_id: account.person_id,
+                                        removed_by_id: context.person&.id)
     account.update!(team_planner: false)
     planners_payload
   end

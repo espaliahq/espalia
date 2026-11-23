@@ -3,7 +3,8 @@
 # What the planner operations share: finding a person's account in the
 # tenant, and the list as it reads after a change.
 #
-# The grant is tenant_users.team_planner (decision 7), in the Org Graph editor
+# The grant is recorded in the AccountGrants stream and read from
+# tenant_users.team_planner (decision 7), in the Org Graph editor
 # tools' shape.
 module Operations::TeamPlanning::PlannerSupport
   private
@@ -11,6 +12,10 @@ module Operations::TeamPlanning::PlannerSupport
   # @raise [Pundit::NotAuthorizedError] unless the caller is a tenant admin
   def policy_check
     authorize ActsAsTenant.current_tenant, :manage_team_planners?, policy_class: TenantPolicy
+  end
+
+  def grant_handler
+    AccountGrants::CommandHandler.new
   end
 
   def account!

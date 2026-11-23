@@ -21,6 +21,8 @@ class Operations::OrgGraph::RemoveEditor < Operations::Base
     account = account!
     raise ParameterError, "person_id: an admin may always edit the Org Graph" if account.admin?
 
+    grant_handler.remove(:org_graph_editor, tenant_user_id: account.id, person_id: account.person_id,
+                                            removed_by_id: context.person&.id)
     account.update!(org_graph_editor: false)
     editors_payload
   end

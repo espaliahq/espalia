@@ -10,6 +10,10 @@ module Operations::OrgGraph::EditorSupport
     authorize ActsAsTenant.current_tenant, :manage_org_graph_editors?, policy_class: TenantPolicy
   end
 
+  def grant_handler
+    AccountGrants::CommandHandler.new
+  end
+
   def account!
     TenantUser.find_by(person_id: params[:person_id].to_s.downcase) or
       raise Operations::Base::ParameterError, "person_id: that person has no account in this organisation"

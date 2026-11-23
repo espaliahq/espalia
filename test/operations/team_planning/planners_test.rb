@@ -24,6 +24,14 @@ class Operations::TeamPlanning::PlannersTest < ActiveSupport::TestCase
 
   def names(list) = list.pluck(:name)
 
+  def grant_events
+    Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant: @tenant)).to_a
+  end
+
+  def call_over_mcp(operation, **params)
+    AuditMetadata.with(acting_via: :mcp, actor_id: @admin.person_id) { call(operation, **params) }
+  end
+
   should "list the planners an admin chose apart from the admins" do
     result = call(:Planners)
 
@@ -74,5 +82,29 @@ class Operations::TeamPlanning::PlannersTest < ActiveSupport::TestCase
       assert_raises(Pundit::NotAuthorizedError) { call(:AddPlanner, as: account, person_id: @member.person_id) }
     end
     assert_not @member.reload.team_planner?
+  end
+
+  should "record each grant and removal as one event, saying who made it and how" do
+    call_over_mcp(:AddPlanner, person_id: @member.person_id)
+    call_over_mcp(:RemovePlanner, person_id: @member.person_id)
+
+    added, removed = grant_events
+    assert_equal [ AccountGrants::Events::PlannerAdded, AccountGrants::Events::PlannerRemoved ], grant_events.map(&:class)
+    assert_equal({ tenant_user_id: @member.id, person_id: @member.person_id, effective_on: @tenant.today.iso8601,
+                   added_by_id: @admin.person_id, already_held: false }, added.data)
+    assert_equal @admin.person_id, removed.data[:removed_by_id]
+    [ added, removed ].each do |event|
+      assert_equal "mcp", event.metadata[:acting_via]
+      assert_equal @admin.person_id, event.metadata[:actor_id]
+      assert_equal @tenant.id, event.metadata[:tenant_id]
+    end
+  end
+
+  should "write no event for a refusal" do
+    assert_raises(Pundit::NotAuthorizedError) { call(:AddPlanner, as: @member, person_id: @member.person_id) }
+    assert_raises(Operations::Base::ParameterError) { call(:AddPlanner, person_id: @admin.person_id) }
+    assert_raises(Operations::Base::ParameterError) { call(:RemovePlanner, person_id: @admin.person_id) }
+
+    assert_empty grant_events
   end
 end

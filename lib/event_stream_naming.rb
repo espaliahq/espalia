@@ -22,6 +22,9 @@
 #   EventStreamNaming.plan_stream("plan-uuid")
 #   # => "tenant-<tenant-uuid>/Plan-plan-uuid"
 #
+#   EventStreamNaming.account_grants_stream
+#   # => "tenant-<tenant-uuid>/AccountGrants"
+#
 module EventStreamNaming
   # Returns the stream name for a Framework aggregate.
   #
@@ -94,6 +97,16 @@ module EventStreamNaming
   # @raise [ArgumentError] if no tenant context is available
   def self.plan_stream(plan_id, tenant: ActsAsTenant.current_tenant)
     "#{tenant_prefix(tenant)}/Plan-#{plan_id}"
+  end
+
+  # Returns the stream name for a tenant's account grants: one stream per
+  # tenant, holding who was made an Org Graph editor or a planner, and when.
+  #
+  # @param tenant [Tenant, nil] override tenant (defaults to ActsAsTenant.current_tenant)
+  # @return [String] the tenant-namespaced stream name
+  # @raise [ArgumentError] if no tenant context is available
+  def self.account_grants_stream(tenant: ActsAsTenant.current_tenant)
+    "#{tenant_prefix(tenant)}/AccountGrants"
   end
 
   # Extracts the tenant ID from a stream name.
