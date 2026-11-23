@@ -80,8 +80,12 @@ module WriteCatalogue
     end
 
     def operation(verb, sql)
-      verb == "insert" && sql.match?(/ON CONFLICT[^;]*DO UPDATE/i) ? "upsert" : verb
+      verb == "insert" && without_literals(sql).match?(/ON CONFLICT[^;]*DO UPDATE/i) ? "upsert" : verb
     end
+
+    # upsert_all writes its values into the SQL as quoted literals, and one may
+    # read "DO UPDATE SET".
+    def without_literals(sql) = sql.gsub(/'(?:[^']|'')*'/, "''")
 
     # A SET clause's columns are the names before each top-level "=", so a
     # subquery's WHERE doesn't end the clause.
@@ -96,7 +100,7 @@ module WriteCatalogue
     # The columns an upsert changes on a row that already exists, which with
     # update_only can be fewer than the columns it inserts.
     def conflict_updates(op, sql)
-      op == "upsert" ? set_columns(sql[/\bDO\s+UPDATE\s+SET\s+(.*)\z/mi, 1].to_s) : []
+      op == "upsert" ? set_columns(without_literals(sql)[/\bDO\s+UPDATE\s+SET\s+(.*)\z/mi, 1].to_s) : []
     end
 
     # Quoted strings and identifiers are skipped whole, so a literal "(" or

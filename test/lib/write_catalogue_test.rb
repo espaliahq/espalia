@@ -29,4 +29,12 @@ class WriteCatalogueTest < ActiveSupport::TestCase
     assert_equal %w[name updated_at], WriteCatalogue.send(:conflict_updates, "upsert", sql)
     assert_empty WriteCatalogue.send(:conflict_updates, "insert", 'INSERT INTO "people" ("id") VALUES ($1)')
   end
+
+  should "not take a value that reads DO UPDATE SET for the upsert's own clause" do
+    sql = %q(INSERT INTO "t" ("a","b") VALUES ('x; ON CONFLICT DO UPDATE SET "zz" = 1','y') ) +
+          %q(ON CONFLICT ("a") DO UPDATE SET "b"=excluded."b" RETURNING "id")
+
+    assert_equal "upsert", WriteCatalogue.send(:operation, "insert", sql)
+    assert_equal %w[b], WriteCatalogue.send(:conflict_updates, "upsert", sql)
+  end
 end
