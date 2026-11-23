@@ -387,10 +387,10 @@ class PersonDevelopment::CommandHandler
   #
   # The aggregate additionally auto-emits an AssessmentAligned event for
   # every (capability × level) cell of the role where both perspectives
-  # explicitly rated the same frequency. The conversation then focuses on
-  # disagreements and unrated cells. Default-fallback agreements (where
-  # one or both perspectives never recorded an explicit value) do NOT
-  # auto-align — only deliberate, recorded agreement counts.
+  # hold the same recorded frequency, carried-forward values included. The
+  # conversation then focuses on disagreements and unrated cells.
+  # Default-fallback agreements (where one or both perspectives hold no
+  # recorded value) do NOT auto-align.
   #
   # The stream doesn't carry framework bindings, so the role's cells are
   # read here from {Assessments::RoleScope} and written onto the event.

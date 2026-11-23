@@ -215,9 +215,10 @@ Alignment lifecycle (per cycle, per role — ADR-22):
       leaves the home lifecycle alone.
     ← The aggregate additionally emits an AssessmentAligned event for every
       cell OF THE ROLE, not already agreed, where both self_rated_frequency
-      and manager_rated_frequency are explicitly recorded, human and equal —
-      all inside the same with_person_development block. Default-fallback
-      and seeded matches do NOT auto-align.
+      and manager_rated_frequency are recorded and equal, carried-forward
+      (seeded) values included — all inside the same
+      with_person_development block. Default-fallback matches do NOT
+      auto-align.
   AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, cycle_id, comment, aligned_by_id?, role_id? }
     ← Per-cell agreed frequency. Requires an alignment IN PROGRESS whose
       cells include the cell, and refuses to rewrite a value a COMPLETED
