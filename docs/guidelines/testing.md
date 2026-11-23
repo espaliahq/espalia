@@ -616,6 +616,24 @@ reset and fails if its cookie survives.
 lands on a page the test didn't visit, or finds a session already signed in,
 suspect a response from the previous test before the helpers.
 
+## Autovacuum Is Off in the Test Databases
+
+**`test_helper.rb` turns autovacuum off on every table of every test database
+(`TestDatabaseAutovacuum`), so keep it off.** A vacuum does not count rows a
+transaction has yet to commit, and a test never commits. One that lands
+mid-test records the tables the test has filled as empty (`reltuples = 0` in
+`pg_class`), and the planner then nests loops over thousands of rows it
+believes are one. `StressSeedTest` hung a precommit that way, on a single
+`DELETE` that ran over six minutes
+([#546](https://github.com/espaliahq/espalia/issues/546)). A table no vacuum has
+visited has `reltuples = -1`, and the planner estimates it from its size.
+
+**The tell is one query `active` for minutes with no wait event and nothing
+blocking it** (`pg_stat_activity`, `pg_blocking_pids`), in a run where the other
+workers have finished. To reproduce it, run `VACUUM` from a second connection
+part-way through the test, with a `statement_timeout` set: a manual vacuum
+does the same damage whatever the setting.
+
 ## Clear Any CDP Emulation You Set
 
 **A CDP emulation outlives the test that set it.** Capybara reuses one browser
