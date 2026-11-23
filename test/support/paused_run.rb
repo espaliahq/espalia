@@ -33,7 +33,8 @@ class PausedRun
       when the machine is paused: a host that sleeps freezes the devcontainer's VM. Browser calls
       in flight when it wakes fail together, in several workers in the same second, with
       "Timeout when executing request" or a stale element. If this run has failures like that,
-      rerun it; whatever fails again is real (docs/guidelines/dev-environment.md).
+      rerun it. What fails again is real; what passes may still be an intermittent defect
+      (docs/guidelines/dev-environment.md).
     NOTICE
   end
 
