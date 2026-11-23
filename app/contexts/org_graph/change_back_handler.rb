@@ -18,6 +18,7 @@ class OrgGraph::ChangeBackHandler
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
   WHOLE_STRUCTURE = "This came with a change to a unit's own structure, so change the whole change back"
   WHOLE_MOVE = "This came with a move between structures, so change the whole change back"
+  GRANT = "Who may edit the Org Graph changes in its settings, not here"
 
   # @param actor [AuthorizationContext, Object] as for {OrgGraph::CommandHandler}
   # @param repository [OrgGraph::Repository]
@@ -176,6 +177,7 @@ class OrgGraph::ChangeBackHandler
     entries.each do |entry|
       raise whole_structure_refusal(entry.cause_id) if !structure && structure_causes.include?(entry.cause_id)
       raise whole_refusal(entry.cause_id, WHOLE_MOVE) if !move && move_causes.include?(entry.cause_id)
+      raise GRANT if entry.grant?
       raise "#{entry.event_type.titleize} can't be changed back" unless entry == structure || entry.reversible?
       raise "This change has already been changed back" if entry.changed_back?
       raise "#{entry.provider} supplies this; change it there" unless (entry.provider || ESPALIA) == ESPALIA

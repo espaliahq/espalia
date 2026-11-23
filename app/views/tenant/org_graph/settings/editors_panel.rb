@@ -51,7 +51,10 @@ class Views::Tenant::OrgGraph::Settings::EditorsPanel < Views::Base
     ul(class: "mt-1 divide-y divide-subtle") do
       @editors[:editors].each do |editor|
         li(class: "flex items-center justify-between gap-2 py-1.5") do
-          span(class: "text-default min-w-0 truncate") { editor[:name] }
+          div(class: "min-w-0") do
+            p(class: "text-default truncate") { editor[:name] }
+            p(class: "text-xs text-muted") { granted(editor) } if editor[:since]
+          end
           next unless editor[:person_id]
 
           settings_form(tenant_org_graph_settings_editor_path(editor[:person_id]), method: :delete) do
@@ -62,6 +65,13 @@ class Views::Tenant::OrgGraph::Settings::EditorsPanel < Views::Base
         end
       end
     end
+  end
+
+  def granted(editor)
+    since = Date.iso8601(editor[:since]).strftime("%-d %b %Y")
+    return "Already an editor on #{since}" if editor[:already_held]
+
+    editor[:added_by] ? "Since #{since}, added by #{editor[:added_by]}" : "Since #{since}"
   end
 
   def add_form

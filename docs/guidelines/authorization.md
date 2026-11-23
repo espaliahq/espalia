@@ -164,7 +164,7 @@ Pundit's `authorize` passes none.
 | Action | Who |
 |--------|-----|
 | See the Org Graph (`show?`) | Any tenant member |
-| The Units view, its activity sidebar and change it back, and `org_graph_units`, `org_graph_activity`, `org_graph_change_back` and `org_graph_change_back_group` (`show_units?`; a change-back also needs the rights to make the inverse change) | A tenant admin, until the Org Graph's screens are finished; it then opens to `show?` |
+| The Units view, its activity sidebar (a unit's, or the organisation's own) and change it back, and `org_graph_units`, `org_graph_activity`, `org_graph_change_back` and `org_graph_change_back_group` (`show_units?`; a change-back also needs the rights to make the inverse change) | A tenant admin, until the Org Graph's screens are finished; it then opens to `show?` |
 | Add, rename or remove a unit type, or say where it can sit (`edit_taxonomy?`) | A tenant admin. Every unit has a type, so the structure's shape is a bigger call than a unit edit |
 | Give a unit a structure of its own, withdraw it, change its types, or move a unit into it (`edit_structure_of?(unit)`, [#494](https://github.com/espaliahq/espalia/issues/494)) | A tenant admin, for now. A move in also needs `move_unit?`, and its refusal names no unit. Step 6 of [#390](https://github.com/espaliahq/espalia/issues/390) widens this one predicate; nothing else names who may |
 | Providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
@@ -221,7 +221,7 @@ members may: no other role opens one.
 
 | Action | Who |
 |--------|-----|
-| Create a plan (`create?`) | A tenant admin, or a planner (`TenantUser#team_planner`, granted by an admin through `team_planning_add_planner`) |
+| Create a plan (`create?`) | A tenant admin, or a planner (`TenantUser#team_planner`, granted by an admin through `team_planning_add_planner`; see [Where editor and planner grants live](#where-editor-and-planner-grants-live)) |
 | Open a plan, list its members, leave it (`show?`, `leave?`) | Its editors and viewers |
 | Rename or delete it, add, re-role or remove its members (`update?`, `destroy?`, `manage_members?`) | Its editors |
 | List frozen plans, delete one unread (`manage_frozen?`, `destroy_frozen?`) | A tenant admin, and only while the plan is frozen |
@@ -239,6 +239,41 @@ lists only the caller's own plans. `test/integration/team_planning_privacy_test.
 walks every Team Planning tool as a tenant admin, an Org Graph editor, a
 planner, a global admin and a plain member, and a new tool joins the walk on
 its own.
+
+### Where editor and planner grants live
+
+An admin who makes someone an Org Graph editor or a planner writes an event to
+the tenant's `AccountGrants` stream (`tenant-{id}/AccountGrants`):
+`OrgGraphEditorAdded`, `OrgGraphEditorRemoved`, `PlannerAdded` or
+`PlannerRemoved`. Each names the account, its person, the date it took effect
+and who gave or took back the grant. Holders are keyed by account, so a person
+who comes back with a new account starts without the old one's grants.
+
+The `account_grants/account_flags` projection writes
+`TenantUser#org_graph_editor` and `TenantUser#team_planner` from those events,
+and the policies read the columns. Nothing else writes them: grant and remove
+through `AccountGrants::CommandHandler`, as the four editor and planner
+operations do.
+
+`account_grants:reconcile` treats the flag as the truth. A flag set with no
+grant recorded becomes an `already_held` addition with no grantor. A recorded
+grant whose flag is clear, or whose account is gone, becomes a removal. An
+account with no person is recorded too, with no person. A destroyed account's
+removal is only recorded at the next deploy's reconcile, and a flag written
+outside the operations reads as `already_held` with no grantor.
+Predeploy runs it before and after a rebuild of the flags
+([projection-rebuild.md](../runbooks/projection-rebuild.md)), and a failure for
+any tenant fails the deploy. The projection's reset writes the stream's
+holders rather than clearing the flags, so a rebuild that stops before its
+replay loses no grant. Each grant or removal first records what the
+account's flag says when the stream disagrees, since a release before the
+stream changed only the flag.
+
+`org_graph_editors`, `team_planning_planners` and their add and remove tools
+give each holder `since`, `added_by` and `already_held` from the stream. Editor
+grants also show in the Org Graph's organisation activity
+(`org_graph_activity` with no `unit_id`), behind `show_units?` like a unit's
+feed. They can't be changed back there: the refusal points to the settings.
 
 ## Policy Conventions
 

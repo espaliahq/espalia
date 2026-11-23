@@ -4,7 +4,7 @@
 // below-lg fixed overlay), the persistence cookie
 // (`assessment_activity_pane_open`), the `?activity=open|closed`
 // URL param (the key is a value; `Kit::SidePanel` sets its own), and the data-pane-state attribute the CSS keys off.
-// Uses stimulus-use's `useTransition` for slide+fade animations and
+// Uses stimulus-use's `useTransition` for the fade and
 // `useClickOutside` (mobile only) so tapping the matrix dismisses the
 // pane like the scoring sidebar does.
 //
@@ -34,6 +34,19 @@ const FIT_BOTTOM_GAP_PX = 16
 // Marks the history entry the overlay pushed. Holds the URL key, so two
 // panes on one page don't take each other's entries.
 const HISTORY_KEY = "sidePanelOverlay"
+
+// Opacity only: translating the pane off-screen during enter would push it
+// out of the viewport and delay the lazy turbo-frame's IntersectionObserver
+// fetch, racing with clicks on the filter chips the moment it opens.
+const FADE = {
+  enterActive: "transition-opacity duration-150 ease-out",
+  enterFrom: "opacity-0",
+  enterTo: "opacity-100",
+  leaveActive: "transition-opacity duration-100 ease-in",
+  leaveFrom: "opacity-100",
+  leaveTo: "opacity-0"
+}
+const FADE_CLASSES = Object.values(FADE).join(" ").split(" ")
 
 let refocusAfterRender = null
 let refocusExpiry = null
@@ -72,26 +85,16 @@ export default class extends BaseController {
   }
 
   #leaving = false
+  #wanted = null
+  #fading = false
 
   connect() {
     super.connect()
     const initialState = this.#computeInitialState()
 
-    // Opacity-only fade — translating the pane off-screen during enter
-    // would push it out of the viewport and delay the lazy turbo-frame's
-    // IntersectionObserver fetch, racing with user clicks on filter chips
-    // inside the pane the moment it opens.
-    useTransition(this, {
-      element: this.paneTarget,
-      enterActive: "transition-opacity duration-150 ease-out",
-      enterFrom: "opacity-0",
-      enterTo: "opacity-100",
-      leaveActive: "transition-opacity duration-100 ease-in",
-      leaveFrom: "opacity-100",
-      leaveTo: "opacity-0",
-      hiddenClass: "hidden",
-      transitioned: initialState === "open"
-    })
+    // Turbo's snapshot of a page left mid-fade keeps that fade's classes.
+    this.paneTarget.classList.remove(...FADE_CLASSES)
+    useTransition(this, { element: this.paneTarget, ...FADE, hiddenClass: "hidden", transitioned: initialState === "open" })
 
     useClickOutside(this, { element: this.paneTarget })
 
@@ -119,6 +122,7 @@ export default class extends BaseController {
     document.removeEventListener("turbo:before-visit", this.onBeforeVisit)
     this.narrowQuery.removeEventListener("change", this.onNarrowChange)
     this.#unobserveViewport()
+    this.#wanted = null
     super.disconnect()
   }
 
@@ -196,7 +200,7 @@ export default class extends BaseController {
     }
     this.#recordInHistory(state, screen)
     if (state === "open") {
-      if (screen) this.paneTarget.focus({ preventScroll: true })
+      if (screen) this.#focusAcrossRestore(this.#currentPane())
     } else if (screen) {
       const pane = this.#currentPane()
       this.#focusAcrossRestore(() => this.#visibleToggleAround(pane()))
@@ -332,14 +336,25 @@ export default class extends BaseController {
     window.history.back()
   }
 
+  // One fade at a time: stimulus-use's leave() hides the pane only when its
+  // fade ends, which would hide a pane reopened in the meantime.
   #animate(state) {
-    if (state === "open") {
-      this.enter()
-      this.#scheduleFit()
-    } else {
-      // Fit once the fade-out ends, which clears the inline height.
-      Promise.resolve(this.leave()).finally(() => this.#scheduleFit())
+    this.#wanted = state
+    if (state === "open") this.#scheduleFit()
+    if (!this.#fading) this.#fadeToWanted()
+  }
+
+  async #fadeToWanted() {
+    this.#fading = true
+    try {
+      while (this.#wanted && this.transitioned !== (this.#wanted === "open")) {
+        await (this.#wanted === "open" ? this.enter() : this.leave())
+      }
+    } finally {
+      this.#fading = false
     }
+    // A fade-out clears the inline height only once it ends.
+    this.#scheduleFit()
   }
 
   #observeViewport() {

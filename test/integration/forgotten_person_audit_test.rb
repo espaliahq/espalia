@@ -97,9 +97,14 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
 
     editors = Operations::OrgGraph::Editors.call(context: lead_context, params: {})
-    assert_equal [ @lead.id ], (editors[:editors] + editors[:admins]).map { it[:person_id] }, "org_graph_editors lists a forgotten editor"
+    assert_equal [ @alex.id, @lead.id ], (editors[:editors] + editors[:admins]).map { it[:person_id] }, "org_graph_editors lists a forgotten editor"
+    assert_equal Person::FORMER_MEMBER, editors[:editors].sole[:added_by], "org_graph_editors names who made Alex an editor"
     planners = Operations::TeamPlanning::Planners.call(context: lead_context, params: {})
-    assert_equal [ @lead.id ], (planners[:planners] + planners[:admins]).map { it[:person_id] }, "team_planning_planners lists a forgotten planner"
+    assert_equal [ @alex.id, @lead.id ], (planners[:planners] + planners[:admins]).map { it[:person_id] }, "team_planning_planners lists a forgotten planner"
+    assert_equal Person::FORMER_MEMBER, planners[:planners].sole[:added_by], "team_planning_planners names who made Alex a planner"
+    organisation = Operations::OrgGraph::Activity.call(context: lead_context, params: {}).as_json.to_json
+    assert_no_match(/#{ERASED_NAME}|#{Regexp.escape(ERASED_EMAIL)}/o, organisation, "org_graph_activity shows the erased identity with no unit")
+    assert_includes organisation, Person::FORMER_MEMBER, "org_graph_activity with no unit names who made Alex an editor"
 
     as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_for("org_graph_as_of"))
     assert_equal [ @quinn.id ], as_of[:people].map { it[:id] }, "org_graph_as_of reads an empty Org Graph here"
@@ -146,6 +151,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     suggest_as_quinn
     place_quinn_in_the_org_graph
     plan_with_quinn
+    grant_as_quinn
     erased = User.find_by!(email: ERASED_EMAIL)
     PayBand.create!(level: @fx.e_levels.fetch(2), currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3,
                     updated_by: erased)
@@ -198,6 +204,14 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
       handler.fork_scenario(@plan_id, dropped, parent_id: @scenario_id, relation: "instead", name: "Dropped")
       handler.remove_scenario(@plan_id, dropped)
     end
+  end
+
+  # Quinn makes Alex an Org Graph editor and a planner, so each list and the
+  # organisation's activity name who gave the grant.
+  def grant_as_quinn
+    alex = create(:tenant_user, tenant: @tenant, person: @alex)
+    grants = AccountGrants::CommandHandler.new
+    AccountGrants::Aggregate::GRANTS.each { grants.add(it, alex, added_by_id: @quinn.id) }
   end
 
   # A second plan, which Quinn archives, so the plan read names its archiver.

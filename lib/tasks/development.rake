@@ -32,6 +32,15 @@ begin
       raise "importmap audit checks failed" unless status
     end
 
+    desc "Report the writes a WRITE_CATALOGUE=1 test run recorded, into tmp/write_catalogue/report.md"
+    task write_catalogue: :environment do
+      require Rails.root.join("test/support/write_catalogue_report").to_s
+      report = WriteCatalogueReport.load
+      File.write(WriteCatalogueReport::DIR.join("report.md"), report.to_markdown)
+      report.findings.each { |finding| puts "#{finding[:table]}: #{finding[:site] || '-'} #{finding[:reason]}" }
+      puts report.coverage.map { |key, value| "#{key}: #{value}" }
+    end
+
     desc "watch tests"
     task watch_tests: [] do
       system("find ./test -name '*.rb' | entr -s 'rails test'", exception: false)

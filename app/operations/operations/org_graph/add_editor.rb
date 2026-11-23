@@ -22,7 +22,7 @@ class Operations::OrgGraph::AddEditor < Operations::Base
     raise ParameterError, "person_id: admins may already edit the Org Graph" if account.admin?
     raise ParameterError, "person_id: only someone still in the organisation can be an editor" unless account.person&.status == "active"
 
-    account.update!(org_graph_editor: true)
+    grant_handler.add(:org_graph_editor, account, added_by_id: context.person&.id)
     editors_payload
   end
 end

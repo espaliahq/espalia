@@ -47,8 +47,12 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
 
         select "Mo Member", from: "Person to make an editor"
         click_button_with_js_fallback("Add an editor", expect_text: "Mo Member may now edit the Org Graph.")
-        within("#org-graph-editors") { assert_selector "li", text: "Mo Member" }
+        within("#org-graph-editors") do
+          assert_selector "li", text: "Mo Member"
+          assert_selector "li", text: "Since #{@tenant.today.strftime('%-d %b %Y')}, added by Ada Admin"
+        end
         assert_no_sideways_overflow
+        scroll_to find("#org-graph-editors")
         screenshot("editors_#{viewport}")
 
         click_button_with_js_fallback("remove-editor-#{@member.id}", expect_text: "Mo Member may no longer edit the Org Graph.")
