@@ -193,6 +193,17 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     JS
   end
 
+  def assert_pane_settles_hidden
+    settled = <<~JS
+      (() => {
+        const pane = document.getElementById("assessment-activity-pane")
+        return pane.dataset.paneState === "closed" && !pane.classList.contains("transition-opacity") &&
+          pane.classList.contains("hidden")
+      })()
+    JS
+    assert wait_until_js { page.evaluate_script(settled) }, "the pane says closed but never finished hiding"
+  end
+
   def assert_pane_settles_on_screen
     settled = <<~JS
       (() => {
@@ -721,6 +732,25 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         page.go_forward
         assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
         assert wait_until_js { page.evaluate_script(focus_in_pane) }, "Forward reopened the overlay with focus lost"
+      end
+    end
+
+    # Turbo caches the page on the first Back and Forward, a moment into the
+    # fade each one starts, and the second pair restore those copies.
+    should "show the overlay when Forward restores a page Turbo cached as it faded in" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      mark_history_entry
+      toggle_activity_pane
+      assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+      assert_pane_settles_on_screen
+      hold_matrix_frame_loads
+
+      2.times do
+        go_back_and_wait_until_landed
+        assert_pane_settles_hidden
+        page.go_forward
+        assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: :all
+        assert_pane_settles_on_screen
       end
     end
 

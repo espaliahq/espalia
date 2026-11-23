@@ -35,6 +35,16 @@ const FIT_BOTTOM_GAP_PX = 16
 // panes on one page don't take each other's entries.
 const HISTORY_KEY = "sidePanelOverlay"
 
+const FADE = {
+  enterActive: "transition-opacity duration-150 ease-out",
+  enterFrom: "opacity-0",
+  enterTo: "opacity-100",
+  leaveActive: "transition-opacity duration-100 ease-in",
+  leaveFrom: "opacity-100",
+  leaveTo: "opacity-0"
+}
+const FADE_CLASSES = [...new Set(Object.values(FADE).join(" ").split(" "))]
+
 let refocusAfterRender = null
 let refocusExpiry = null
 document.addEventListener("turbo:render", () => {
@@ -83,17 +93,9 @@ export default class extends BaseController {
     // would push it out of the viewport and delay the lazy turbo-frame's
     // IntersectionObserver fetch, racing with user clicks on filter chips
     // inside the pane the moment it opens.
-    useTransition(this, {
-      element: this.paneTarget,
-      enterActive: "transition-opacity duration-150 ease-out",
-      enterFrom: "opacity-0",
-      enterTo: "opacity-100",
-      leaveActive: "transition-opacity duration-100 ease-in",
-      leaveFrom: "opacity-100",
-      leaveTo: "opacity-0",
-      hiddenClass: "hidden",
-      transitioned: initialState === "open"
-    })
+    // Turbo's snapshot of a page left mid-fade keeps that fade's classes.
+    this.paneTarget.classList.remove(...FADE_CLASSES)
+    useTransition(this, { element: this.paneTarget, ...FADE, hiddenClass: "hidden", transitioned: initialState === "open" })
 
     useClickOutside(this, { element: this.paneTarget })
 
