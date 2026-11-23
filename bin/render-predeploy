@@ -40,7 +40,8 @@ log "step 2: done"
 #     AccountGrants events, before step 3 or 4 can reset the flags their
 #     projection derives. Idempotent: a run that finds nothing new writes
 #     nothing. The previous release never reads the stream, so events left by
-#     a deploy that fails at verify are harmless.
+#     a deploy that fails at verify are harmless. A failure for any tenant
+#     stops the deploy here, before step 3 can clear that tenant's flags.
 log "step 2b: account_grants:reconcile"
 rake account_grants:reconcile
 log "step 2b: done"

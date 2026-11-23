@@ -117,7 +117,7 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
     assert_equal 2, events.size
   end
 
-  should "report a tenant that fails and still record the others" do
+  should "record the other tenants, then fail so the deploy stops before a rebuild clears the failed tenant's flags" do
     other = create(:tenant)
     outsider = ActsAsTenant.with_tenant(other) do
       create(:tenant_user, tenant: other, person: create(:person, tenant: other)).tap { it.update_columns(team_planner: true) }
@@ -128,9 +128,11 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
       @tenant.id == failing_id ? raise("stream unavailable") : real.bind_call(self)
     end
 
-    out = reconcile
+    error = assert_raises(SystemExit) { capture_io { Rake::Task["account_grants:reconcile"].invoke } }
+    Rake::Task["account_grants:reconcile"].reenable
 
-    assert_match "[#{@tenant.id}] failed: RuntimeError: stream unavailable", out
+    assert_not error.success?
+    assert_match @tenant.id, error.message
     assert_empty events
     assert_equal [ outsider.id ], events(other).map { it.data[:tenant_user_id] }
   ensure

@@ -259,7 +259,10 @@ operations do.
 grant recorded becomes an `already_held` addition with no grantor. A recorded
 grant whose flag is clear, or whose account is gone, becomes a removal.
 Predeploy runs it before and after a rebuild of the flags
-([projection-rebuild.md](../runbooks/projection-rebuild.md)).
+([projection-rebuild.md](../runbooks/projection-rebuild.md)), and a failure for
+any tenant fails the deploy. Each grant or removal first records what the
+account's flag says when the stream disagrees, since a release before the
+stream changed only the flag.
 
 `org_graph_editors`, `team_planning_planners` and their add and remove tools
 give each holder `since`, `added_by` and `already_held` from the stream. Editor
