@@ -3,9 +3,9 @@
 require "test_helper"
 require "rake"
 
-class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
+class EventsReconcileTaskTest < ActiveSupport::TestCase
   PROJECTION = AccountGrants::Projections::AccountFlags
-  TASKS = %w[account_grants:reconcile events:projections:stamp_if_no_events events:projections:verify
+  TASKS = %w[events:reconcile events:projections:stamp_if_no_events events:projections:verify
              events:projections:rebuild_if_stale events:projections:rebuild].freeze
 
   setup do
@@ -33,7 +33,7 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
     out
   end
 
-  def reconcile = run_task("account_grants:reconcile")
+  def reconcile = run_task("events:reconcile")
 
   def events(tenant = @tenant)
     Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant:)).to_a
@@ -46,7 +46,7 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
   should "record each grant the flags hold as already held, with no grantor, as the system" do
     out = reconcile
 
-    assert_match "[#{@tenant.id}] recorded 2 already held, 0 removed", out
+    assert_match "account_grants [#{@tenant.id}] recorded 2 already held, 0 removed", out
     editor, planner = events
     assert_equal [ AccountGrants::Events::OrgGraphEditorAdded, AccountGrants::Events::PlannerAdded ], events.map(&:class)
     assert_equal({ tenant_user_id: @editor.id, person_id: @editor.person_id, effective_on: @tenant.today.iso8601,
@@ -67,7 +67,7 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
   should "write nothing when run again" do
     reconcile
 
-    assert_match "[#{@tenant.id}] nothing to record", reconcile
+    assert_match "account_grants [#{@tenant.id}] nothing to record", reconcile
     assert_equal 2, events.size
   end
 
@@ -110,7 +110,7 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
   should "record a flagged account with no person, so a rebuild keeps its grant" do
     unlinked = as_tenant { create(:tenant_user, tenant: @tenant).tap { it.update_columns(org_graph_editor: true) } }
 
-    assert_match "[#{@tenant.id}] recorded 3 already held, 0 removed", reconcile
+    assert_match "account_grants [#{@tenant.id}] recorded 3 already held, 0 removed", reconcile
     assert_equal({ tenant_user_id: unlinked.id, person_id: nil, effective_on: @tenant.today.iso8601,
                    added_by_id: nil, already_held: true }, events.find { it.data[:tenant_user_id] == unlinked.id }.data)
 
@@ -127,17 +127,19 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
     end
     real = AccountGrants::Reconciliation.instance_method(:call)
     failing_id = @tenant.id
+    ProjectionVersion.where(name: PROJECTION::PROJECTION_NAME).delete_all
     AccountGrants::Reconciliation.define_method(:call) do
       @tenant.id == failing_id ? raise("stream unavailable") : real.bind_call(self)
     end
 
-    error = assert_raises(SystemExit) { capture_io { Rake::Task["account_grants:reconcile"].invoke } }
-    Rake::Task["account_grants:reconcile"].reenable
+    error = assert_raises(SystemExit) { capture_io { Rake::Task["events:reconcile"].invoke } }
+    Rake::Task["events:reconcile"].reenable
 
     assert_not error.success?
     assert_match @tenant.id, error.message
     assert_empty events
     assert_equal [ outsider.id ], events(other).map { it.data[:tenant_user_id] }
+    assert_nil ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME), "a failed run adopts nothing"
   ensure
     AccountGrants::Reconciliation.define_method(:call, real)
   end
@@ -146,24 +148,37 @@ class AccountGrantsReconcileTaskTest < ActiveSupport::TestCase
     setup do
       (Projections::Registry.classes - [ PROJECTION ]).each { ProjectionVersion.stamp!(it) }
       ProjectionVersion.where(name: PROJECTION::PROJECTION_NAME).delete_all
-      reconcile
+      @out = reconcile
     end
 
-    should "keep the flags and fail verify when the rebuild variable is missing" do
-      run_task("events:projections:stamp_if_no_events")
-
-      assert_nil ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME)
-      assert_equal [ [ true, false ], [ false, true ] ], [ @editor, @planner ].map { flags(it) }
-      assert_raises(SystemExit) { capture_io { Rake::Task["events:projections:verify"].invoke } }
-    end
-
-    should "give the flags back from the events when rebuilt, then pass verify" do
-      run_task("events:projections:rebuild_if_stale", PROJECTION::PROJECTION_NAME)
-      run_task("events:projections:stamp_if_no_events")
-
+    should "adopt it once the stream holds what the flags hold, so verify passes without a rebuild" do
+      assert_match "#{PROJECTION::PROJECTION_NAME}: adopted", @out
       assert_equal PROJECTION::CODE_VERSION, ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).version
       assert_equal [ [ true, false ], [ false, true ], [ false, false ] ], [ @editor, @planner, @member ].map { flags(it) }
       assert_match "OK", run_task("events:projections:verify")
     end
+
+    should "adopt flags a rebuild from the stream writes back the same" do
+      adopted = TenantUser.unscoped.where(tenant_id: @tenant.id).order(:id).map { it.slice(:id, *PROJECTION::COLUMNS) }
+
+      run_task("events:projections:rebuild", PROJECTION::PROJECTION_NAME)
+
+      assert_equal adopted, TenantUser.unscoped.where(tenant_id: @tenant.id).order(:id).map { it.slice(:id, *PROJECTION::COLUMNS) }
+    end
+
+    should "leave the stamp alone when run again" do
+      stamped_at = ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).applied_at
+
+      assert_no_match "adopted", reconcile
+      assert_equal stamped_at, ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).applied_at
+    end
+  end
+
+  should "not adopt a projection stamped at an older version, which still needs its rebuild" do
+    ProjectionVersion.stamp!(PROJECTION)
+    ProjectionVersion.where(name: PROJECTION::PROJECTION_NAME).update_all(version: PROJECTION::CODE_VERSION - 1)
+
+    assert_no_match "adopted", reconcile
+    assert_equal PROJECTION::CODE_VERSION - 1, ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).version
   end
 end

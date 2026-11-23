@@ -255,7 +255,7 @@ and the policies read the columns. Nothing else writes them: grant and remove
 through `AccountGrants::CommandHandler`, as the four editor and planner
 operations do.
 
-`account_grants:reconcile` treats the flag as the truth. A flag set with no
+`events:reconcile` treats the flag as the truth. A flag set with no
 grant recorded becomes an `already_held` addition with no grantor. A recorded
 grant whose flag is clear, or whose account is gone, becomes a removal. An
 account with no person is recorded too, with no person. A destroyed account's
