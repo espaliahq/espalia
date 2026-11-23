@@ -5,8 +5,11 @@
 class Operations::OrgGraph::Editors < Operations::Base
   include Operations::OrgGraph::EditorSupport
 
-  description "List who may change the whole Org Graph: the Org Graph editors an admin chose, and the " \
-              "tenant's admins, who always may. Each with a person id and name. Admins only."
+  description "List who may change the whole Org Graph: the Org Graph editors an admin chose, and the tenant's " \
+              "admins, who always may. Each with a person id and name. Each editor also has since (the date it " \
+              "took effect; for one already_held, the date Espalia recorded it), added_by (who made them one, " \
+              "or null when no one did) and already_held (true when they were an editor before Espalia recorded " \
+              "who gave it). Admins only."
   category :read
   approval :none
 

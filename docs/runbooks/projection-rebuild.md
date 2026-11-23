@@ -95,6 +95,16 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: `account_grants/account_flags` v1 (grants as events, [#539](https://github.com/espaliahq/espalia/issues/539)), 2026-11-23
+
+Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection is new and now the only writer of `tenant_users.org_graph_editor` and `tenant_users.team_planner`.
+
+Predeploy step 2b, `account_grants:reconcile`, first records each flag already set as an `already_held` event with no grantor, an account with no person included. The rebuild's reset then sets both flags on every live account to what the stream holds, in one statement, and its replay changes nothing. So no grant is ever cleared, and a rebuild that stops part way leaves the flags right. Step 6 runs the task again and records any grant the previous release gave or took back after the rebuild. If the task fails for any tenant, it fails the deploy before the rebuild.
+
+**On this first deploy, nobody may add or remove an editor or a planner between step 2b and step 3.** The previous release writes only the flag, and the reset sets the flags from the events step 2b wrote, so a change in those seconds is undone. After step 3 it is safe: step 6 records it, and a later command on that account first records what its flag says. Later deploys don't need the rule, since the release they replace writes events.
+
+Forgetting the variable is safe. Step 4 finds events for a projection that was never stamped, so it resets nothing, `verify` fails and the previous release keeps serving. Set the variable and deploy again.
+
 #### Recorded: `org_graph/structure` v3 (a copied type remembers its source, [#494](https://github.com/espaliahq/espalia/issues/494))
 
 Path A: `REBUILD_ON_DEPLOY=org_graph/structure`, removed once the deploy is live. The migration adds `org_taxonomy_levels.copied_from_level_id`, and the rebuild fills it from each declaration that copied a structure. A plan then names the copy a misfit unit would take: "Here its type would be Crew". Every other column is unchanged.

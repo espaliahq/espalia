@@ -153,6 +153,63 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Unit Created can't be changed back", flash[:alert]
     end
 
+    should "show the organisation's activity in the sidebar of a tenant with no units yet" do
+      ActsAsTenant.with_tenant(@tenant) do
+        editor = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant, name: "Brook Tamsin"))
+        AccountGrants::CommandHandler.new.add(:org_graph_editor, editor)
+      end
+
+      get tenant_org_graph_path
+
+      sidebar = Nokogiri::HTML5(response.body).at_css("##{Views::Tenant::OrgGraph::Sidebar::ID}")
+      assert_equal "Organisation activity", sidebar.at_css("h2").text
+      assert_includes sidebar.text, "Made Brook Tamsin an Org Graph editor"
+      assert_includes sidebar.text, "Can't change back: #{OrgGraph::ChangeBackHandler::GRANT}"
+    end
+
+    should "name an account with no person in the organisation's activity" do
+      ActsAsTenant.with_tenant(@tenant) do
+        unlinked = create(:tenant_user, tenant: @tenant)
+        AccountGrants::CommandHandler.new.add(:org_graph_editor, unlinked)
+        AccountGrants::CommandHandler.new.remove(:org_graph_editor, tenant_user_id: unlinked.id, person_id: nil)
+      end
+
+      get tenant_org_graph_path
+
+      sidebar = Nokogiri::HTML5(response.body).at_css("##{Views::Tenant::OrgGraph::Sidebar::ID}")
+      assert_includes sidebar.text, "Made an account with no person an Org Graph editor"
+      assert_includes sidebar.text, "An account with no person is no longer an Org Graph editor"
+    end
+
+    should "open the organisation's activity beside a unit, and link back to the unit's" do
+      org = build_org_graph(@tenant)
+
+      get tenant_org_graph_path(unit: org[:platform])
+      sidebar = Nokogiri::HTML5(response.body).at_css("##{Views::Tenant::OrgGraph::Sidebar::ID}")
+      assert_equal tenant_org_graph_path(unit: org[:platform], activity: "organisation"),
+                   sidebar.at_css("a[href*='activity=organisation']")["href"]
+
+      get tenant_org_graph_path(unit: org[:platform], activity: "organisation")
+      sidebar = Nokogiri::HTML5(response.body).at_css("##{Views::Tenant::OrgGraph::Sidebar::ID}")
+      assert_equal "Organisation activity", sidebar.at_css("h2").text
+      assert_includes sidebar.text, "No activity yet"
+      assert_includes sidebar.text, "Back to Platform's activity"
+    end
+
+    should "return to the organisation's activity when one of its changes can't be changed back" do
+      org = build_org_graph(@tenant)
+      entry = ActsAsTenant.with_tenant(@tenant) do
+        editor = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant))
+        AccountGrants::CommandHandler.new.add(:org_graph_editor, editor)
+        OrgUnitActivity.for_organisation.last
+      end
+
+      post change_back_tenant_org_graph_path, params: { entry_id: entry.id, unit: org[:platform], activity: "organisation" }
+
+      assert_redirected_to tenant_org_graph_path(unit: org[:platform], activity: "organisation")
+      assert_equal OrgGraph::ChangeBackHandler::GRANT, flash[:alert].delete_prefix("Can't change back: ")
+    end
+
     should "say so when the tenant has no units" do
       get tenant_org_graph_path
 
@@ -235,6 +292,23 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :redirect
       assert_equal "You are not authorized to perform this action.", flash[:alert]
+    end
+
+    should "refuse the organisation's activity, with no unit open or beside one" do
+      org = build_org_graph(@tenant)
+      ActsAsTenant.with_tenant(@tenant) do
+        editor = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant, name: "Rowan Grant"))
+        AccountGrants::CommandHandler.new.add(:org_graph_editor, editor)
+      end
+
+      [ tenant_org_graph_path, tenant_org_graph_path(unit: org[:platform], activity: "organisation") ].each do |path|
+        get path
+
+        assert_response :redirect
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+        follow_redirect!
+        assert_not_includes response.body, "Rowan Grant", path
+      end
     end
 
     should "refuse to change anything back" do
