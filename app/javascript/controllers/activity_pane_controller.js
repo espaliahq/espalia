@@ -4,7 +4,7 @@
 // below-lg fixed overlay), the persistence cookie
 // (`assessment_activity_pane_open`), the `?activity=open|closed`
 // URL param (the key is a value; `Kit::SidePanel` sets its own), and the data-pane-state attribute the CSS keys off.
-// Uses stimulus-use's `useTransition` for slide+fade animations and
+// Uses stimulus-use's `useTransition` for the fade and
 // `useClickOutside` (mobile only) so tapping the matrix dismisses the
 // pane like the scoring sidebar does.
 //
@@ -35,6 +35,9 @@ const FIT_BOTTOM_GAP_PX = 16
 // panes on one page don't take each other's entries.
 const HISTORY_KEY = "sidePanelOverlay"
 
+// Opacity only: translating the pane off-screen during enter would push it
+// out of the viewport and delay the lazy turbo-frame's IntersectionObserver
+// fetch, racing with clicks on the filter chips the moment it opens.
 const FADE = {
   enterActive: "transition-opacity duration-150 ease-out",
   enterFrom: "opacity-0",
@@ -43,7 +46,7 @@ const FADE = {
   leaveFrom: "opacity-100",
   leaveTo: "opacity-0"
 }
-const FADE_CLASSES = [...new Set(Object.values(FADE).join(" ").split(" "))]
+const FADE_CLASSES = Object.values(FADE).join(" ").split(" ")
 
 let refocusAfterRender = null
 let refocusExpiry = null
@@ -89,10 +92,6 @@ export default class extends BaseController {
     super.connect()
     const initialState = this.#computeInitialState()
 
-    // Opacity-only fade — translating the pane off-screen during enter
-    // would push it out of the viewport and delay the lazy turbo-frame's
-    // IntersectionObserver fetch, racing with user clicks on filter chips
-    // inside the pane the moment it opens.
     // Turbo's snapshot of a page left mid-fade keeps that fade's classes.
     this.paneTarget.classList.remove(...FADE_CLASSES)
     useTransition(this, { element: this.paneTarget, ...FADE, hiddenClass: "hidden", transitioned: initialState === "open" })
