@@ -113,7 +113,8 @@ module EventStreamNaming
   end
 
   # Returns the stream name a tenant's account grants move to: who was made an
-  # Org Graph editor or a planner, and later each account's role.
+  # Org Graph editor or a planner, and later each account's role. Until that
+  # move, AccountGrants::Repository reads and writes {account_grants_stream}.
   #
   # @param tenant [Tenant, nil] override tenant (defaults to ActsAsTenant.current_tenant)
   # @return [String] the tenant-namespaced stream name

@@ -67,6 +67,8 @@ class TenantStreams::Repository
     raise NotImplementedError, "#{self.class} must define #stream_name"
   end
 
+  # The expected version only catches a write between load and store; the
+  # lock also holds the no-op checks the aggregate makes, such as a duplicate add.
   def lock_stream(tenant)
     sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", stream_name(tenant) ])
     ActiveRecord::Base.connection.execute(sql)

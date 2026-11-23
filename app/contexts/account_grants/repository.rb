@@ -3,7 +3,7 @@
 # Loads and saves a tenant's account grants, held in one stream per tenant.
 #
 # @example
-#   AccountGrants::Repository.new.with_grants { |grants| grants.add(:planner, ...) }
+#   AccountGrants::Repository.new.with_grants { |grants| grants.add(:team_planner, ...) }
 class AccountGrants::Repository < TenantStreams::Repository
   alias with_grants with_aggregate
   alias load_grants load_aggregate
