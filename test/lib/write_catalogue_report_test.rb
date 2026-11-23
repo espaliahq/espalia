@@ -49,4 +49,11 @@ class WriteCatalogueReportTest < ActiveSupport::TestCase
 
     assert_equal [ 2 ], WriteCatalogueReport.new(rows).plain_tables["budget_lines"].map(&:count)
   end
+
+  should "read an upsert recorded before upserts kept their updated columns" do
+    rows = [ write("people", "update", columns: %w[manager_id], projection: "org/people", site: nil),
+             write("people", "upsert", columns: %w[manager_id]).except("updates") ]
+
+    assert_empty findings(*rows)
+  end
 end

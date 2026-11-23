@@ -12,7 +12,7 @@ module WriteCatalogue
   WRITE = /\A\s*(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+"?(\w+)"?/i
   # A quoted string, an assigned column (quoted or bare), a quoted identifier,
   # a parenthesis, or a keyword that ends a SET clause.
-  SET_TOKEN = /'(?:[^']|'')*'|"((?:[^"]|"")+)"\s*=(?!=)|"(?:[^"]|"")*"|(\w+)\s*=(?!=)|\(|\)|\b(?:WHERE|RETURNING)\b/i
+  SET_TOKEN = /'(?:[^']|'')*'|"((?:[^"]|"")+)"\s*=(?!=)|"(?:[^"]|"")*"|(\w+)\s*=(?!=)|\(|\)|\b(?:FROM|WHERE|RETURNING)\b/i
   # Written by gems, never by our code.
   INFRASTRUCTURE = /\A(event_store_|solid_|ar_internal_metadata\z|schema_migrations\z)/
   SOURCE_ROOTS = [ Rails.root.join("app").to_s, Rails.root.join("lib").to_s ].freeze
@@ -113,7 +113,7 @@ module WriteCatalogue
         if token == "(" then depth += 1
         elsif token == ")" then depth -= 1
         elsif depth.zero?
-          break if token.match?(/\A(WHERE|RETURNING)\z/i)
+          break if token.match?(/\A(FROM|WHERE|RETURNING)\z/i)
 
           name = quoted&.gsub('""', '"') || bare
           names << name if name

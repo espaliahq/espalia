@@ -37,4 +37,10 @@ class WriteCatalogueTest < ActiveSupport::TestCase
     assert_equal "upsert", WriteCatalogue.send(:operation, "insert", sql)
     assert_equal %w[b], WriteCatalogue.send(:conflict_updates, "upsert", sql)
   end
+
+  should "end the SET clause at an update's top-level FROM" do
+    sql = 'UPDATE "a" SET "x" = 1 FROM "b" INNER JOIN "c" ON "c"."tenant_id" = "b"."id" WHERE "a"."id" = "b"."id"'
+
+    assert_equal %w[x], set_columns(sql)
+  end
 end
