@@ -18,6 +18,10 @@ class PausedRunTest < ActiveSupport::TestCase
     assert_includes notice, "docs/guidelines/dev-environment.md"
   end
 
+  should "round a pause to the nearest minute, whatever the clocks count in" do
+    assert_match(/about 2 minutes \(119s\)/, run_with(wall: [ 0, 219 ], monotonic: [ 0, 100 ]).notice)
+  end
+
   should "give a short pause in seconds" do
     assert_match(/gained 45 seconds on/, run_with(wall: [ 0, 145 ], monotonic: [ 0, 100 ]).notice)
   end

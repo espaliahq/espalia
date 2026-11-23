@@ -50,6 +50,6 @@ class PausedRun
   def duration(seconds)
     return "#{seconds.round} seconds" if seconds < 90
 
-    "about #{(seconds / 60).round} minutes (#{seconds.round}s)"
+    "about #{(seconds / 60.0).round} minutes (#{seconds.round}s)"
   end
 end
