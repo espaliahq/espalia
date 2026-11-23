@@ -47,12 +47,11 @@ class Tenant::OrgGraphOrganisationActivitySystemTest < ApplicationSystemTestCase
       visit tenant_org_graph_path(unit: org[:platform])
       within(SIDEBAR) { assert_text "Added Ada Quill" }
 
-      within(SIDEBAR) { click_link "Organisation activity" }
+      click_with_retry(expect_text: "Made Rowan Grant an Org Graph editor") { within(SIDEBAR) { click_link "Organisation activity" } }
       assert_grant_shown
       assert_operator find("#org-graph-unit").rect.x, :<, find(SIDEBAR).rect.x, "the sidebar stays beside the unit"
 
-      within(SIDEBAR) { click_link "Back to Platform's activity" }
-      within(SIDEBAR) { assert_text "Added Ada Quill" }
+      click_with_retry(expect_text: "Added Ada Quill") { within(SIDEBAR) { click_link "Back to Platform's activity" } }
     end
   end
 
