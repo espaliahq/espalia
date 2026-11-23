@@ -628,11 +628,20 @@ believes are one. `StressSeedTest` hung a precommit that way, on a single
 ([#546](https://github.com/espaliahq/espalia/issues/546)). A table no vacuum has
 visited has `reltuples = -1`, and the planner estimates it from its size.
 
-**The tell is one query `active` for minutes with no wait event and nothing
-blocking it** (`pg_stat_activity`, `pg_blocking_pids`), in a run where the other
-workers have finished. To reproduce it, run `VACUUM` from a second connection
-part-way through the test, with a `statement_timeout` set: a manual vacuum
-does the same damage whatever the setting.
+**Dead rows now stay until the database is next emptied.** Each parallel run
+truncates its worker databases, and `db:test:prepare`, which precommit runs,
+rebuilds the base one. Single-file runs in between add to the base database's
+dead rows. `DATABASE_URL` names a database the run was lent, such as a second
+worktree's, and the helper leaves that one alone, so its tests stay exposed.
+
+**A test connection cancels any statement after two minutes**
+(`statement_timeout` in `config/database.yml`), so a query that hangs for any
+reason fails its test with the SQL in the error. Before that the tell was one
+query `active` for minutes with no wait event and nothing blocking it
+(`pg_stat_activity`, `pg_blocking_pids`), in a run where the other workers had
+finished. To reproduce the bad plan, run `VACUUM` from a second connection
+part-way through the test: a manual vacuum does the same damage whatever the
+setting.
 
 ## Clear Any CDP Emulation You Set
 
