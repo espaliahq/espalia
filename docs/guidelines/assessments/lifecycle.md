@@ -149,7 +149,7 @@ The per-side `Complete` is a **projected, event-sourced fact**: [`CurrentAssessm
 - Auto-aligned `AssessmentAligned` events share the `AlignmentStarted` timestamp. A matching cell agreed seconds or minutes later was skipped at the start.
 - `assessments_capability_get` shows each cell's `self`, `manager` and `aligned` values with `self_carried` / `manager_carried`. A start made before the rule changed skipped every cell with a carried side.
 - A side with no recorded value never matches. Below the assessed level the chip shows an assumed "Consistently"; that is a default, not a rating.
-- Otherwise check for a framework publish during the cycle that mapped the capability as `evolved`. The read model re-keys the ratings to the survivor's stable id; the aggregate's rating maps stay under the retired id, so the start's `cell_keys` (survivor ids) never match them. This is a gap, not a design.
+- Otherwise check for a framework publish during the cycle that mapped the capability as `evolved`. The read model re-keys the ratings to the survivor's stable id; the aggregate's rating maps stay under the retired id, so the start's `cell_keys` (survivor ids) never match them. This is a gap, not a design: [#538](https://github.com/espaliahq/espalia/issues/538) tracks it, with the other commands the stale ids break.
 
 **Cross-cycle seeding (carry-forward, ADR-20).** When a person enrols in a
 new cycle, their ratings are pre-populated from their **most recent prior
