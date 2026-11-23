@@ -745,6 +745,17 @@ find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 - If you must use `within`, scope it to a container that is NOT replaced (e.g. the parent `tr` or a wrapper div that sits outside the Turbo Stream target)
 - This applies to any element inside a Turbo Stream replacement target: rating cells, scoring panels, category headers, contribution labels
 
+**Out of an `assert_no_selector` on the page, it means the wait ran out with
+no poll finding the page clear.** Capybara swallows the error and polls again
+until its wait runs out, and the assertion passes at the first poll that finds
+no match. So each poll found a match, and the error came from reading one for
+the failure message: a request that took the whole wait, or a re-render that
+keeps putting a match back. With `wait: 0` it can escape on the first look. Inside a `within`,
+Capybara finds a stale scope again where it can and raises the error when it
+cannot, which is the rule above. If several workers failed in the same second,
+look for a paused machine too:
+[dev-environment.md → A run where several workers error in the same second](dev-environment.md#a-run-where-several-workers-error-in-the-same-second).
+
 **`visit` itself can raise it when the page replaces itself while loading.**
 Capybara's `visit` is a bare `navigate.to`, which holds no element, but
 ChromeDriver waits on the document it loaded. A page whose script navigates
