@@ -4,7 +4,8 @@
 # clock and has its wall clock corrected when it wakes, so the lead the wall
 # clock gains is the time spent paused.
 class PausedRun
-  THRESHOLD_SECONDS = 30
+  # Capybara's wait: a shorter pause cannot fail one on its own.
+  THRESHOLD_SECONDS = 10
 
   # @param wall [#call] seconds on the wall clock
   # @param monotonic [#call] seconds on the monotonic clock
@@ -21,18 +22,27 @@ class PausedRun
     (@wall.call - @wall_start) - (@monotonic.call - @monotonic_start)
   end
 
-  # @return [String, nil] what to tell whoever reads the run, or nil when it was not paused
+  # @return [String, nil] what to tell whoever reads the run, or nil when the clocks kept together
   def notice
     paused = seconds_paused
     return if paused < THRESHOLD_SECONDS
 
     <<~NOTICE
 
-      This machine was paused for about #{duration(paused)} during the run: the wall clock gained
-      #{paused.round}s on the monotonic clock. A host that sleeps does this. Browser calls in
-      flight when it woke fail together, with "Timeout when executing request" or a stale
-      element. Rerun before reading those as test failures (docs/guidelines/dev-environment.md).
+      The wall clock gained #{duration(paused)} on the monotonic clock during this run, as it does
+      when the machine is paused: a host that sleeps freezes the devcontainer's VM. Browser calls
+      in flight when it wakes fail together, in several workers in the same second, with
+      "Timeout when executing request" or a stale element. If this run has failures like that,
+      rerun it; whatever fails again is real (docs/guidelines/dev-environment.md).
     NOTICE
+  end
+
+  # Prints the notice, if there is one.
+  #
+  # @param io [IO]
+  # @return [void]
+  def report(io = $stdout)
+    notice&.then { |text| io.puts text }
   end
 
   private
@@ -40,6 +50,6 @@ class PausedRun
   def duration(seconds)
     return "#{seconds.round} seconds" if seconds < 90
 
-    "#{(seconds / 60).round} minutes"
+    "about #{(seconds / 60).round} minutes (#{seconds.round}s)"
   end
 end

@@ -12,22 +12,31 @@ class PausedRunTest < ActiveSupport::TestCase
   end
 
   should "name the pause when the wall clock gained on the monotonic clock" do
-    notice = run_with(wall: [ 1_000, 2_778 ], monotonic: [ 50, 1_164 ]).notice
+    notice = run_with(wall: [ 1_000.0, 2_778.2 ], monotonic: [ 50.0, 1_164.0 ]).notice
 
-    assert_includes notice, "paused for about 11 minutes"
-    assert_includes notice, "gained\n664s"
+    assert_match(/gained about 11 minutes \(664s\) on the monotonic clock/, notice)
     assert_includes notice, "docs/guidelines/dev-environment.md"
   end
 
   should "give a short pause in seconds" do
-    assert_includes run_with(wall: [ 0, 145 ], monotonic: [ 0, 100 ]).notice, "paused for about 45 seconds"
+    assert_match(/gained 45 seconds on/, run_with(wall: [ 0, 145 ], monotonic: [ 0, 100 ]).notice)
   end
 
-  should "say nothing about a gap a clock correction could explain" do
-    assert_nil run_with(wall: [ 0, 129 ], monotonic: [ 0, 100 ]).notice
+  should "say nothing about a gap shorter than a Capybara wait" do
+    assert_nil run_with(wall: [ 0, 109 ], monotonic: [ 0, 100 ]).notice
   end
 
   should "say nothing when the wall clock was set back" do
     assert_nil run_with(wall: [ 1_000, 900 ], monotonic: [ 0, 100 ]).notice
+  end
+
+  should "print the notice once, and nothing for a run that kept time" do
+    paused = StringIO.new
+    run_with(wall: [ 0, 145 ], monotonic: [ 0, 100 ]).report(paused)
+    quiet = StringIO.new
+    run_with(wall: [ 0, 100 ], monotonic: [ 0, 100 ]).report(quiet)
+
+    assert_equal 1, paused.string.scan("gained 45 seconds").size
+    assert_empty quiet.string
   end
 end

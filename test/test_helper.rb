@@ -14,7 +14,7 @@ require_relative "support/pay_figure_assertions"
 require_relative "support/paused_run"
 
 paused_run = PausedRun.new
-Minitest.after_run { (notice = paused_run.notice) && puts(notice) }
+Minitest.after_run { paused_run.report }
 
 OmniAuth.config.test_mode = true
 OmniAuth.config.logger = Rails.logger
