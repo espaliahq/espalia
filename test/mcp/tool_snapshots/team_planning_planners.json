@@ -1,6 +1,6 @@
 {
   "name": "team_planning_planners",
-  "description": "List who may create Team Planning plans: the planners an admin chose, and the tenant's admins, who always may. Each with a person id and name. Admins only.",
+  "description": "List who may create Team Planning plans: the planners an admin chose, and the tenant's admins, who always may. Each with a person id and name. Each planner also has since (the date it took effect), added_by (who made them one, or null when no one did) and already_held (true when they were a planner before Espalia recorded who gave it). Admins only.",
   "inputSchema": {
     "type": "object",
     "properties": {},

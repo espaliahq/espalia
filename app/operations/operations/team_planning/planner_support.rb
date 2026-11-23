@@ -7,6 +7,8 @@
 # tenant_users.team_planner (decision 7), in the Org Graph editor
 # tools' shape.
 module Operations::TeamPlanning::PlannerSupport
+  include Operations::GrantHoldersPayload
+
   private
 
   # @raise [Pundit::NotAuthorizedError] unless the caller is a tenant admin
@@ -23,15 +25,6 @@ module Operations::TeamPlanning::PlannerSupport
       raise Operations::Base::ParameterError, "person_id: that person has no account in this organisation"
   end
 
-  # Admins may always create a plan, so they are listed apart from the
-  # planners an admin chose.
-  def planners_payload
-    accounts = TenantUser.where(role: :admin).or(TenantUser.where(team_planner: true)).includes(:person, :user)
-    admins, planners = accounts.partition(&:admin?)
-    { planners: planners.map { account_payload(it) }.sort_by { it[:name].to_s }, admins: admins.map { account_payload(it) }.sort_by { it[:name].to_s } }
-  end
-
-  def account_payload(account)
-    { person_id: account.person_id, name: account.person&.name || account.user&.email }
-  end
+  # Admins may always create a plan, so they are listed apart from the planners an admin chose.
+  def planners_payload = grant_holders_payload(:team_planner, :planners)
 end

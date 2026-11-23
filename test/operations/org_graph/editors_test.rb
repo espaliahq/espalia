@@ -107,4 +107,36 @@ class Operations::OrgGraph::EditorsTest < ActiveSupport::TestCase
 
     assert_empty grant_events
   end
+
+  def listed(name, result = call(:Editors)) = result[:editors].find { it[:name] == name }
+
+  should "say since when each editor holds it, and who made them one" do
+    travel_to Date.new(2026, 11, 2)
+    result = call(:AddEditor, person_id: @member.person_id)
+
+    assert_equal({ person_id: @member.person_id, name: "Mo Member", since: "2026-11-02", added_by: "Ada Admin", already_held: false },
+                 listed("Mo Member", result))
+    assert_equal listed("Mo Member", result), listed("Mo Member")
+  end
+
+  should "leave since and who blank for a flag the stream doesn't hold yet, and fill since once it is reconciled" do
+    assert_equal [ nil, nil, nil ], listed("Eve Editor").values_at(:since, :added_by, :already_held)
+
+    AccountGrants::Reconciliation.new(@tenant).call
+
+    assert_equal [ @tenant.today.iso8601, nil, true ], listed("Eve Editor").values_at(:since, :added_by, :already_held)
+  end
+
+  should "name a editor given by someone no longer on record as a former member" do
+    ActsAsTenant.with_tenant(@tenant) { AccountGrants::CommandHandler.new.add(:org_graph_editor, @member, added_by_id: SecureRandom.uuid_v7) }
+
+    assert_equal Person::FORMER_MEMBER, listed("Mo Member")[:added_by]
+  end
+
+  should "leave out a editor whose account is gone" do
+    call(:AddEditor, person_id: @member.person_id)
+    ActsAsTenant.with_tenant(@tenant) { @member.destroy! }
+
+    assert_equal [ "Eve Editor" ], names(call(:Editors)[:editors])
+  end
 end

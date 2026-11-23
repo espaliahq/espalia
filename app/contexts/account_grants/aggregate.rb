@@ -20,21 +20,31 @@ class AccountGrants::Aggregate
   # The grants, named as the tenant_users columns that hold them.
   GRANTS = EVENTS.keys.freeze
 
+  # What the addition that gave a held grant recorded: when it took effect,
+  # who gave it, and whether it was held before grants were events.
+  Holding = Data.define(:person_id, :since, :added_by_id, :already_held)
+
   def initialize
-    @holders = GRANTS.index_with { {} }
+    @holdings = GRANTS.index_with { {} }
   end
 
   # @param grant [Symbol] one of {GRANTS}
   # @param tenant_user_id [String]
   # @return [Boolean]
   def holds?(grant, tenant_user_id)
-    holders(grant).key?(tenant_user_id.to_s)
+    holdings(grant).key?(tenant_user_id.to_s)
   end
 
   # @param grant [Symbol] one of {GRANTS}
   # @return [Hash{String => String, nil}] each holding account's id to its person's id
   def holders(grant)
-    @holders.fetch(grant)
+    holdings(grant).transform_values(&:person_id)
+  end
+
+  # @param grant [Symbol] one of {GRANTS}
+  # @return [Hash{String => Holding}] each holding account's id to how it came to hold the grant
+  def holdings(grant)
+    @holdings.fetch(grant)
   end
 
   # @param grant [Symbol] one of {GRANTS}
@@ -71,7 +81,13 @@ class AccountGrants::Aggregate
   end
 
   EVENTS.each do |grant, events|
-    on(events.fetch(:added)) { |event| @holders[grant][event.data[:tenant_user_id]] = event.data[:person_id] }
-    on(events.fetch(:removed)) { |event| @holders[grant].delete(event.data[:tenant_user_id]) }
+    on(events.fetch(:added)) do |event|
+      data = event.data
+      @holdings[grant][data[:tenant_user_id]] = Holding.new(
+        person_id: data[:person_id], since: Date.iso8601(data[:effective_on]),
+        added_by_id: data[:added_by_id], already_held: data[:already_held] == true
+      )
+    end
+    on(events.fetch(:removed)) { |event| @holdings[grant].delete(event.data[:tenant_user_id]) }
   end
 end
