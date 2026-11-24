@@ -158,6 +158,41 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    should "say in the confirm that matching ratings are agreed, and agree a carried match" do
+      # The manager's L1 rating is carried and unconfirmed; the report rated
+      # the same value this cycle.
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        handler.rate_self(@report.id, @framework_id, @cap_stable,
+          level_ordinal: 1, frequency: "consistent", cycle_id: @cycle_id)
+        handler.rate_as_manager(@report.id, @framework_id, @cap_stable,
+          level_ordinal: 1, frequency: "consistent", cycle_id: @cycle_id,
+          source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
+      end
+
+      visit assessment_path(@report_assignment)
+      assert_selector "h1", text: "Report Alex"
+      assert_selector %(form[data-turbo-confirm*="agree every rating where you already match"] button),
+        text: "Start alignment"
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Start alignment");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
+      end
+      assert_text "Aligning"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        l1 = AssessmentLevelRating.find_by!(
+          cycle_id: @cycle_id, person_id: @report.id,
+          capability_stable_id: @cap_stable, level_ordinal: 1
+        )
+        assert_equal "consistent", l1.aligned_frequency
+        assert_equal "seeded", l1.manager_rating_source, "the agreed value leaves the rating's provenance alone"
+      end
+    end
+
     should "render the inline alignment pill once aligning" do
       seed_alignment_started!
       visit assessment_path(@report_assignment, capability: @cap_stable)

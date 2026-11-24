@@ -16,7 +16,9 @@ class Operations::Assessments::StartAlignment < Operations::Base
 
   description "Start the alignment conversation for one of your direct reports — against their own role, or " \
               "against another role or level with as_role_id / as_level_ordinal. Discloses your ratings on " \
-              "that role's cells to the report and freezes both parties' ratings there."
+              "that role's cells to the report and freezes both parties' ratings there. Every cell where " \
+              "you and they have both recorded the same rating is agreed at once, recorded as agreed by " \
+              "you, carried-forward ratings included. A side with no recorded rating never matches."
   category :write
   approval :in_app
 

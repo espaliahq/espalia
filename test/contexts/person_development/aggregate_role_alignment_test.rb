@@ -187,12 +187,14 @@ class PersonDevelopment::AggregateRoleAlignmentTest < ActiveSupport::TestCase
       assert_equal [ "consistent", "some" ], shared_alignments.map { |e| e.data[:aligned_frequency] }
     end
 
-    should "never agree a carried-forward pair" do
+    should "agree a carried-forward pair, as starting confirms it" do
       rate_both(@pm_only, "consistent", source: "seeded")
 
       start(@pm_role, @pm_cells)
 
-      assert_empty events_of(PersonDevelopment::Events::AssessmentAligned)
+      assert_equal [ @pm_only ], events_of(PersonDevelopment::Events::AssessmentAligned).map { |e|
+        [ e.data[:capability_stable_id], e.data[:level_ordinal] ]
+      }
     end
   end
 

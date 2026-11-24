@@ -53,6 +53,9 @@ class AssessmentRoleAlignmentSystemTest < ApplicationSystemTestCase
         visit @pm_lens
         click_selector_with_js_fallback("button[data-modal-target-id='start-lens-alignment-modal']",
                                         expect_selector: "#start-lens-alignment-modal")
+        within("#start-lens-alignment-modal") do
+          assert_text "Ratings where you already match are agreed automatically, carried ones included."
+        end
         click_selector_with_js_fallback("#start-lens-alignment-modal button[type='submit']",
                                         expect_text: "Aligning with Alex against PM2")
 
