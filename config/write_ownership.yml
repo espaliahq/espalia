@@ -1,0 +1,372 @@
+# Who may write each table. test/db/write_ownership_test.rb holds every table to
+# an entry, and CI's write_ownership:check holds every recorded write to it.
+# How to write an entry: docs/architecture/direct-writes.md#declaring-a-table-or-a-writer
+
+# Assessment cycles
+
+assessment_cycle_enrollments:
+  owner: assessment_cycles/current_state
+assessment_cycles:
+  owner: assessment_cycles/current_state
+calibration_session_members:
+  owner: assessment_cycles/calibration_sessions
+calibration_sessions:
+  owner: assessment_cycles/calibration_sessions
+
+# Person development
+
+assessment_cycle_progress:
+  owner: person_development/current_assessment
+assessment_cycle_role_alignments:
+  owner: person_development/current_assessment
+assessment_explorations:
+  owner: person_development/current_assessment
+assessment_level_ratings:
+  owner: person_development/current_assessment
+person_framework_assignments:
+  owner: person_development/current_assessment
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+evidence_items:
+  owner: person_development/evidence_collection
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+evidence_links:
+  owner: person_development/evidence_collection
+evidence_requests:
+  owner: person_development/evidence_requests
+person_development_comments:
+  owner: person_development/comment_thread
+manager_assessment_delegations:
+  owner: person_development/assessment_authority
+recorded_reporting_managers:
+  owner: person_development/assessment_authority
+
+# Frameworks
+
+framework_behavioural_expectations:
+  owner: frameworks/published_state
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+framework_capabilities:
+  owner: frameworks/published_state
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+framework_capability_categories:
+  owner: frameworks/published_state
+  reason: >-
+    The evidence evaluation builds a throwaway tenant and rolls it back. The framework seed sets a
+    category's threshold on the row after publishing, which a rebuild loses; that is a finding to fix.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+    - lib/tasks/seed_framework.rake
+framework_capability_role_bindings:
+  owner: frameworks/published_state
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+framework_collaborators:
+  owner: frameworks/published_state
+framework_explorer_graphs:
+  owner: frameworks/published_state
+  reason: >-
+    ExplorerGraph caches the snapshot it builds from the stream, and the projection's reset deletes it.
+    A missing row is rebuilt on the next load.
+  writers:
+    - app/contexts/frameworks/explorer_graph.rb
+framework_levels:
+  owner: frameworks/published_state
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+framework_migration_mappings:
+  owner: frameworks/published_state
+framework_role_families:
+  owner: frameworks/published_state
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+framework_role_illustrations:
+  owner: frameworks/published_state
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+framework_roles:
+  owner: frameworks/published_state
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+framework_states:
+  owner: frameworks/published_state
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
+  writers:
+    - lib/tasks/evidence_suggestions_eval.rb
+framework_suggested_edits:
+  owner: frameworks/published_state
+framework_suggestion_comments:
+  owner: frameworks/suggestion_thread
+framework_publications:
+  owner: plain
+  reason: Tracks a background publish job. The publish itself is FrameworkVersionPublished.
+  writers:
+    - app/jobs/frameworks/publish_version_job.rb
+    - app/models/framework_publication.rb
+    - app/operations/operations/frameworks/publish_version.rb
+
+# Org Graph
+
+org_fact_ages:
+  owner: org_graph/fact_ages
+org_fact_periods:
+  owner: org_graph/history
+org_fact_providers:
+  owner: org_graph/structure
+org_leavers:
+  owner: org_graph/leavers
+org_memberships:
+  owner: org_graph/members
+org_taxonomy_levels:
+  owner: org_graph/structure
+org_unit_activities:
+  owner: org_graph/unit_activity
+org_unit_owners:
+  owner: org_graph/structure
+org_unit_successions:
+  owner: org_graph/structure
+org_units:
+  owner: org_graph/structure
+
+# Team Planning
+
+team_planning_history_entries:
+  owner: team_planning/history
+team_planning_removed_scenario_tallies:
+  owner: team_planning/history
+team_planning_overrides:
+  owner: team_planning/overrides
+team_planning_plan_members:
+  owner: team_planning/plan_members
+team_planning_plans:
+  owner: team_planning/plans
+team_planning_removed_scenarios:
+  owner: team_planning/scenarios
+team_planning_scenarios:
+  owner: team_planning/scenarios
+plan_encryption_keys:
+  owner: plain
+  reason: Destroying a key is how a plan's figures are shredded, and events can't be deleted.
+  writers:
+    - app/models/plan_key_store.rb
+
+# People and accounts
+
+people:
+  owner: org_graph/people_columns
+  columns:
+    - job_title
+    - manager_id
+    - status
+  reason: >-
+    The row holds a person's identifiers, which must be erasable. The HiBob adapter writes the
+    projection's columns only before a tenant is cut over, and the calibration seed moves reporting
+    lines on the row, a finding to fix.
+  writers:
+    - app/contexts/org_graph/forgetting.rb
+    - app/integrations/hris/hibob/adapter.rb
+    - app/models/tenant_user.rb
+    - lib/tasks/calibration_history_seed.rb
+    - lib/tasks/evidence_suggestions_eval.rb
+    - lib/tasks/example_seed.rb
+    - lib/tasks/stress_seed.rb
+tenant_users:
+  owner: account_grants/account_flags
+  columns:
+    - org_graph_editor
+    - team_planner
+  reason: >-
+    Links an account to a tenant, a person and a Slack user. The role stays plain until #540 moves it
+    to events.
+  writers:
+    - app/contexts/org_graph/forgetting.rb
+    - app/controllers/tenant/users_controller.rb
+    - app/integrations/hris/hibob/adapter.rb
+    - app/integrations/slack/identity.rb
+    - app/models/person.rb
+    - app/models/tenant.rb
+    - app/models/tenant_user.rb
+    - app/models/user.rb
+    - app/notifiers/slack_delivery_method.rb
+    - lib/tasks/example_seed.rb
+    - lib/tasks/stress_seed.rb
+users:
+  owner: plain
+  reason: Devise's sign-in identity, shared across tenants.
+  writers:
+    - app/controllers/settings/color_schemes_controller.rb
+    - app/models/person.rb
+    - app/models/user.rb
+    - app/notifiers/slack_delivery_method.rb
+    - lib/seed_admin.rb
+    - lib/tasks/admin.rake
+    - lib/tasks/example_seed.rb
+    - lib/tasks/stress_seed.rb
+tenants:
+  owner: plain
+  reason: >-
+    The tenant's configuration and operational stamps. Retention and scheduled forgetting stay plain
+    until Track C of #539 moves them to events.
+  writers:
+    - app/contexts/org_graph/people_cutover.rb
+    - app/contexts/org_graph/person_development_cutover.rb
+    - app/integrations/hris/hibob/adapter.rb
+    - app/models/pay_band.rb
+    - app/models/tenant.rb
+    - app/operations/operations/integrations/hris_title_preview.rb
+    - app/operations/operations/org_graph/update_staleness_threshold.rb
+    - app/operations/operations/tenants/disable_scheduled_forgetting.rb
+    - app/operations/operations/tenants/enable_scheduled_forgetting.rb
+    - app/operations/operations/tenants/set_time_zone.rb
+    - app/operations/operations/tenants/update_comparisons.rb
+    - app/operations/operations/tenants/update_retention_period.rb
+    - app/operations/operations/tenants/update_scoring_vocabulary.rb
+    - app/operations/operations/tenants/update_theme.rb
+    - lib/tasks/evidence_suggestions_eval.rb
+    - lib/tasks/example_seed.rb
+    - lib/tasks/stress_seed.rb
+
+# Sign-in and API access
+
+oauth_access_grants:
+  owner: plain
+  reason: Doorkeeper's grants; their history is login telemetry, not a domain decision.
+  writers:
+    - app/controllers/oauth/authorizations_controller.rb
+    - app/jobs/mcp/prune_stale_clients_job.rb
+oauth_access_tokens:
+  owner: plain
+  reason: Doorkeeper's tokens; their history is login telemetry, not a domain decision.
+  writers:
+    - app/controllers/settings/connected_clients_controller.rb
+    - app/jobs/mcp/prune_stale_clients_job.rb
+oauth_applications:
+  owner: plain
+  reason: MCP clients registered through Doorkeeper.
+  writers:
+    - app/controllers/mcp/client_registrations_controller.rb
+    - app/jobs/mcp/prune_stale_clients_job.rb
+mcp_pending_approvals:
+  owner: plain
+  reason: An MCP call waiting for approval. The call it approves runs through an Operation, whose events carry it.
+  writers:
+    - app/controllers/mcp/approvals_controller.rb
+    - app/services/mcp/request_handler.rb
+
+# Pay and cost inputs
+
+pay_bands:
+  owner: plain
+  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  writers:
+    - app/models/pay_band.rb
+    - app/operations/operations/tenants/pay_band_support.rb
+    - app/operations/operations/tenants/remove_pay_band.rb
+exchange_rates:
+  owner: plain
+  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  writers:
+    - app/operations/operations/tenants/pay_band_support.rb
+    - app/operations/operations/tenants/remove_exchange_rate.rb
+reference_currencies:
+  owner: plain
+  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  writers:
+    - app/operations/operations/tenants/pay_band_support.rb
+budget_lines:
+  owner: plain
+  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  writers:
+    - app/operations/operations/tenants/pay_band_support.rb
+    - app/operations/operations/tenants/remove_budget_line.rb
+planning_rule_defaults:
+  owner: plain
+  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  writers:
+    - app/operations/operations/tenants/set_planning_rule.rb
+
+# Working data
+
+hris_sync_issues:
+  owner: plain
+  reason: Each sync rebuilds them from what the HRIS reports; a to-do list, not a record.
+  writers:
+    - app/integrations/hris/level_handover.rb
+    - app/models/hris_sync_issue.rb
+hris_unit_parent_proposals:
+  owner: plain
+  reason: Each sync rebuilds them from what the HRIS reports; a to-do list, not a record.
+  writers:
+    - app/integrations/hris/level_mirror.rb
+evidence_placement_suggestions:
+  owner: plain
+  reason: AI output until someone accepts one, and accepting writes evidence through events.
+  writers:
+    - app/controllers/concerns/evidence_diff_submit.rb
+    - app/jobs/evidence/suggest_placements_job.rb
+    - app/models/evidence_placement_suggestion.rb
+feedback_drafts:
+  owner: plain
+  reason: A draft lives until the Slack modal submits it.
+  writers:
+    - app/integrations/slack/feedback.rb
+    - app/models/feedback_draft.rb
+feedback_exchange_acks:
+  owner: plain
+  reason: A ledger of what the feedback exchange sent, used to skip duplicates.
+  writers:
+    - app/models/feedback_exchange_ack.rb
+feedback_exchange_imports:
+  owner: plain
+  reason: A ledger of what the feedback exchange received, used to skip duplicates.
+  writers:
+    - app/contexts/org_graph/forgetting.rb
+    - app/integrations/feedback_exchange/importer.rb
+level_comparison_groups:
+  owner: plain
+  reason: Derived from ratings when a snapshot is taken, so it can be taken again.
+  writers:
+    - app/models/level_comparison_snapshot.rb
+level_comparison_snapshots:
+  owner: plain
+  reason: Derived from ratings when a snapshot is taken, so it can be taken again.
+  writers:
+    - app/models/level_comparison_snapshot.rb
+noticed_events:
+  owner: plain
+  reason: The Noticed gem's delivery queue.
+  writers:
+    - app/contexts/org_graph/forgetting.rb
+    - app/notifiers/application_notifier.rb
+noticed_notifications:
+  owner: plain
+  reason: The Noticed gem's delivery queue and read state.
+  writers:
+    - app/contexts/org_graph/forgetting.rb
+    - app/controllers/notifications_controller.rb
+    - app/models/evidence/conversation_reads.rb
+    - app/notifiers/application_notifier.rb
+
+# Infrastructure
+
+event_store_events:
+  owner: event_store
+event_store_events_in_streams:
+  owner: event_store
+projection_versions:
+  owner: plain
+  reason: Deploy bookkeeping, recording the code version each projection was last rebuilt at.
+  writers:
+    - app/models/projection_version.rb
