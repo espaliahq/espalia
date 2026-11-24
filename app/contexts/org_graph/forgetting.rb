@@ -29,6 +29,7 @@ class OrgGraph::Forgetting
   # The person holds every admin account the tenant has, so forgetting them
   # would leave no one able to run it.
   class LastAdmin < Refused
+    # @param msg [String] what to tell the admin who asked
     def initialize(msg = "This person holds the organisation's only admin account. " \
                          "Make someone else an admin, then forget them.")
       super
@@ -293,6 +294,7 @@ class OrgGraph::Forgetting
 
           next false
         end
+        raise LastAdmin if holds_every_admin?(TenantUser.where(person_id:).pluck(:id), TenantUser.where(role: "admin").pluck(:id))
 
         scrub_notifications(person.id, person.name)
         drop_notifications_to(person)
@@ -320,7 +322,7 @@ class OrgGraph::Forgetting
       held_back = 0
       forgotten = person_ids.select do |person_id|
         theirs = accounts.fetch(person_id, []).map(&:last)
-        if admins.any? && (admins - theirs).empty?
+        if holds_every_admin?(theirs, admins)
           held_back += 1
           next false
         end
@@ -331,6 +333,11 @@ class OrgGraph::Forgetting
       [ forgotten, held_back ]
     end
   end
+
+  # Read from the table, unlocked, so a held-back leaver costs no erase.
+  # AccountGrants::CommandHandler#unlink_forgotten counts again under the
+  # grants lock and decides.
+  def holds_every_admin?(theirs, admins) = admins.any? && (admins - theirs).empty?
 
   def due?(person_id, config, on)
     cutoff = TenantRetentionSetting.forget_left_on_or_before(@tenant, on, config:)

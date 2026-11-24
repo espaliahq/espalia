@@ -22,6 +22,8 @@ namespace :org_graph do
           forgot = OrgGraph::Forgetting.new(tenant).forget(args.fetch(:person_id), requested_by: context,
                                                                                    before_due: ENV["BEFORE_DUE"] == "1")
           puts "[#{tenant.id}] #{args[:person_id]} #{forgot ? "forgotten" : "was already forgotten"}"
+        rescue OrgGraph::Forgetting::Refused => e
+          abort "[#{tenant.id}] #{args[:person_id]} refused: #{e.message}"
         end
       end
     end

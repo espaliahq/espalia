@@ -72,6 +72,14 @@ class OrgGraph::ForgettingLastAdminTest < ActiveSupport::TestCase
       assert_whole(@leaver, @account, notification: @notification, plan_key: @plan_key)
     end
 
+    should "roll back a whole erase when the count under the grants lock refuses" do
+      run = forgetting
+      report = run.stub(:holds_every_admin?, false) { run.forget_due(on: TODAY, scheduled: true) }
+
+      assert_equal [ 0, 1 ], [ report.count, report.held_back ]
+      assert_whole(@leaver, @account, notification: @notification, plan_key: @plan_key)
+    end
+
     should "refuse a manual forget and leave them whole" do
       error = assert_raises(OrgGraph::Forgetting::LastAdmin) do
         forgetting.forget(@leaver.id, requested_by: @requester, on: TODAY)
