@@ -48,8 +48,11 @@ class TenantStreams::Reconciliation
     end
   end
 
-  private
-
+  # Records the differences on an aggregate the caller already holds under
+  # its stream's lock, as a command does before acting on what the table says.
+  #
+  # @param aggregate [AggregateRoot]
+  # @return [Report]
   def reconcile(aggregate)
     table = held_in_table
     stream = held_in_stream(aggregate)
@@ -68,6 +71,8 @@ class TenantStreams::Reconciliation
     differing.each { |key, row, recorded| record_changed(aggregate, key, row, recorded) }
     Report.new(added: missing.size, removed: cleared.size, changed: differing.size)
   end
+
+  private
 
   # @return [Hash{Object => Object}] each entry the table holds, keyed, with its row
   def held_in_table

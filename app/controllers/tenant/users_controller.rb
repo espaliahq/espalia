@@ -72,13 +72,12 @@ class Tenant::UsersController < ApplicationController
                          status: :see_other
     end
 
-    if demoting_last_admin?(@tenant_user, new_role)
-      return redirect_to tenant_user_path(@tenant_user),
-                         alert: "Cannot remove the last tenant administrator."
-    end
-
-    @tenant_user.update!(role: new_role)
-    redirect_to tenant_user_path(@tenant_user), notice: "Tenant role updated."
+    person = @tenant_user.ensure_person!
+    Operations::Tenants::SetAccountRole.call(context: pundit_user, params: { person_id: person.id, role: new_role })
+    redirect_to tenant_user_path(@tenant_user), notice: "Tenant role updated.", status: :see_other
+  rescue Operations::Base::ParameterError => e
+    redirect_to tenant_user_path(@tenant_user), alert: "The role could not be changed: #{e.message.sub(/\A\w+: /, '')}.",
+                                                status: :see_other
   end
 
   private
@@ -123,10 +122,6 @@ class Tenant::UsersController < ApplicationController
 
   def last_admin?(tenant_user)
     tenant_user.admin? && TenantUser.where(role: :admin).count <= 1
-  end
-
-  def demoting_last_admin?(tenant_user, new_role)
-    new_role.to_s == "member" && last_admin?(tenant_user)
   end
 
   # @return [Array<Tenant>]

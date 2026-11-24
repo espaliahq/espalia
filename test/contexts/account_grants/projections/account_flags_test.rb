@@ -18,7 +18,7 @@ class AccountGrants::Projections::AccountFlagsTest < ActiveSupport::TestCase
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
 
-  def flags(account) = TenantUser.unscoped.find(account.id).slice(*PROJECTION::COLUMNS).values
+  def flags(account) = TenantUser.unscoped.find(account.id).slice(*AccountGrants::Aggregate::GRANTS.map(&:to_s)).values
 
   def remove(grant, account) = @handler.remove(grant, tenant_user_id: account.id, person_id: account.person_id)
 
