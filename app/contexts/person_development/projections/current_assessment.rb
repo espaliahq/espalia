@@ -481,9 +481,11 @@ class PersonDevelopment::Projections::CurrentAssessment
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
-    # Completion counts only vetted (human) cells, so a seeded event can
-    # never change it — skip the ~8-query coverage pass (paid ~100× per
-    # person at bulk enrollment, and again on every replay).
+    # Completion counts only vetted cells, and a seeded value is vetted
+    # only once its cell is agreed, which comes later and freezes the
+    # rating. So a seeded event can never change it — skip the ~8-query
+    # coverage pass (paid ~100× per person at bulk enrollment, and again on
+    # every replay).
     refresh_completion(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
@@ -829,7 +831,8 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   # Recomputes current-level coverage for both perspectives after a rating
-  # change and stamps the per-side completion timestamps the /assessments list
+  # change, or an agreement on a carried cell, and stamps the per-side
+  # completion timestamps the /assessments list
   # reads. `status` is left as the lifecycle phase — completion lives in the
   # two timestamp columns because the two sides complete independently.
   #
@@ -870,8 +873,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     progress = find_progress(event)
     return unless progress
 
+    # An unknown home level leaves the level to LevelCoverage, as a rating does.
     level_ordinal = home_level_ordinal(event, progress)
-    return unless rating.level_ordinal == level_ordinal
+    return if level_ordinal && rating.level_ordinal != level_ordinal
 
     refresh_completion(event, progress: progress, level_ordinal: level_ordinal)
   end

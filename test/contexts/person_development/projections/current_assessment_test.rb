@@ -1021,6 +1021,22 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       assert_nil progress.manager_completed_at
     end
 
+    should "fall back to the enrollment's level when the home level can't be read" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @enrollment.update!(role_id: @role.role_id, level_ordinal: 2)
+        @level.destroy!
+      end
+      seeded = { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "consistent",
+                 cycle_id: @cycle_id, source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7 }
+      emit(PersonDevelopment::Events::SelfRated, **seeded)
+
+      emit(PersonDevelopment::Events::AssessmentAligned,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        aligned_frequency: "consistent", cycle_id: @cycle_id)
+
+      assert_not_nil reload_progress.self_completed_at
+    end
+
     should "leave completion alone when the agreed carried cell is off the assessed level" do
       emit(PersonDevelopment::Events::SelfRated,
         capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)

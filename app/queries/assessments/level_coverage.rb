@@ -5,7 +5,8 @@
 #
 # This is the durable "Assessment Complete" signal: the
 # {PersonDevelopment::Projections::CurrentAssessment} projection runs it on
-# every rating change and stamps the result onto
+# every rating change, and when a carried cell at the level is agreed or its
+# agreed value cleared, and stamps the result onto
 # {AssessmentCycleProgress#self_completed_at} / `#manager_completed_at`, which
 # the /assessments list then reads cheaply. The aligned perspective backs the
 # alignment-completion gate: {Assessments::AlignmentCompletionsController}
