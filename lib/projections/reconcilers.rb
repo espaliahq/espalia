@@ -12,7 +12,8 @@
 # `events:reconcile` runs the list at predeploy steps 2b and 6.
 module Projections::Reconcilers
   LIST = {
-    "account_grants" => { reconciler: "AccountGrants::Reconciliation", adopts: %w[account_grants/account_flags] }
+    "account_grants" => { reconciler: "AccountGrants::Reconciliation", adopts: %w[account_grants/account_flags] },
+    "tenant_settings" => { reconciler: "TenantSettings::Reconciliation", adopts: %w[tenant_settings/retention] }
   }.freeze
 
   # @return [Array<String>] the reconciler names

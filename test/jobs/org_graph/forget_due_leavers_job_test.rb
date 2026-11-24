@@ -6,7 +6,8 @@ class OrgGraph::ForgetDueLeaversJobTest < ActiveJob::TestCase
   PROVENANCE = { provider: "espalia", effective_on: "2020-01-01" }.freeze
 
   def tenant_with_leaver(scheduled:)
-    tenant = create(:tenant, org_graph_config: { scheduled_forgetting: scheduled })
+    tenant = create(:tenant)
+    TenantSettings::CommandHandler.new(tenant).enable_scheduled_forgetting { 1 } if scheduled
     leaver = ActsAsTenant.with_tenant(tenant) do
       person = create(:person, tenant:)
       handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)

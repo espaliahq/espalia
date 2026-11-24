@@ -23,6 +23,7 @@ class Tenant::OrgGraphSettings::ForgettingControllersTest < ActionDispatch::Inte
   end
 
   def config = @tenant.reload.org_graph_config
+  def settings = TenantSettings::CommandHandler.new(@tenant)
 
   context "as a tenant admin" do
     setup { sign_in @admin_user }
@@ -38,7 +39,7 @@ class Tenant::OrgGraphSettings::ForgettingControllersTest < ActionDispatch::Inte
     end
 
     should "say when a shorter period turns the schedule off" do
-      @tenant.update!(org_graph_config: { scheduled_forgetting: true })
+      settings.enable_scheduled_forgetting { 1 }
       patch tenant_org_graph_settings_retention_path, params: { retention: "1" }
 
       assert_equal "Leavers are now forgotten 1 year after they leave. Scheduled forgetting is off until you check " \
@@ -47,7 +48,8 @@ class Tenant::OrgGraphSettings::ForgettingControllersTest < ActionDispatch::Inte
     end
 
     should "offer to turn the schedule off while it is on, even with no key or a period of never" do
-      @tenant.update!(org_graph_config: { scheduled_forgetting: true, retention_years: nil })
+      settings.enable_scheduled_forgetting { 1 }
+      settings.set_retention_period(nil)
       OrgGraph::Forgetting.stub(:key, nil) do
         get tenant_org_graph_settings_path
       end
@@ -57,7 +59,32 @@ class Tenant::OrgGraphSettings::ForgettingControllersTest < ActionDispatch::Inte
       assert_select "#org-graph-forgetting-off"
     end
 
-    should "count the leavers due today" do
+    should "say nobody is forgotten while the stream alone holds a period of never" do
+      settings.enable_scheduled_forgetting { 1 }
+      ActsAsTenant.with_tenant(@tenant) do
+        TenantSettings::Repository.new.with_settings { it.set_retention_period(nil) }
+      end
+
+      get tenant_org_graph_settings_path
+
+      assert_equal 7, config.retention_years
+      assert_select "#org-graph-forgetting", text: /nobody is forgotten while the period is never/
+      assert_select "#org-graph-forgetting", text: /Each leaver is forgotten/, count: 0
+    end
+
+    should "say who turned the schedule on, and a former member once they are forgotten" do
+      admin = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant, name: "Ida Admin")) }
+      settings.enable_scheduled_forgetting(enabled_by: admin) { 1 }
+
+      get tenant_org_graph_settings_path
+      assert_select "#org-graph-forgetting", text: /when Ida Admin turned it on/
+
+      admin.person.update_columns(name: Person::FORMER_MEMBER, forgotten_at: Time.current)
+      get tenant_org_graph_settings_path
+      assert_select "#org-graph-forgetting", text: /when a former member turned it on/
+    end
+
+        should "count the leavers due today" do
       get tenant_org_graph_settings_forgetting_due_path, headers: { "Turbo-Frame" => "org-graph-forgetting-due" }
 
       assert_response :success

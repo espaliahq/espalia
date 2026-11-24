@@ -93,14 +93,14 @@ class OrgGraph::Projections::LeaversTest < ActiveSupport::TestCase
 
   should "follow the tenant's own period" do
     leave(@ada, "2030-05-31")
-    @tenant.update!(org_graph_config: { retention_years: 3 })
+    TenantSettings::CommandHandler.new(@tenant).set_retention_period(3)
 
     assert_equal [ @ada.id ], due
   end
 
   should "list nobody while the tenant keeps leavers for ever" do
     leave(@ada, "2020-02-01")
-    @tenant.update!(org_graph_config: { retention_years: nil })
+    TenantSettings::CommandHandler.new(@tenant).set_retention_period(nil)
 
     assert_empty due
   end
