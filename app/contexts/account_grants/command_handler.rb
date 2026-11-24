@@ -100,14 +100,20 @@ class AccountGrants::CommandHandler
 
   # Unlinks every account linked to a person about to be forgotten, in the
   # table or the stream. Takes the grants lock, so the caller must hold no
-  # tenant_users row yet.
+  # tenant_users row yet. The accounts the table links to them are about to
+  # be erased, so it refuses when they hold every admin the tenant has,
+  # counted as {#set_role} counts them.
   #
   # @param person_id [String]
   # @return [Array<String>] the accounts the table linked to them, for the caller to erase
+  # @raise [AccountGrants::Aggregate::LastAdmin] when erasing them would leave no admin
   def unlink_forgotten(person_id)
     linked = nil
     @repository.with_grants do |grants|
+      hold_live_accounts
+      AccountGrants::RoleReconciliation.new(ActsAsTenant.current_tenant, repository: @repository).reconcile(grants)
       linked = TenantUser.where(person_id:).order(:id).pluck(:id)
+      grants.ensure_an_admin_outlives!(linked)
       ids = (linked | grants.accounts_of(person_id)).sort
       linked.each do |id|
         next if grants.person_of(id) == person_id
