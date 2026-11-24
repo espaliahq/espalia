@@ -54,7 +54,7 @@ class PersonDevelopment::SuggestionCommandsTest < ActiveSupport::TestCase
 
   def migrate(from, to)
     event_store.with_metadata(tenant_id: @tenant.id, person_id: @alex.id, framework_id: @framework_id) do
-      event_store.append(PersonDevelopment::Events::FrameworkVersionMigrated.new(data: {
+      event_store.publish(PersonDevelopment::Events::FrameworkVersionMigrated.new(data: {
         framework_id: @framework_id, old_version: 1, new_version: 2,
         mappings: [ { from_stable_id: from.stable_id, to_stable_id: to.stable_id, mapping_type: "evolved" } ]
       }), stream_name: stream)
@@ -181,10 +181,8 @@ class PersonDevelopment::SuggestionCommandsTest < ActiveSupport::TestCase
 
     should "follow a row the old release superseded, then reopened" do
       suggest(proposal(@ownership, 3))
-      suggestion = ActsAsTenant.with_tenant(@tenant) do
-        create(:evidence_placement_suggestion, tenant: @tenant, item: @item, id: suggestion_ids.first,
-               capability_stable_id: @ownership.stable_id, level_ordinal: 3, status: "superseded")
-      end
+      suggestion = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find(suggestion_ids.first) }
+      suggestion.update!(status: "superseded")
       catch_up(suggestion)
       assert_equal "superseded", aggregate.suggestion_status(suggestion.id)
 

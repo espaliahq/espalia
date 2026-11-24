@@ -1,0 +1,124 @@
+# frozen_string_literal: true
+
+# Writes {EvidencePlacementSuggestion} rows from the suggestion events on the
+# person's development stream: one row per suggestion, keyed by its
+# `suggestion_id`, so a rebuild keeps every id the hub and MCP clients hold.
+#
+# Accepting writes no suggestion event. A link event that carries
+# `via_suggestion_id` decides the row: `accepted`, or `edited` when the link's
+# valence differs from the one suggested. A decision is final, as on the
+# aggregate.
+#
+# Until [#539](https://github.com/espaliahq/espalia/issues/539) c5, the release
+# before this one may still write the table directly during a deploy; the
+# suggestion commands record what it wrote before they act.
+class PersonDevelopment::Projections::EvidenceSuggestions
+  PROJECTION_NAME = "person_development/evidence_suggestions"
+  CODE_VERSION = 1
+
+  # @return [Array<Class>] event classes this projection handles
+  def self.handled_events
+    [
+      PersonDevelopment::Events::EvidencePlacementSuggested,
+      PersonDevelopment::Events::EvidencePlacementSuggestionsSuperseded,
+      PersonDevelopment::Events::EvidencePlacementSuggestionDismissed,
+      PersonDevelopment::Events::EvidenceLinkAdded,
+      PersonDevelopment::Events::EvidenceLinkRevalenced,
+      PersonDevelopment::Events::FrameworkVersionMigrated
+    ]
+  end
+
+  # @param tenant [Tenant]
+  def self.reset!(tenant:)
+    ActsAsTenant.with_tenant(tenant) do
+      EvidencePlacementSuggestion.where(tenant_id: tenant.id).delete_all
+    end
+  end
+
+  # @param event [RubyEventStore::Event]
+  def call(event)
+    ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) { handle(event) }
+  end
+
+  private
+
+  def handle(event)
+    case event
+    when PersonDevelopment::Events::EvidencePlacementSuggested then handle_suggested(event)
+    when PersonDevelopment::Events::EvidencePlacementSuggestionsSuperseded then handle_superseded(event)
+    when PersonDevelopment::Events::EvidencePlacementSuggestionDismissed then handle_dismissed(event)
+    when PersonDevelopment::Events::EvidenceLinkAdded then handle_link(event, event.data[:linked_by_id])
+    when PersonDevelopment::Events::EvidenceLinkRevalenced then handle_link(event, event.data[:changed_by_id])
+    when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
+    end
+  end
+
+  # A new suggestion, or a superseded one the model proposed again. An
+  # `already_held` event carries the status the table held when it was
+  # recorded, and who decided it.
+  def handle_suggested(event)
+    data = event.data
+    row = EvidencePlacementSuggestion.find_or_initialize_by(id: data[:suggestion_id])
+    return if row.persisted? && EvidencePlacementSuggestion::DECIDED_STATUSES.include?(row.status)
+
+    row.assign_attributes(
+      evidence_id: data[:evidence_id], person_id: event.metadata[:person_id], framework_id: event.metadata[:framework_id],
+      capability_stable_id: data[:capability_stable_id], level_ordinal: data[:level_ordinal],
+      valence: data[:valence], confidence: data[:confidence], rationale: data[:rationale],
+      provider: data[:provider], model: data[:model], prompt_version: data[:prompt_version], generated_at: data[:generated_at],
+      status: data[:status] || "pending", decided_by_id: data[:decided_by_id], decided_at: data[:decided_at], dismiss_reason: nil
+    )
+    row.save!
+  end
+
+  def handle_superseded(event)
+    EvidencePlacementSuggestion.pending.where(id: Array(event.data[:suggestion_ids]))
+      .update_all(status: "superseded", updated_at: Time.current)
+  end
+
+  def handle_dismissed(event)
+    EvidencePlacementSuggestion.pending.where(id: event.data[:suggestion_id]).update_all(
+      status: "dismissed", decided_by_id: event.data[:dismissed_by_id], decided_at: event.data[:dismissed_at],
+      dismiss_reason: event.data[:reason].presence, updated_at: Time.current
+    )
+  end
+
+  def handle_link(event, decided_by_id)
+    row = event.data[:via_suggestion_id] && EvidencePlacementSuggestion.pending.find_by(id: event.data[:via_suggestion_id])
+    return unless row
+
+    row.update!(status: event.data[:valence] == row.valence ? "accepted" : "edited",
+                decided_by_id: decided_by_id, decided_at: event.metadata[:timestamp] || Time.current)
+  end
+
+  # Moves suggestions on a retiring capability onto its survivor, so a
+  # dismissal keeps blocking the cell it was about. Where the item already has
+  # a suggestion at the survivor's cell, {PersonDevelopment::SuggestionCollision}
+  # picks the one that stays, as the aggregate does. A suggestion on an archived
+  # or split capability is left as it is; accepting it is refused, as its cell
+  # is gone.
+  def handle_framework_version_migrated(event)
+    event.data[:mappings].each do |mapping|
+      to_stable_id = mapping[:to_stable_id]
+      next unless %w[same evolved].include?(mapping[:mapping_type])
+      next if to_stable_id.nil? || to_stable_id == mapping[:from_stable_id]
+
+      EvidencePlacementSuggestion.where(person_id: event.metadata[:person_id], framework_id: event.data[:framework_id],
+                                        capability_stable_id: mapping[:from_stable_id]).find_each do |retiring|
+        rekey(retiring, to_stable_id)
+      end
+    end
+  end
+
+  def rekey(retiring, to_stable_id)
+    survivor = EvidencePlacementSuggestion.find_by(evidence_id: retiring.evidence_id, level_ordinal: retiring.level_ordinal,
+                                                   capability_stable_id: to_stable_id)
+    case PersonDevelopment::SuggestionCollision.resolve(retiring: retiring.status, survivor: survivor&.status)
+    when :move then retiring.update!(capability_stable_id: to_stable_id)
+    when :keep_survivor then retiring.destroy!
+    when :replace_survivor
+      survivor.destroy!
+      retiring.update!(capability_stable_id: to_stable_id)
+    end
+  end
+end
