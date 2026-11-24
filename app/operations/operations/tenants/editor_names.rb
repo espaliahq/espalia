@@ -7,19 +7,24 @@ module Operations::Tenants::EditorNames
   # Each editor's name in this tenant. Anyone forgotten, or gone, reads as a
   # former member. A row the previous release changed during a deploy names
   # its account until reconcile records it, so that account's person stands
-  # in until then.
+  # in until then, and an account that never had one is named by no one, as
+  # a row with no editor is.
   #
   # @param records [Array<#updated_by_person_id, #updated_by_id>]
-  # @return [Hash{String => String}] by {#editor_id}
+  # @return [Hash{String => String, nil}] by {#editor_id}
   def editor_names(records)
     people_of = account_people(records)
     ids = records.filter_map { editor_id(it) }.uniq
     people = Person.remembered.where(id: ids.map { people_of.fetch(it, it) }).pluck(:id, :name).to_h
-    ids.to_h { [ it, people.fetch(people_of.fetch(it, it), Person::FORMER_MEMBER) ] }
+    ids.to_h do |id|
+      person = people_of.fetch(id, id)
+      [ id, person && people.fetch(person, Person::FORMER_MEMBER) ]
+    end
   end
 
-  # An account with no person left, or no membership, keeps its own id,
-  # which reads as a former member.
+  # Forgetting clears a membership's account as well as its person, so an
+  # account with no membership keeps its own id, which reads as a former
+  # member. One whose membership has no person maps to nil.
   #
   # @return [Hash{String => String, nil}] each account's person, by account id
   def account_people(records)

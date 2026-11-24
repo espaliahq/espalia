@@ -77,6 +77,17 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     assert_equal [ @member.person.name, @editor.person.name ].sort, call(:PayBands)[:pay_bands].pluck(:updated_by).sort
   end
 
+  should "name no one for a band an account with no person changed in the previous release, and a former member for one forgotten" do
+    personless = create(:tenant_user, tenant: @tenant, role: :admin, person: nil)
+    gone = create(:user)
+    bands = [ add, add(location: "Testonia") ].map { PayBand.unscoped.find(it[:pay_band_id]) }
+    bands.first.update_columns(updated_by_id: personless.user_id)
+    bands.last.update_columns(updated_by_id: gone.id)
+
+    assert_equal({ "Fixtureland" => nil, "Testonia" => Person::FORMER_MEMBER },
+                 call(:PayBands)[:pay_bands].to_h { [ it[:location], it[:updated_by] ] })
+  end
+
   should "keep a band whose level has left the framework, marked so" do
     added = add
     ActsAsTenant.with_tenant(@tenant) { @level.destroy! }
