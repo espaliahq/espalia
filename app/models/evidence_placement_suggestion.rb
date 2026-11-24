@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 
 # A cell (capability × level) and valence the model proposes for a piece of
-# feedback, until a person decides. Not event-sourced: a pending suggestion
-# is regenerable machine output and worthless once decided. The decision is
-# what the stream records — an accepted suggestion becomes an
-# EvidenceLinkAdded or EvidenceLinkRevalenced carrying `via_suggestion_id`.
+# feedback, until a person decides. Written directly today; the development
+# stream already loads the suggestion events a later release will write
+# instead ([#539](https://github.com/espaliahq/espalia/issues/539) c3). An
+# accepted suggestion becomes an EvidenceLinkAdded or EvidenceLinkRevalenced
+# carrying `via_suggestion_id`.
 #
 # One row per evidence × cell. Regenerating supersedes the pending set and
 # reuses a superseded row when the model proposes the same cell again; a cell
