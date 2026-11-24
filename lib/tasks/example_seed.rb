@@ -113,8 +113,10 @@ class ExampleSeed
     second = Tenant.find_or_create_by!(slug: SECOND_TENANT[:slug]) { |t| t.name = SECOND_TENANT[:name] }
     [ tenant, second ].each do |t|
       ActsAsTenant.with_tenant(t) do
-        account = TenantUser.find_or_create_by!(tenant: t, user: @admin_user) { |tu| tu.role = :admin }
-        AccountGrants::CommandHandler.new.record_new_account(account) if account.previously_new_record?
+        TenantUser.transaction do
+          account = TenantUser.find_or_create_by!(tenant: t, user: @admin_user) { |tu| tu.role = :admin }
+          AccountGrants::CommandHandler.new.record_new_account(account) if account.previously_new_record?
+        end
       end
     end
     tenant
@@ -141,11 +143,13 @@ class ExampleSeed
         u.password = PASSWORD
         u.password_confirmation = PASSWORD
       end
-      account = TenantUser.find_or_create_by!(tenant: tenant, user: user) do |tu|
-        tu.role = :member
-        tu.person = person(key)
+      TenantUser.transaction do
+        account = TenantUser.find_or_create_by!(tenant: tenant, user: user) do |tu|
+          tu.role = :member
+          tu.person = person(key)
+        end
+        AccountGrants::CommandHandler.new.record_new_account(account) if account.previously_new_record?
       end
-      AccountGrants::CommandHandler.new.record_new_account(account) if account.previously_new_record?
     end
   end
 
