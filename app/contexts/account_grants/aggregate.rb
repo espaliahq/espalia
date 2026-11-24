@@ -9,6 +9,10 @@
 #
 # Adding a grant someone holds, or removing one they don't, writes nothing.
 #
+# It also reads each account's role and the person it is linked to, though
+# no command here writes either yet: a release loads those events before any
+# release writes them.
+#
 class AccountGrants::Aggregate
   include Shreddable::AggregateRoot
 
@@ -26,6 +30,29 @@ class AccountGrants::Aggregate
 
   def initialize
     @holdings = GRANTS.index_with { {} }
+    @roles = {}
+    @links = {}
+  end
+
+  # @return [Hash{String => String}] each account's id to its role
+  def roles
+    @roles.transform_values(&:first)
+  end
+
+  # @return [Hash{String => String, nil}] each account with a role to its person's id
+  def role_holders
+    @roles.transform_values(&:last)
+  end
+
+  # @param tenant_user_id [String]
+  # @return [String, nil] the account's role, nil when none is recorded
+  def role_of(tenant_user_id)
+    @roles[tenant_user_id.to_s]&.first
+  end
+
+  # @return [Hash{String => String}] each linked account's id to its person's id
+  def links
+    @links.dup
   end
 
   # @param grant [Symbol] one of {GRANTS}
@@ -90,4 +117,14 @@ class AccountGrants::Aggregate
     end
     on(events.fetch(:removed)) { |event| @holdings[grant].delete(event.data[:tenant_user_id]) }
   end
+
+  on(AccountGrants::Events::AccountRoleSet) do |event|
+    @roles[event.data[:tenant_user_id]] = event.data.values_at(:role, :person_id)
+  end
+  on(AccountGrants::Events::AccountRoleRemoved) { |event| @roles.delete(event.data[:tenant_user_id]) }
+
+  on(AccountGrants::Events::AccountLinkedToPerson) do |event|
+    @links[event.data[:tenant_user_id]] = event.data[:person_id]
+  end
+  on(AccountGrants::Events::AccountUnlinkedFromPerson) { |event| @links.delete(event.data[:tenant_user_id]) }
 end
