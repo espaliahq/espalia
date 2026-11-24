@@ -8,8 +8,10 @@
 # kept equal by linking: an event is recorded once and indexed in both. The
 # lock keeps the old stream's name, so both releases take the same lock.
 # Under it, events only in the old stream are linked into the new one before
-# loading, and events appended to the new one are linked back. Track B of
-# #539 stops the linking back.
+# loading, and events appended to the new one are linked back. A read without
+# the lock uses the old stream, the only one complete while both releases
+# write. [#539](https://github.com/espaliahq/espalia/issues/539) Track B stops
+# the linking back and moves that read to the new stream in the same change.
 #
 # @example
 #   AccountGrants::Repository.new.with_grants { |grants| grants.add(:team_planner, ...) }
@@ -22,6 +24,7 @@ class AccountGrants::Repository < TenantStreams::Repository
   end
 
   # Reads the old stream, which holds every grant whichever release wrote it.
+  # It stops being complete once the linking back stops.
   #
   # @return [AccountGrants::Aggregate]
   def load_aggregate
