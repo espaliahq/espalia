@@ -21,12 +21,15 @@ class AccountGrants::RoleReconciliation < TenantStreams::Reconciliation
   private
 
   def held_in_table
-    TenantUser.where(tenant_id: @tenant.id).to_h { [ [ it.id, it.role ], it ] }
+    @held_in_table ||= TenantUser.where(tenant_id: @tenant.id).to_h { [ [ it.id, it.role ], it ] }
   end
 
+  # A live account whose role changed is recorded with its new role, which
+  # replaces the old one, so the old one is no removal.
   def held_in_stream(aggregate)
+    live = held_in_table.keys.to_h
     people = aggregate.role_holders
-    aggregate.roles.to_h { |id, role| [ [ id, role ], people[id] ] }
+    aggregate.roles.filter_map { |id, role| [ [ id, role ], people[id] ] if live.fetch(id, role) == role }.to_h
   end
 
   def forgotten(_keys) = []
@@ -36,10 +39,7 @@ class AccountGrants::RoleReconciliation < TenantStreams::Reconciliation
                        effective_on: today, already_held: true)
   end
 
-  # A live account whose role changed was recorded with its new one already.
-  def record_removed(aggregate, (id, role), person_id)
-    return unless aggregate.role_of(id) == role
-
+  def record_removed(aggregate, (id, _role), person_id)
     aggregate.remove_role(tenant_user_id: id, person_id:, effective_on: today)
   end
 end
