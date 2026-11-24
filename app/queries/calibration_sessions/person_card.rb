@@ -98,8 +98,7 @@ class CalibrationSessions::PersonCard
       .to_h do |rating|
         [ rating.level_ordinal, {
           manager: rating.manager_rated_frequency,
-          manager_carried: rating.manager_rated_frequency.present? &&
-            rating.manager_rating_source == "seeded",
+          manager_carried: rating.manager_rated_frequency.present? && rating.manager_rating_unconfirmed?,
           self: visible ? rating.self_rated_frequency : nil
         } ]
       end

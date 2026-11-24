@@ -3,9 +3,10 @@
 # When one participation reached each home-role milestone, read from its
 # enrollment and progress rows. The read models keep only the latest of
 # each: a re-open clears `aligned_at`, and the completion stamps come from
-# `Assessments::LevelCoverage` on rating events, which counts human ratings
-# against the live assignment's role — so they can disagree with the cohort
-# funnel's `self_done` / `manager_done` until the next rating.
+# `Assessments::LevelCoverage` on rating events and on agreements over a
+# carried cell, counted against the home role the projection tracks — so
+# they can disagree with the cohort funnel's `self_done` / `manager_done`,
+# which reads the enrollment snapshot, until the next of those events.
 #
 # @example
 #   Assessments::Lifecycle.from(enrollment: enrollment, progress: progress).aligned_at

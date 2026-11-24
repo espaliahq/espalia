@@ -332,8 +332,9 @@ class Views::Assessments::IndexView < Views::Base
     span(class: "text-xs text-muted") { Views::Assessments::StatusPill::READY_FOR_ALIGNMENT }
   end
 
-  # "Start" until the viewer has touched a rating this cycle — carried
-  # (seeded) values don't count, so the verb agrees with the Self chip's
+  # "Start" until the viewer's side has been touched this cycle — carried
+  # (seeded) values don't count until their cell is agreed, so the verb
+  # agrees with the Self chip's
   # :not_started / :to_confirm work states. "Review" while a finished
   # self-assessment waits for alignment, as on the home card.
   # @param assignment [PersonFrameworkAssignment]
@@ -348,9 +349,10 @@ class Views::Assessments::IndexView < Views::Base
     %i[not_started to_confirm].include?(state) ? "Start" : "Continue"
   end
 
-  # Complete = every current-level cell vetted (human-owned) this cycle.
-  # In progress = at least one human touch (rate / revise / confirm / clear).
-  # To confirm = values exist but ALL are carried forward, untouched.
+  # Complete = every current-level cell vetted this cycle.
+  # In progress = at least one human touch (rate / revise / confirm / clear)
+  #   or one carried cell agreed.
+  # To confirm = values exist but ALL are carried forward, untouched and unagreed.
   # Not started = nothing at all.
   #
   # @return [Symbol] :complete | :in_progress | :to_confirm | :not_started
