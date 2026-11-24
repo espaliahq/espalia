@@ -108,9 +108,9 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     role's (REBUILD_ON_DEPLOY=person_development/current_assessment).
   #
   # 11 — agreeing a cell vets its carried sides: `AssessmentAligned` and
-  #     `AlignmentCleared` on a cell with a seeded side now run
-  #     `refresh_completion`, and Assessments::LevelCoverage counts a seeded
-  #     side once its cell is agreed. A rebuild stamps `self_completed_at` /
+  #     `AlignmentCleared` on a cell at the assessed level with a seeded
+  #     side now run `refresh_completion`, and Assessments::LevelCoverage
+  #     counts a seeded side once its cell is agreed. A rebuild stamps `self_completed_at` /
   #     `manager_completed_at` on participations whose carried cells were
   #     agreed, at the time of the agreement that completed them
   #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
@@ -868,8 +868,10 @@ class PersonDevelopment::Projections::CurrentAssessment
     return unless rating.self_rating_carried? || rating.manager_rating_carried?
 
     progress = find_progress(event)
+    return unless progress
+
     level_ordinal = home_level_ordinal(event, progress)
-    return unless progress && rating.level_ordinal == level_ordinal
+    return unless rating.level_ordinal == level_ordinal
 
     refresh_completion(event, progress: progress, level_ordinal: level_ordinal)
   end
