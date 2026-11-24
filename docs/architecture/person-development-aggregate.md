@@ -123,9 +123,9 @@ Evidence and feedback:
       (ADR-18 payload attribution). Present only when the link decision came
       from a suggestion; absent on every other event, historical or not, so
       consumers tolerate nil and no projection needed a CODE_VERSION bump.
-      The suggestion itself is plain state, not an event: machine output,
-      regenerable, worthless once decided (assessments/evidence.md →
-      Suggested placement and valence).
+      The suggestion itself is still plain state today (assessments/evidence.md →
+      Suggested placement and valence); it is moving onto this stream as the
+      three events below.
   EvidencePlacementSuggested { suggestion_id, evidence_id, capability_stable_id,
                                level_ordinal, valence, confidence, rationale?, provider,
                                model, prompt_version, generated_at, already_held,
@@ -135,9 +135,10 @@ Evidence and feedback:
                                          reason?, dismissed_at, already_held }
     ← LOADED, NOT YET WRITTEN. A release loads these before any release writes
       them, so the release still serving during the deploy that starts writing
-      them can load the stream (#539 c3). The aggregate tracks each
-      suggestion's status: a link event's via_suggestion_id marks it accepted,
-      and superseding never reopens a decided one. status, decided_by_id and
+      them can load the stream ([#539](https://github.com/espaliahq/espalia/issues/539)
+      c3). The aggregate tracks each suggestion's status: a link event's
+      via_suggestion_id marks it accepted, even when the link comes first, and
+      a decision is final, so no later event reopens or flips it. status, decided_by_id and
       decided_at appear only with already_held, on a suggestion recorded from
       the table.
   EvidenceUpdated { evidence_id, title?, content, evidence_type, custom_type_label?,

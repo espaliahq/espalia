@@ -4,7 +4,7 @@
 # for the evidence item again.
 #
 # The reason is free text, stored unencrypted and permanently, as comments are
-# (#539, decided 2026-11-23).
+# ([#539](https://github.com/espaliahq/espalia/issues/539), decided 2026-11-23).
 #
 # @!attribute [r] data
 #   @return [Hash] event data
