@@ -118,9 +118,11 @@ class AssessmentLevelRating < ApplicationRecord
   end
   private_class_method :within_cells
 
-  # Whether the self side still shows a carried-forward (seeded) value the
-  # person hasn't confirmed or changed. Per-side — the row-level `source`
-  # flips to "human" on any human touch and can't answer this.
+  # Whether the self side's value was carried forward (seeded) and the
+  # person hasn't confirmed or changed it themselves: provenance alone,
+  # whatever the cell's agreed value ({#self_rating_unconfirmed?} asks that
+  # too). Per-side — the row-level `source` flips to "human" on any human
+  # touch and can't answer this.
   #
   # @return [Boolean]
   def self_rating_carried?

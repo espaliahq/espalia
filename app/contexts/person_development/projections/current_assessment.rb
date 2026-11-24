@@ -869,6 +869,7 @@ class PersonDevelopment::Projections::CurrentAssessment
   # role, one event each, so every other cell skips the coverage count, and
   # each carried one at the level pays it.
   def refresh_completion_after_agreement(event, rating)
+    # Provenance, not `unconfirmed?`: the row already holds the agreed value.
     return unless rating.self_rating_carried? || rating.manager_rating_carried?
 
     progress = find_progress(event)
