@@ -43,9 +43,10 @@ class TenantSettings::CommandHandler
     change(enabled_by_account_id: enabled_by&.id) do |settings|
       raise TenantSettings::Aggregate::Refused, "retention is set to never, so there is nothing to schedule" if
         settings.retention_years.nil?
+      raise TenantSettings::Aggregate::Refused, "scheduled forgetting is already on" if settings.scheduled_forgetting?
 
       count = yield settings
-      settings.enable(enabled_by_id: enabled_by&.person_id, confirmed_count: count) unless settings.scheduled_forgetting?
+      settings.enable(enabled_by_id: enabled_by&.person_id, confirmed_count: count)
     end
     count
   end

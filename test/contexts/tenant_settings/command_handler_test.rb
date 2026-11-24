@@ -64,6 +64,17 @@ class TenantSettings::CommandHandlerTest < ActiveSupport::TestCase
     assert_equal [ false, false ], [ config.scheduled_forgetting, row.scheduled_forgetting ]
   end
 
+  should "refuse to turn on a schedule already on, before counting, and keep who turned it on" do
+    handler.enable_scheduled_forgetting(enabled_by: @admin) { 0 }
+    counted = false
+
+    error = assert_raises(TenantSettings::Aggregate::Refused) { handler.enable_scheduled_forgetting { counted = true } }
+
+    assert_equal "scheduled forgetting is already on", error.message
+    assert_not counted
+    assert_equal @admin.person_id, row.enabled_by_id
+  end
+
   context "after the previous release wrote the JSON alone" do
     should "record what it wrote before acting, so a shorter period still turns the schedule off" do
       previous_release_writes(scheduled_forgetting: true, scheduled_forgetting_enabled_at: 1.day.ago,
