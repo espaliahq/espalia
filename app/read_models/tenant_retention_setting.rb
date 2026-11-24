@@ -52,7 +52,7 @@ class TenantRetentionSetting < ApplicationRecord
   # @param on [Date]
   # @param config [OrgGraphConfig] the tenant's JSON, read under whatever lock the caller holds
   # @return [Date, nil] who left on or before this is due, by the longer period; nil when nobody is
-  def self.forget_left_on_or_before(tenant, on = Date.current, config: tenant.org_graph_config)
+  def self.forget_left_on_or_before(tenant, on = tenant.today, config: tenant.org_graph_config)
     years = longer_period(tenant, config:)
     on - years.years if years
   end

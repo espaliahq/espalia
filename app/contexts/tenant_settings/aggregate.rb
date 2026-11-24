@@ -12,7 +12,7 @@
 # period it already has, or turning off what is off, writes nothing.
 #
 class TenantSettings::Aggregate
-  include AggregateRoot
+  include Shreddable::AggregateRoot
 
   # Turning scheduled forgetting on when the guards don't allow it.
   class Refused < StandardError; end
