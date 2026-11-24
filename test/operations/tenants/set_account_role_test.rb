@@ -39,6 +39,15 @@ class Operations::Tenants::SetAccountRoleTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { call({ person_id: stranger.id, role: "admin" }) }
   end
 
+  should "refuse a person with two accounts, rather than change either" do
+    second = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, person: @member.person, role: :member) }
+
+    error = assert_raises(Operations::Base::ParameterError) { call({ person_id: @member.person_id, role: "admin" }) }
+
+    assert_match "more than one account", error.message
+    assert_equal [ "member", "member" ], [ @member, second ].map { it.reload.role }
+  end
+
   should "refuse a member" do
     context = AuthorizationContext.new(user: @member.user, tenant_user: @member, person: @member.person)
 

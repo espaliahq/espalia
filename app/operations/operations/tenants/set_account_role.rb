@@ -14,18 +14,22 @@ class Operations::Tenants::SetAccountRole < Operations::Base
   parameter :person_id, String, required: true, allow_blank: false
   parameter :role, String, required: true, allow_blank: false
 
+  # @raise [Pundit::NotAuthorizedError] unless the caller is a tenant admin
   def policy_check
     authorize TenantUser, :update?
   end
 
   # @return [Hash] `{ person_id, role }`
-  # @raise [ParameterError] for a person with no account, an unknown role, or demoting the last admin
+  # @raise [ParameterError] for a person with no account or more than one, an unknown role, or demoting the last admin
   def perform
     role = params[:role].to_s
     raise ParameterError, "role: must be one of #{AccountGrants::Aggregate::ROLES.join(', ')}" unless AccountGrants::Aggregate::ROLES.include?(role)
 
-    account = TenantUser.find_by(person_id: params[:person_id].to_s.downcase) or
-      raise ParameterError, "person_id: that person has no account in this organisation"
+    accounts = TenantUser.where(person_id: params[:person_id].to_s.downcase).to_a
+    raise ParameterError, "person_id: that person has no account in this organisation" if accounts.empty?
+    raise ParameterError, "person_id: that person has more than one account here, so the role can't be changed" if accounts.many?
+
+    account = accounts.sole
 
     AccountGrants::CommandHandler.new.set_role(account, role, set_by_id: context.person&.id)
     { person_id: account.person_id, role: account.reload.role }
