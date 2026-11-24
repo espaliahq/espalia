@@ -93,6 +93,7 @@ class Person < ApplicationRecord
         membership.person ||= self
         membership.role ||= :member
         membership.save!
+        AccountGrants::CommandHandler.new.record_new_account(membership) if membership.previously_new_record?
         account
       end
     end

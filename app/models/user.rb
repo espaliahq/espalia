@@ -142,7 +142,8 @@ class User < ApplicationRecord
         uid: auth.uid
       )
       ActsAsTenant.with_tenant(person.tenant) do
-        TenantUser.create!(tenant: person.tenant, user: user, person: person, role: :member)
+        account = TenantUser.create!(tenant: person.tenant, user: user, person: person, role: :member)
+        AccountGrants::CommandHandler.new.record_new_account(account)
       end
       user
     end

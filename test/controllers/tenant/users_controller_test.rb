@@ -72,6 +72,18 @@ class Tenant::UsersControllerTest < ActionDispatch::IntegrationTest
         assert_includes response.body, "last tenant administrator"
         assert_equal "admin", @admin_tu.reload.role
       end
+
+      should "refuse when the person holds two accounts, rather than change the wrong one" do
+        person = @member_tu.ensure_person!
+        ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: create(:user), person:) }
+
+        patch tenant_user_path(@member_tu), params: { tenant_user: { role: "admin" } }
+
+        assert_redirected_to tenant_user_path(@member_tu)
+        follow_redirect!
+        assert_includes response.body, "more than one account"
+        assert_equal "member", @member_tu.reload.role
+      end
     end
   end
 
