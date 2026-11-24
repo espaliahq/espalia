@@ -226,12 +226,81 @@ class PersonDevelopment::Aggregate
   # @return [String, nil] the cycle the person is enrolled in
   attr_reader :current_cycle_id
 
-  # No command writes suggestion events yet: a release loads them before any
-  # release writes them ([#539](https://github.com/espaliahq/espalia/issues/539)).
-  #
   # @param suggestion_id [String]
   # @return [String, nil] "pending", "accepted", "dismissed" or "superseded"; nil when none is recorded
   def suggestion_status(suggestion_id) = @suggestions.dig(suggestion_id.to_s, :status)
+
+  # ── Placement suggestions ──
+
+  # Stores a model run's proposals for an evidence item. The item's pending
+  # suggestions are superseded in one event; each proposal then becomes a
+  # suggestion, keeping the id of the one already held for its cell. A cell
+  # someone accepted or dismissed is never proposed again.
+  #
+  # @param evidence_id [String]
+  # @param proposals [Array<Hash>] each with :capability_stable_id, :level_ordinal,
+  #   :valence, :confidence (a decimal string) and :rationale
+  # @param provider [String]
+  # @param model [String]
+  # @param prompt_version [String]
+  # @param generated_at [String] ISO 8601 time the model answered
+  # @return [Integer] how many suggestions were stored
+  # @raise [CommandError] if the evidence is unknown or withdrawn
+  def suggest_placements(evidence_id, proposals:, provider:, model:, prompt_version:, generated_at:)
+    state = @evidence[evidence_id]
+    raise CommandError, "No evidence with id #{evidence_id}" unless state
+    raise CommandError, "Cannot suggest placements for withdrawn evidence" if state[:status] == "withdrawn"
+
+    held = @suggestions.select { |_id, s| s[:evidence_id] == evidence_id }
+    pending = held.select { |_id, s| s[:status] == "pending" }.keys
+    by_cell = held.to_h { |id, s| [ s[:cell], id ] }
+    storable = proposals.select do |proposal|
+      id = by_cell[[ proposal[:capability_stable_id], proposal[:level_ordinal] ]]
+      id.nil? || !DECIDED_SUGGESTION_STATUSES.include?(held[id][:status])
+    end
+    return 0 if pending.empty? && storable.empty?
+
+    if pending.any?
+      apply(PersonDevelopment::Events::EvidencePlacementSuggestionsSuperseded.new(
+        data: { evidence_id: evidence_id, suggestion_ids: pending }
+      ))
+    end
+    storable.each do |proposal|
+      cell = [ proposal[:capability_stable_id], proposal[:level_ordinal] ]
+      apply(PersonDevelopment::Events::EvidencePlacementSuggested.new(data: {
+        suggestion_id: by_cell[cell] || SecureRandom.uuid_v7, evidence_id: evidence_id,
+        capability_stable_id: cell.first, level_ordinal: cell.last,
+        valence: proposal[:valence], confidence: proposal[:confidence], rationale: proposal[:rationale],
+        provider: provider, model: model, prompt_version: prompt_version, generated_at: generated_at
+      }))
+    end
+    storable.size
+  end
+
+  # @param suggestion_id [String]
+  # @param evidence_id [String]
+  # @param dismissed_by_id [String, nil] person_id of who dismissed it
+  # @param reason [String, nil]
+  # @raise [CommandError] if the suggestion was already decided or superseded
+  def dismiss_suggestion(suggestion_id, evidence_id:, dismissed_by_id:, reason: nil)
+    ensure_suggestion_open!(suggestion_id)
+
+    apply(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed.new(data: {
+      suggestion_id: suggestion_id, evidence_id: evidence_id, dismissed_by_id: dismissed_by_id,
+      reason: reason.presence, dismissed_at: Time.current.iso8601(6)
+    }))
+  end
+
+  # Records what the release before suggestions were events wrote to the
+  # suggestions table and this stream doesn't know yet, so a command reads
+  # the table's truth before it acts
+  # ([#539](https://github.com/espaliahq/espalia/issues/539) c5 removes it).
+  #
+  # @param rows [Array<Hash>] suggestion rows, with the table's column names
+  # @return [void]
+  def catch_up_suggestions(rows)
+    rows.each { |row| catch_up_suggestion(row.symbolize_keys) }
+  end
 
   # ── Manager-rating delegation ──
 
@@ -1007,6 +1076,7 @@ class PersonDevelopment::Aggregate
     if state[:links].include?([ capability_stable_id, level_ordinal ])
       raise CommandError, "Evidence is already linked to that coordinate"
     end
+    ensure_suggestion_open!(via_suggestion_id) if via_suggestion_id.present?
 
     apply(PersonDevelopment::Events::EvidenceLinkAdded.new(data: {
       evidence_id: evidence_id,
@@ -1083,8 +1153,11 @@ class PersonDevelopment::Aggregate
       raise CommandError, "Evidence is not linked to that coordinate"
     end
 
+    ensure_suggestion_open!(via_suggestion_id) if via_suggestion_id.present?
+
+    # Accepting a suggestion that keeps the valence still records the accept.
     previous = state[:links][[ capability_stable_id, level_ordinal ]]
-    return if previous == valence
+    return if previous == valence && via_suggestion_id.blank?
 
     apply(PersonDevelopment::Events::EvidenceLinkRevalenced.new(data: {
       evidence_id: evidence_id,
@@ -1426,6 +1499,51 @@ class PersonDevelopment::Aggregate
     via_suggestion_id.present? ? { via_suggestion_id: via_suggestion_id } : {}
   end
 
+  # An id the stream doesn't hold is let through: the table may know it
+  # still, and the projection decides the row the link names.
+  def ensure_suggestion_open!(suggestion_id)
+    status = suggestion_status(suggestion_id)
+    return if status.nil? || status == "pending"
+
+    raise CommandError, "this suggestion was already #{status}"
+  end
+
+  def catch_up_suggestion(row)
+    held = suggestion_status(row[:id])
+    return if DECIDED_SUGGESTION_STATUSES.include?(held) || row[:status] == held
+
+    case row[:status]
+    when "superseded"
+      if held.nil?
+        record_held_suggestion(row, status: "superseded")
+      else
+        apply(PersonDevelopment::Events::EvidencePlacementSuggestionsSuperseded.new(
+          data: { evidence_id: row[:evidence_id], suggestion_ids: [ row[:id] ] }
+        ))
+      end
+    when "dismissed"
+      record_held_suggestion(row, status: "pending") unless held == "pending"
+      apply(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed.new(data: {
+        suggestion_id: row[:id], evidence_id: row[:evidence_id], dismissed_by_id: row[:decided_by_id],
+        reason: row[:dismiss_reason].presence, dismissed_at: row[:decided_at]&.iso8601(6), already_held: true
+      }))
+    else
+      record_held_suggestion(row, status: row[:status])
+    end
+  end
+
+  def record_held_suggestion(row, status:)
+    decided = %w[accepted edited].include?(status)
+    apply(PersonDevelopment::Events::EvidencePlacementSuggested.new(data: {
+      suggestion_id: row[:id], evidence_id: row[:evidence_id],
+      capability_stable_id: row[:capability_stable_id], level_ordinal: row[:level_ordinal],
+      valence: row[:valence], confidence: row[:confidence].to_s, rationale: row[:rationale],
+      provider: row[:provider], model: row[:model], prompt_version: row[:prompt_version],
+      generated_at: row[:generated_at]&.iso8601(6), already_held: true, status: status,
+      decided_by_id: (row[:decided_by_id] if decided), decided_at: (row[:decided_at]&.iso8601(6) if decided)
+    }))
+  end
+
   # Direct aggregate callers cannot inspect the org chart. The command handler
   # supplies the exact value; this source-based default keeps lower-level
   # domain calls classified for self, manager, and lateral feedback.
@@ -1690,6 +1808,22 @@ class PersonDevelopment::Aggregate
         next if alignment[:cells] == :all
 
         alignment[:cells] = alignment[:cells].to_set { |cap, ordinal| [ cap == from ? to : cap, ordinal ] }
+      end
+      rekey_suggestions(from, to) unless from == to
+    end
+  end
+
+  # Mirrors the EvidenceSuggestions projection, through the same collision rule.
+  def rekey_suggestions(from, to)
+    @suggestions.select { |_id, s| s[:cell].first == from }.each do |id, retiring|
+      cell = [ to, retiring[:cell].last ]
+      survivor_id, survivor = @suggestions.find { |_sid, s| s[:evidence_id] == retiring[:evidence_id] && s[:cell] == cell }
+      case PersonDevelopment::SuggestionCollision.resolve(retiring: retiring[:status], survivor: survivor&.dig(:status))
+      when :move then retiring[:cell] = cell
+      when :keep_survivor then @suggestions.delete(id)
+      when :replace_survivor
+        @suggestions.delete(survivor_id)
+        retiring[:cell] = cell
       end
     end
   end
