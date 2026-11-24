@@ -66,6 +66,8 @@ class TenantSettings::CommandHandler
   # stored before the command's block runs, so what it reads of the
   # projection is settled too. A refusal rolls back that second settling,
   # which may hold a JSON written since the first, so it settles once more.
+  # A database error may leave no transaction to settle in, so it goes
+  # straight up.
   def change(enabled_by_account_id: nil)
     ActsAsTenant.with_tenant(@tenant) do
       settle
@@ -79,6 +81,8 @@ class TenantSettings::CommandHandler
           end
         end
       end
+    rescue ActiveRecord::ActiveRecordError
+      raise
     rescue StandardError => e
       settle
       raise e
