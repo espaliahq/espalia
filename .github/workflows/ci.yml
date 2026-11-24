@@ -151,7 +151,15 @@ jobs:
           # token. To avoid those install costs and to keep this job fast,
           # we skip it here and run it in the dedicated `mcp-cli-test` job.
           SKIP_MCP_CLI_TEST: "1"
+          # Records every write, for the next step to check (docs/architecture/direct-writes.md).
+          WRITE_CATALOGUE: "1"
         run: bin/rails db:test:prepare test
+
+      - name: Check every write against config/write_ownership.yml
+        env:
+          RAILS_ENV: test
+          DB_HOST: localhost
+        run: bin/rails write_ownership:check
 
   # Runs only the claude CLI parity test (test/integration/mcp_claude_cli_test.rb)
   # in isolation. Pulled out of the main `test` job because:
