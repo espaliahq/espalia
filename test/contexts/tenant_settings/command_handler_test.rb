@@ -105,6 +105,18 @@ class TenantSettings::CommandHandlerTest < ActiveSupport::TestCase
       assert_not row.scheduled_forgetting
     end
 
+    should "keep what it wrote between the two settlings when the command is refused" do
+      reads = 0
+      held = TenantSettings::Held.method(:from)
+      written_late = ->(config) { held.call(config).merge(retention_years: (reads += 1) == 1 ? 7 : 3) }
+
+      TenantSettings::Held.stub(:from, written_late) do
+        assert_raises(ArgumentError) { handler.enable_scheduled_forgetting { raise ArgumentError, "the count moved" } }
+      end
+
+      assert_equal 3, row.retention_years
+    end
+
     should "record what it wrote as the system, while the command itself names the admin" do
       previous_release_writes(retention_years: 3)
 

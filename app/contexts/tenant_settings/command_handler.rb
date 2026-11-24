@@ -64,7 +64,8 @@ class TenantSettings::CommandHandler
   # counts by it. Then settles again and changes in one transaction, so both
   # locks hold from the first read to the commit. The settled events are
   # stored before the command's block runs, so what it reads of the
-  # projection is settled too.
+  # projection is settled too. A refusal rolls back that second settling,
+  # which may hold a JSON written since the first, so it settles once more.
   def change(enabled_by_account_id: nil)
     ActsAsTenant.with_tenant(@tenant) do
       settle
@@ -78,6 +79,9 @@ class TenantSettings::CommandHandler
           end
         end
       end
+    rescue StandardError => e
+      settle
+      raise e
     end
   end
 
