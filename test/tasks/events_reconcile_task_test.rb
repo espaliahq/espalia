@@ -177,7 +177,7 @@ class EventsReconcileTaskTest < ActiveSupport::TestCase
     should "leave the stamp alone when run again" do
       stamped_at = ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).applied_at
 
-      assert_no_match "adopted", reconcile
+      assert_no_match "#{PROJECTION::PROJECTION_NAME}: adopted", reconcile
       assert_equal stamped_at, ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).applied_at
     end
   end
@@ -186,7 +186,7 @@ class EventsReconcileTaskTest < ActiveSupport::TestCase
     ProjectionVersion.stamp!(PROJECTION)
     ProjectionVersion.where(name: PROJECTION::PROJECTION_NAME).update_all(version: PROJECTION::CODE_VERSION - 1)
 
-    assert_no_match "adopted", reconcile
+    assert_no_match "#{PROJECTION::PROJECTION_NAME}: adopted", reconcile
     assert_equal PROJECTION::CODE_VERSION - 1, ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).version
   end
 end

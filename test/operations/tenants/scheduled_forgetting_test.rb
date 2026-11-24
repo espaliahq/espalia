@@ -34,6 +34,12 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
       assert_not @leaver.reload.forgotten?
     end
 
+    should "report the period that decides who is due, the longer of the two places" do
+      Tenant.find(@tenant.id).tap { it.org_graph_config.assign_attributes(retention_years: 3) }.save!
+
+      assert_equal 7, call(Operations::Tenants::ForgettingDryRun)[:retention_years]
+    end
+
     should "refuse without the forgetting key" do
       OrgGraph::Forgetting.stub(:key, nil) do
         assert_raises(Operations::Base::ParameterError) { call(Operations::Tenants::ForgettingDryRun) }
@@ -57,6 +63,7 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
 
       assert_equal({ tenant_id: @tenant.id, scheduled_forgetting: true, confirmed_count: 1 }, result)
       assert config.scheduled_forgetting
+      assert TenantRetentionSetting.for(@tenant).scheduled_forgetting
       assert_equal admin.tenant_user.id, config.scheduled_forgetting_enabled_by_id
       assert_not_nil config.scheduled_forgetting_enabled_at
       assert_not @leaver.reload.forgotten?
@@ -102,6 +109,7 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
       assert_equal({ tenant_id: @tenant.id, scheduled_forgetting: false },
         call(Operations::Tenants::DisableScheduledForgetting))
       assert_not config.scheduled_forgetting
+      assert_not TenantRetentionSetting.for(@tenant).scheduled_forgetting
       assert_nil config.scheduled_forgetting_enabled_by_id
     end
 

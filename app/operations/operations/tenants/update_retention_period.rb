@@ -30,27 +30,12 @@ class Operations::Tenants::UpdateRetentionPeriod < Operations::Base
     years = params[:never] ? nil : params[:retention_years]
     raise ParameterError, "give retention_years, or never: true" if years.nil? && !params[:never]
 
+    config = OrgGraphConfig.new(retention_years: years)
+    raise ParameterError, config.errors.full_messages.to_sentence unless config.valid?
+
     tenant = ActsAsTenant.current_tenant
-    stopped = false
-    tenant.with_lock do
-      config = tenant.org_graph_config.dup
-      stopped = config.scheduled_forgetting && sooner?(years, config.retention_years)
-      config.retention_years = years
-      raise ParameterError, config.errors.full_messages.to_sentence unless config.valid?
-
-      stop_schedule(config) if stopped
-      tenant.update!(org_graph_config: config)
-    end
-    { tenant_id: tenant.id, retention_years: tenant.org_graph_config.retention_years, scheduled_forgetting_stopped: stopped }
-  end
-
-  private
-
-  def sooner?(years, was) = !years.nil? && (was.nil? || years < was)
-
-  def stop_schedule(config)
-    config.scheduled_forgetting = false
-    config.scheduled_forgetting_enabled_at = nil
-    config.scheduled_forgetting_enabled_by_id = nil
+    result = TenantSettings::CommandHandler.new(tenant).set_retention_period(years, set_by: context.tenant_user)
+    { tenant_id: tenant.id, retention_years: result.retention_years,
+      scheduled_forgetting_stopped: result.scheduled_forgetting_stopped }
   end
 end

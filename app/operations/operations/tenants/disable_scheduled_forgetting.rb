@@ -15,13 +15,7 @@ class Operations::Tenants::DisableScheduledForgetting < Operations::Base
   # @return [Hash] tenant_id and scheduled_forgetting
   def perform
     tenant = ActsAsTenant.current_tenant
-    tenant.with_lock do
-      config = tenant.org_graph_config.dup
-      config.scheduled_forgetting = false
-      config.scheduled_forgetting_enabled_at = nil
-      config.scheduled_forgetting_enabled_by_id = nil
-      tenant.update!(org_graph_config: config)
-    end
+    TenantSettings::CommandHandler.new(tenant).disable_scheduled_forgetting(disabled_by: context.tenant_user)
     Rails.logger.info("[OrgGraph::Forgetting] disabled tenant=#{tenant.id} requested_by=#{context.tenant_user&.id}")
     { tenant_id: tenant.id, scheduled_forgetting: false }
   end
