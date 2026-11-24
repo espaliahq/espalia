@@ -97,7 +97,9 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 #### Recorded: `person_development/current_assessment` v11 (agreeing a cell vets its carried ratings, [#550](https://github.com/espaliahq/espalia/issues/550))
 
-Path A: `REBUILD_ON_DEPLOY=person_development/current_assessment`, removed once the deploy is live. `AssessmentAligned` and `AlignmentCleared` now refresh the completion stamps when the cell is at the assessed level and a side is carried. The rebuild stamps `self_completed_at` and `manager_completed_at` on every participation whose carried cells were agreed, at the time of the agreement that completed the side. Nothing else changes: no rating, status or alignment row differs.
+Path A: `REBUILD_ON_DEPLOY=person_development/current_assessment`, removed once the deploy is live. `AssessmentAligned` and `AlignmentCleared` now refresh the completion stamps when the cell is at the assessed level and a side is carried. The rebuild stamps `self_completed_at` and `manager_completed_at` on a participation whose carried cells were agreed, at the time of the agreement that completed the side. Nothing else changes: no rating, status or alignment row differs.
+
+Coverage is counted against the role's cells as the framework stands today, as it already is for a rating event. So a participation agreed under an earlier framework version stays unstamped if its role has since gained a capability at that level, and the cohort funnel reads it the same way.
 
 This projection's rebuild blanks every assessment while it runs, as above. Deploy in a quiet window and take the snapshot first. Until the rebuild, a participation agreed before this release keeps empty stamps: the Team Assessments chips after a lens start, the calibration population badge and `assessments_get`'s `self_completed_at` read it as unfinished, while the cohort funnel and the calibration readiness card, which read the ratings, already count it.
 
