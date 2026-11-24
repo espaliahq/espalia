@@ -97,6 +97,14 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: `account_grants/account_flags` v2 takes the link to a person ([#539](https://github.com/espaliahq/espalia/issues/539) b2), 2026-11-24
+
+Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection now also writes `tenant_users.person_id` from `AccountLinkedToPerson` and `AccountUnlinkedFromPerson`. Its reset sets a link the stream records and keeps one it doesn't.
+
+The order matters. Step 2b runs the new `account_links` reconciler, which records every live link as `already_held`. Step 3 then rebuilds, and its reset leaves every link where the table has it. A link or an erase the previous release wrote between steps 2b and 3 survives the reset, since the stream doesn't record it, and step 6 records it: an erased link as an unlink with reason `forgotten`.
+
+**Deploy this only onto a release that holds [PR #561](https://github.com/espaliahq/espalia/pull/561).** That release loads both link events and ignores them in `AccountFlags`, so it keeps serving while step 2b writes them.
+
 #### Recorded: `account_grants/account_flags` takes the role, with no bump ([#540](https://github.com/espaliahq/espalia/issues/540)), 2026-11-24
 
 No `CODE_VERSION` bump and no `REBUILD_ON_DEPLOY`. The projection now also writes `tenant_users.role` from `AccountRoleSet`, and its reset keeps a role the stream doesn't record. No role event exists before this deploy, and the `account_roles` reconciler records every account's role at step 2b and again at step 6. A rebuild at step 3 would gain nothing, and would undo a role the previous release changed between steps 2b and 3. Step 6 records that change instead.

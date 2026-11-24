@@ -13,7 +13,8 @@
 module Projections::Reconcilers
   LIST = {
     "account_grants" => { reconciler: "AccountGrants::Reconciliation", adopts: %w[account_grants/account_flags] },
-    "account_roles" => { reconciler: "AccountGrants::RoleReconciliation", adopts: %w[account_grants/account_flags] }
+    "account_roles" => { reconciler: "AccountGrants::RoleReconciliation", adopts: %w[account_grants/account_flags] },
+    "account_links" => { reconciler: "AccountGrants::LinkReconciliation", adopts: %w[account_grants/account_flags] }
   }.freeze
 
   # @return [Array<String>] the reconciler names
