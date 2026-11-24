@@ -29,6 +29,21 @@ class AssessmentLevelRating < ApplicationRecord
   MIGRATION_STATUSES = %w[not_flagged flagged resolved].freeze
   SOURCES = %w[human agent seeded].freeze
 
+  # A side is vetted this cycle when it holds a value someone stood behind:
+  # one a person rated, revised or confirmed, or a carried (seeded) one on a
+  # cell the pair has since agreed. Starting alignment agrees matching
+  # carried cells and freezes the rest, so agreeing is the only confirmation
+  # left (ADR-20). A nil source is a legacy row and counts as human.
+  SELF_VETTED_SQL = "self_rated_frequency IS NOT NULL AND " \
+                    "(self_rating_source IS DISTINCT FROM 'seeded' OR aligned_frequency IS NOT NULL)"
+  MANAGER_VETTED_SQL = "manager_rated_frequency IS NOT NULL AND " \
+                       "(manager_rating_source IS DISTINCT FROM 'seeded' OR aligned_frequency IS NOT NULL)"
+
+  # A side someone has worked on this cycle: vetted, or cleared by a person
+  # (a human source with no value). Tells "In progress" from "To confirm".
+  SELF_TOUCHED_SQL = "self_rating_source = 'human' OR (#{SELF_VETTED_SQL})".freeze
+  MANAGER_TOUCHED_SQL = "manager_rating_source = 'human' OR (#{MANAGER_VETTED_SQL})".freeze
+
   acts_as_tenant :tenant
 
   belongs_to :tenant
@@ -54,6 +69,8 @@ class AssessmentLevelRating < ApplicationRecord
   scope :self_rated, -> { where.not(self_rated_frequency: nil) }
   scope :aligned, -> { where.not(aligned_frequency: nil) }
   scope :seeded, -> { where(source: "seeded") }
+  scope :self_vetted, -> { where(SELF_VETTED_SQL) }
+  scope :manager_vetted, -> { where(MANAGER_VETTED_SQL) }
   scope :human_entered, -> { where(source: "human") }
 
   # Ratings inside one role's scope, or inside each person's own scope
@@ -101,9 +118,11 @@ class AssessmentLevelRating < ApplicationRecord
   end
   private_class_method :within_cells
 
-  # Whether the self side still shows a carried-forward (seeded) value the
-  # person hasn't confirmed or changed. Per-side — the row-level `source`
-  # flips to "human" on any human touch and can't answer this.
+  # Whether the self side's value was carried forward (seeded) and the
+  # person hasn't confirmed or changed it themselves: provenance alone,
+  # whatever the cell's agreed value ({#self_rating_unconfirmed?} asks that
+  # too). Per-side — the row-level `source` flips to "human" on any human
+  # touch and can't answer this.
   #
   # @return [Boolean]
   def self_rating_carried?
@@ -115,5 +134,20 @@ class AssessmentLevelRating < ApplicationRecord
   # @return [Boolean]
   def manager_rating_carried?
     manager_rating_source == "seeded"
+  end
+
+  # Whether the self side's carried value still waits to be confirmed
+  # ({Assessments::CarriedCell.unconfirmed?}). The readers that show or
+  # count "to confirm" ask this; the rating operations ask
+  # `*_rating_carried?`, which is provenance alone.
+  #
+  # @return [Boolean]
+  def self_rating_unconfirmed?
+    Assessments::CarriedCell.unconfirmed?(self_rating_source, aligned_frequency)
+  end
+
+  # @return [Boolean]
+  def manager_rating_unconfirmed?
+    Assessments::CarriedCell.unconfirmed?(manager_rating_source, aligned_frequency)
   end
 end

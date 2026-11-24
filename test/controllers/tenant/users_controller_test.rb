@@ -35,6 +35,19 @@ class Tenant::UsersControllerTest < ActionDispatch::IntegrationTest
         assert_includes response.body, "Tenant role"
         assert_includes response.body, "Framework involvement"
       end
+
+      should "redirect with an alert when the account's person is held by another account" do
+        ActsAsTenant.with_tenant(@tenant) do
+          held = create(:person, tenant: @tenant, email: @member_user.email)
+          create(:tenant_user, tenant: @tenant, person: nil).link_to!(held, match: :admin)
+        end
+
+        get tenant_user_path(@member_tu)
+
+        assert_redirected_to root_path
+        assert_match "can't be linked to its person", flash[:alert]
+        assert_nil @member_tu.reload.person_id
+      end
     end
 
     context "PATCH /tenant/users/:id" do

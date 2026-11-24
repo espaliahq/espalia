@@ -56,10 +56,25 @@ class TenantUser < ApplicationRecord
           p.status = "active"
         end
         record_in_org_graph(linked) if tenant.org_graph_people_projected?
-        update!(person: linked)
-        linked
+        link_to!(linked, match: :sign_in)
       end
     end
+  end
+
+  # Links the account to its person through the grants stream, whose
+  # projection writes `person_id` before this returns.
+  #
+  # @param person [Person]
+  # @param match [Symbol, String] one of {AccountGrants::Aggregate::MATCHES}
+  # @param linked_by_id [String, nil] person_id of the actor
+  # @return [Person]
+  # @raise [AccountGrants::Aggregate::LinkTaken] when the account or the person is linked elsewhere
+  # @raise [AccountGrants::Aggregate::PersonForgotten] when the person was forgotten
+  def link_to!(person, match:, linked_by_id: nil)
+    AccountGrants::CommandHandler.new.link_account(self, person, match:, linked_by_id:)
+    self.person = person
+    clear_attribute_changes(%i[person_id])
+    person
   end
 
   # Derives a human-readable placeholder name from an email address by

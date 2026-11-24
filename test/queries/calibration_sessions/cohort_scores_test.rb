@@ -65,11 +65,11 @@ class CalibrationSessions::CohortScoresTest < ActiveSupport::TestCase
 
   teardown { ActsAsTenant.current_tenant = nil }
 
-  def rate(person, capability, frequency, ordinal: 3, source: nil)
+  def rate(person, capability, frequency, ordinal: 3, source: nil, aligned: nil)
     create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
            person_id: person.id, framework_id: @framework_id,
            capability_stable_id: capability.stable_id, level_ordinal: ordinal,
-           manager_rated_frequency: frequency, manager_rating_source: source)
+           manager_rated_frequency: frequency, manager_rating_source: source, aligned_frequency: aligned)
   end
 
   def scores
@@ -141,6 +141,15 @@ class CalibrationSessions::CohortScoresTest < ActiveSupport::TestCase
     assert_equal 0, pax[:rated]
     assert_equal 2, pax[:total]
     assert_equal 1, pax[:unlock_target]
+  end
+
+  should "not disclose a carried rating whose cell is agreed" do
+    rate(@r1, @cap_a, "consistent", source: "seeded", aligned: "consistent")
+    rate(@r1, @cap_b, "consistent", source: "seeded")
+
+    ivy = dot_for(@r1)
+    assert_equal [ 2, 1 ], ivy.values_at(:rated, :carried_count)
+    assert_not ivy[:carried_majority]
   end
 
   should "count a carried rating toward coverage AND disclose it" do

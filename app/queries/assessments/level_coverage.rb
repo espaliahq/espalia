@@ -5,7 +5,8 @@
 #
 # This is the durable "Assessment Complete" signal: the
 # {PersonDevelopment::Projections::CurrentAssessment} projection runs it on
-# every rating change and stamps the result onto
+# every rating change, and when a carried cell at the level is agreed or its
+# agreed value cleared, and stamps the result onto
 # {AssessmentCycleProgress#self_completed_at} / `#manager_completed_at`, which
 # the /assessments list then reads cheaply. The aligned perspective backs the
 # alignment-completion gate: {Assessments::AlignmentCompletionsController}
@@ -63,19 +64,14 @@ class Assessments::LevelCoverage
     ratings = AssessmentLevelRating
       .where(person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id)
       .within(scope)
-    # Completion means VETTED THIS CYCLE: carried-forward (seeded) values
-    # hold real data but nobody has confirmed them, so they don't count
-    # toward the self/manager "Complete" signals. A confirm/revise flips a
-    # side's provenance to "human" and it starts counting; nil provenance
-    # (legacy rows, factories) is treated as human — only "seeded" is
-    # excluded. The ALIGNED side below stays value-based: agreed values are
-    # never seeded.
-    self_rated = ratings.where.not(self_rated_frequency: nil)
-      .where(self_rating_source: [ nil, "human" ])
-      .distinct.count(:capability_stable_id)
-    manager_rated = ratings.where.not(manager_rated_frequency: nil)
-      .where(manager_rating_source: [ nil, "human" ])
-      .distinct.count(:capability_stable_id)
+    # Completion means VETTED THIS CYCLE: a carried-forward (seeded) value
+    # holds real data nobody has confirmed, so it doesn't count toward the
+    # self/manager "Complete" signals until a person confirms or revises
+    # it, or the pair agrees its cell (AssessmentLevelRating::SELF_VETTED_SQL).
+    # The ALIGNED side below stays value-based: agreed values are never
+    # seeded.
+    self_rated = ratings.self_vetted.distinct.count(:capability_stable_id)
+    manager_rated = ratings.manager_vetted.distinct.count(:capability_stable_id)
     total = stable_ids.size
 
     result = {

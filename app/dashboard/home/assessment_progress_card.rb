@@ -57,15 +57,13 @@ class Home::AssessmentProgressCard < Home::Card
         cycle_id: cycle.cycle_id, framework_id: cycle.framework_id, person_ids: [ person.id ]
       ))
       .self_rated
-    # The self side counts as started only on a human touch — the row-level
+    # The self side counts as started only on a vetted value — the row-level
     # progress status also flips on the MANAGER's first rating, and carried
-    # (seeded) values don't count either. Mirrors the index's self_human
-    # predicate (AssessmentsController#build_card_statuses) so the two
-    # surfaces' Start/Continue verbs can't disagree. Legacy rows with nil
-    # provenance count as human.
-    self_started = self_rated
-      .where("self_rating_source = 'human' OR self_rating_source IS NULL")
-      .exists?
+    # (seeded) values don't count until their cell is agreed. Follows the
+    # index's self_human predicate (AssessmentsController#build_card_statuses)
+    # so the two surfaces' Start/Continue verbs agree, but for a rating the
+    # person made and cleared: that reads Continue there and Start here.
+    self_started = self_rated.self_vetted.exists?
 
     Views::Home::Cards::AssessmentProgress.new(
       state: {

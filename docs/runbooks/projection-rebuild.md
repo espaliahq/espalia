@@ -97,6 +97,38 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: `account_grants/account_flags` v2 takes the link to a person ([#539](https://github.com/espaliahq/espalia/issues/539) b2), 2026-11-24
+
+Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection now also writes `tenant_users.person_id` from `AccountLinkedToPerson` and `AccountUnlinkedFromPerson`. Its reset sets a link the stream records and keeps one it doesn't. A link to a person since destroyed stays as the table has it, which is clear.
+
+The order matters. Step 2b runs the new `account_links` reconciler, which records every live link as `already_held`. Step 3 then rebuilds, and its reset leaves every link where the table has it. The previous release changes a link in only three ways, and a reset between steps 2b and 3 keeps each as the table has it. It links an account with no person, which the stream doesn't record, so the reset keeps it. It erases an account, which marks the account forgotten, and the reset touches only live accounts. And it destroys a person, which clears the column, and the reset finds no person to restore. Step 6 then records each: an erased link as an unlink with reason `forgotten`. No quiet window is needed. One race remains: the previous release's `Person#ensure_user!` saves a link without rereading the account, so if step 2b records another link to that account in between, the reset puts the recorded link back. That release loses one of the two links in this race anyway, and the table and the stream still agree afterwards.
+
+**Deploy this only onto a release that holds [PR #561](https://github.com/espaliahq/espalia/pull/561).** That release loads both link events and ignores them in `AccountFlags`, so it keeps serving while step 2b writes them.
+
+**If this deploys together with [#550](https://github.com/espaliahq/espalia/issues/550),** set `REBUILD_ON_DEPLOY=person_development/current_assessment,account_grants/account_flags`. That deploy blanks every assessment while it runs, as the #550 entry below says. If #550 deployed first and the variable was removed, set it again to `account_grants/account_flags`.
+
+#### Recorded: `person_development/current_assessment` v11 (agreeing a cell vets its carried ratings, [#550](https://github.com/espaliahq/espalia/issues/550))
+
+Path A: `REBUILD_ON_DEPLOY=person_development/current_assessment`, removed once the deploy is live. `AssessmentAligned` and `AlignmentCleared` now refresh the completion stamps when the cell is at the assessed level and a side is carried. The rebuild stamps `self_completed_at` and `manager_completed_at` on a participation whose carried cells were agreed, at the time of the agreement that completed the side. Nothing else changes: no rating, status or alignment row differs.
+
+Coverage is counted against the role's cells as the framework stands today, as it already is for a rating event. So a participation agreed under an earlier framework version stays unstamped if its role has since gained a capability at that level, and the cohort funnel reads it the same way.
+
+This projection's rebuild blanks every assessment while it runs, as above. Deploy in a quiet window and take the snapshot first. Until the rebuild, a participation agreed before this release keeps empty stamps. Everything that reads them shows it as unfinished: the Team Assessments chips and the Home card's "Ready for alignment" after a lens start, the calibration population badge, and the `self_completed_at` / `manager_completed_at` that `assessments_get`, `reporting_cycle_cohort` and `assessments_timeline` report. The cohort funnel and the calibration readiness card read the ratings, so they already count it.
+
+**Nobody may start alignment, agree a cell or clear an agreed value from the start of the deploy until traffic swaps.** The rebuild runs in predeploy while the previous release still serves. That release's handlers don't refresh the stamps, and nothing replays an event it projects after the rebuild has passed it. So an agreement or a clear on a carried cell in that window leaves that participation's stamps as they were. Nothing blocks those writes: the quiet window is the safeguard, and this is a rule for the operator, not a guard in the code.
+
+After the swap, count what slipped through, from the time the deploy started:
+
+```
+bin/rails runner 'puts Rails.configuration.event_store.read
+  .of_type([PersonDevelopment::Events::AssessmentAligned, PersonDevelopment::Events::AlignmentCleared])
+  .newer_than(Time.utc(2026, 11, 24, 6, 0)).count'
+```
+
+Zero means nothing to do. Otherwise the stamps of those participations may be stale. One refreshes at its next rating or at its next agreement on a carried cell; to settle them all, rebuild again from the Shell on the new release, in the next quiet window: `bin/rails "events:projections:rebuild[person_development/current_assessment]"`. A stale stamp misreports only what the paragraph above lists; no rating or agreed value is affected.
+
+Measured on the seeded dev database (194 handled events, one tenant): 4.7 s, Rails boot included.
+
 #### Recorded: `account_grants/account_flags` takes the role, with no bump ([#540](https://github.com/espaliahq/espalia/issues/540)), 2026-11-24
 
 No `CODE_VERSION` bump and no `REBUILD_ON_DEPLOY`. The projection now also writes `tenant_users.role` from `AccountRoleSet`, and its reset keeps a role the stream doesn't record. No role event exists before this deploy, and the `account_roles` reconciler records every account's role at step 2b and again at step 6. A rebuild at step 3 would gain nothing, and would undo a role the previous release changed between steps 2b and 3. Step 6 records that change instead.

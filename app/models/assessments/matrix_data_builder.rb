@@ -325,13 +325,16 @@ class Assessments::MatrixDataBuilder
         current_frequency: rating&.self_rated_frequency,
         manager_frequency: hidden ? nil : rating&.manager_rated_frequency,
         aligned_frequency: hidden ? nil : rating&.aligned_frequency,
-        # Carried-forward (seeded, unconfirmed) values that still ask to be
-        # confirmed — drives the lighter pill/chip treatment and the "to
-        # confirm" counts. Below the floor the scale already assumes the cell
-        # met, so a carried value there asks nothing (#480). Same privacy
-        # gate as the values.
-        current_frequency_carried: asks_confirmation?(ordinal, rating&.self_rating_carried?),
-        manager_frequency_carried: !hidden && asks_confirmation?(ordinal, rating&.manager_rating_carried?),
+        # Carried-forward (seeded) values that still ask to be confirmed —
+        # drives the lighter pill/chip treatment and the "to confirm"
+        # counts. Agreeing the cell confirms both sides. Below the floor the
+        # scale already assumes the cell met, so a carried value there asks
+        # nothing (#480). The manager's flag takes the values' privacy
+        # gate. The self flag doesn't: it shows no value, the assessee saw
+        # the agreed one when it was agreed, and every count of their side
+        # (Assessments::LevelCoverage) reads the cell the same way.
+        current_frequency_carried: asks_confirmation?(ordinal, rating&.self_rating_unconfirmed?),
+        manager_frequency_carried: !hidden && asks_confirmation?(ordinal, rating&.manager_rating_unconfirmed?),
         # Whether the record reads this cell (ADR-22).
         in_home_scope: @home_scope.include?(capability.stable_id, ordinal),
         # The started alignment that froze self and manager ratings here —
@@ -693,11 +696,11 @@ class Assessments::MatrixDataBuilder
   end
 
   # Whether every capability with a cell at the person's current level has a
-  # VETTED (human-owned) rating in the viewer's perspective — the "Assessment
+  # VETTED rating in the viewer's perspective — the "Assessment
   # Complete" signal. Same denominator as the hero's coverage gate, but a
   # DELIBERATELY stricter numerator: the hero counts carried values (score is
-  # about data), while Complete excludes them until confirmed (the pill is
-  # about this cycle's work). A role with no current-level cells is never
+  # about data), while Complete excludes them until confirmed or agreed (the
+  # pill is about this cycle's work). A role with no current-level cells is never
   # "complete" (nothing to finish).
   def current_level_complete?(categories)
     cells = categories
@@ -706,7 +709,7 @@ class Assessments::MatrixDataBuilder
     return false if cells.empty?
 
     # Complete means VETTED: a carried-forward value doesn't count until
-    # confirmed or changed (mirrors Assessments::LevelCoverage).
+    # confirmed, changed or agreed (mirrors Assessments::LevelCoverage).
     cells.all? { |cell| primary_cell_frequency(cell).present? && !primary_cell_carried?(cell) }
   end
 

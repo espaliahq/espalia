@@ -73,6 +73,30 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Start self-assessment"
     end
 
+    should "read a carried self value as work begun once its cell is agreed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        other = create(:framework_capability, category_id: @cap.category_id, name: "Execution")
+        create(:framework_capability_role_binding, capability_id: other.capability_id, role_id: @role.role_id)
+        create(:framework_behavioural_expectation, capability_id: other.capability_id, level_ordinal: 2)
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle_id, person_id: @person.id,
+          framework_id: @framework.framework_id, capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          self_rated_frequency: "some", self_rating_source: "seeded")
+      end
+
+      sign_in @user
+      get assessments_path
+      assert_includes response.body, "Start self-assessment", "carried and unagreed is still to confirm"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id, capability_stable_id: @cap.stable_id)
+          .update!(aligned_frequency: "some")
+      end
+
+      get assessments_path
+      assert_includes response.body, "Continue self-assessment"
+      assert_not_includes response.body, "Start self-assessment"
+    end
+
     should "offer a review once the self-assessment is ready for alignment" do
       rate(@cap, "consistent")
 

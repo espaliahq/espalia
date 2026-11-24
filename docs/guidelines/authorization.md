@@ -290,6 +290,18 @@ too. `events:reconcile` does the same for every account at deploy.
 Role events stay out of the old `AccountGrants` stream, since the previous
 release has no class to load them.
 
+An account's link to its person lives there too. `AccountLinkedToPerson`
+names the account, the person, how they were matched (`sign_in`,
+`hris_email`, `provisioned` or `admin`) and who linked them;
+`AccountUnlinkedFromPerson` gives a reason (`forgotten`, `admin`,
+`account_removed` or `cleared`). The projection writes `TenantUser#person_id`
+from them. Link through `TenantUser#link_to!`, never by writing the column.
+The aggregate refuses an account already linked, a person another account
+holds and a forgotten person. Forgetting unlinks the person's accounts
+through `AccountGrants::CommandHandler#unlink_forgotten` before it erases
+them. The `account_links` reconciler records links the table holds and the
+stream doesn't, as it does for roles, and logs any person two accounts share.
+
 `org_graph_editors`, `team_planning_planners` and their add and remove tools
 give each holder `since`, `added_by` and `already_held` from the stream. Editor
 grants also show in the Org Graph's organisation activity

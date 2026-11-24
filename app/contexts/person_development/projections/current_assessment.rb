@@ -106,7 +106,15 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     the snapshot ended.
   #     A role-less alignment after a pre-alignment transfer is now the new
   #     role's (REBUILD_ON_DEPLOY=person_development/current_assessment).
-  CODE_VERSION = 10
+  #
+  # 11 — agreeing a cell vets its carried sides: `AssessmentAligned` and
+  #     `AlignmentCleared` on a cell at the assessed level with a seeded
+  #     side now run `refresh_completion`, and Assessments::LevelCoverage
+  #     counts a seeded side once its cell is agreed. A rebuild stamps `self_completed_at` /
+  #     `manager_completed_at` on participations whose carried cells were
+  #     agreed, at the time of the agreement that completed them
+  #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
+  CODE_VERSION = 11
 
   # All event classes this projection handles.
   #
@@ -473,9 +481,11 @@ class PersonDevelopment::Projections::CurrentAssessment
     apply_source(rating, event)
     rating.save!
     touch_progress_started(event) unless seeded_event?(event)
-    # Completion counts only vetted (human) cells, so a seeded event can
-    # never change it — skip the ~8-query coverage pass (paid ~100× per
-    # person at bulk enrollment, and again on every replay).
+    # Completion counts only vetted cells, and a seeded value is vetted
+    # only once its cell is agreed, which comes later and freezes the
+    # rating. So a seeded event can never change it — skip the ~8-query
+    # coverage pass (paid ~100× per person at bulk enrollment, and again on
+    # every replay).
     refresh_completion(event) unless seeded_event?(event)
     broadcast_assessment_sync(event)
   end
@@ -590,6 +600,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.aligned_by_id = event.data[:aligned_by_id]
     rating.last_aligned_at = event.metadata[:timestamp] || Time.current
     rating.save!
+    refresh_completion_after_agreement(event, rating)
     broadcast_assessment_sync(event)
   end
 
@@ -615,6 +626,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.aligned_comment = nil
     rating.aligned_by_id = nil
     rating.save!
+    refresh_completion_after_agreement(event, rating)
     broadcast_assessment_sync(event)
   end
 
@@ -819,7 +831,8 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   # Recomputes current-level coverage for both perspectives after a rating
-  # change and stamps the per-side completion timestamps the /assessments list
+  # change, or an agreement on a carried cell, and stamps the per-side
+  # completion timestamps the /assessments list
   # reads. `status` is left as the lifecycle phase — completion lives in the
   # two timestamp columns because the two sides complete independently.
   #
@@ -831,8 +844,7 @@ class PersonDevelopment::Projections::CurrentAssessment
   # cell set without a subsequent rating can leave a stale flag until the next
   # rating — acceptable while migrations are rare and the migration UI is
   # deferred.
-  def refresh_completion(event)
-    progress = find_progress(event)
+  def refresh_completion(event, progress: find_progress(event), level_ordinal: nil)
     return unless progress
 
     coverage = Assessments::LevelCoverage.new(
@@ -840,7 +852,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       framework_id: event.metadata[:framework_id],
       cycle_id: event.data[:cycle_id],
       role_id: home_role_id(event, progress),
-      level_ordinal: home_level_ordinal(event, progress)
+      level_ordinal: level_ordinal || home_level_ordinal(event, progress)
     ).call
     now = event.metadata[:timestamp] || Time.current
 
@@ -849,6 +861,25 @@ class PersonDevelopment::Projections::CurrentAssessment
       manager_completed_at: completion_timestamp(progress.manager_completed_at, coverage[:manager_complete], now),
       updated_at: now
     )
+  end
+
+  # Agreeing a cell, or clearing its agreed value, moves completion only
+  # where a side is carried and the cell is at the assessed level: agreement
+  # is what vets a seeded value. A start agrees every matching cell of the
+  # role, one event each, so every other cell skips the coverage count, and
+  # each carried one at the level pays it.
+  def refresh_completion_after_agreement(event, rating)
+    # Provenance, not `unconfirmed?`: the row already holds the agreed value.
+    return unless rating.self_rating_carried? || rating.manager_rating_carried?
+
+    progress = find_progress(event)
+    return unless progress
+
+    # An unknown home level leaves the level to LevelCoverage, as a rating does.
+    level_ordinal = home_level_ordinal(event, progress)
+    return if level_ordinal && rating.level_ordinal != level_ordinal
+
+    refresh_completion(event, progress: progress, level_ordinal: level_ordinal)
   end
 
   # @return [Time, nil] existing time if still complete, `now` on first

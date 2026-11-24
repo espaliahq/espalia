@@ -231,7 +231,7 @@ class CalibrationSessions::CohortScores
     rows = ratings_by_person.fetch(person_id, []).select do |rating|
       rating.level_ordinal == ordinal && rating.manager_rated_frequency.present?
     end
-    [ rows.size, rows.count { |rating| rating.manager_rating_source == "seeded" } ]
+    [ rows.size, rows.count(&:manager_rating_unconfirmed?) ]
   end
 
   def bindings_for(role_id)
