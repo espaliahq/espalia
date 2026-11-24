@@ -16,7 +16,7 @@ Each entry is keyed by its table and has an `owner`:
 | `event_store` | RailsEventStore writes it. | nothing |
 | `plain` | Plain state, not written from events. | `reason`, required |
 
-`writers` lists the files in `app/` or `lib/` allowed to write the table outside its owner. A projection's table with writers, a table whose projection owns only some columns, and a plain table each need a `reason` of one line. Write an issue as its full link: in YAML, ` #` starts a comment and cuts the reason short.
+`writers` lists the files in `app/` or `lib/` allowed to write the table outside its owner. Where a projection owns only some `columns`, a writer may still insert rows, but only a file also in `column_writers` may update those columns. A projection's table with writers, a table whose projection owns only some columns, and a plain table each need a `reason` of one line. Write an issue as its full link: in YAML, ` #` starts a comment and cuts the reason short.
 
 ```yaml
 pay_bands:
@@ -28,7 +28,7 @@ pay_bands:
     - app/operations/operations/tenants/remove_pay_band.rb
 ```
 
-**A new table** gets an entry in the same PR as its migration, or `test/db/write_ownership_test.rb` fails. The test also fails on an entry whose table is gone, an owner that is no projection, a missing reason, or a writer that is no file.
+**A new table** gets an entry in the same PR as its migration, or `test/db/write_ownership_test.rb` fails. The test also fails on a table declared twice, an entry whose table is gone, an owner that is no projection, a column the table doesn't have, a missing reason, or a writer that is no file in `app/` or `lib/`.
 
 **A table moving onto a stream** changes its entry from `plain` to its projection. Leave the old writers listed, with the reason, until the PR that stops their writes removes them.
 
@@ -36,7 +36,8 @@ pay_bands:
 
 - a write from a file the entry doesn't name;
 - a projection writing a table another projection owns;
-- a projection writing a column its entry doesn't give it.
+- a projection writing a column its entry doesn't give it, or deleting rows of a table where it owns only columns;
+- a writer updating a column a projection owns, unless the file is among `column_writers`.
 
 A write a test makes itself is never checked. The check matches files, not lines, so moving code within a file doesn't break it. It sees only what the unit tests write: a writer only a system test reaches still belongs in the entry, but CI won't fail without it. To check those too, run the whole suite with `WRITE_CATALOGUE=1 bin/rails test:all`, then the check.
 

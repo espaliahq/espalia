@@ -182,6 +182,9 @@ people:
     - lib/tasks/evidence_suggestions_eval.rb
     - lib/tasks/example_seed.rb
     - lib/tasks/stress_seed.rb
+  column_writers:
+    - app/integrations/hris/hibob/adapter.rb
+    - lib/tasks/calibration_history_seed.rb
 tenant_users:
   owner: account_grants/account_flags
   columns:
