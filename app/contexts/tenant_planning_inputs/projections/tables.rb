@@ -24,13 +24,21 @@ class TenantPlanningInputs::Projections::Tables
   REMOVALS = TenantPlanningInputs::Aggregate::WRITES.values.filter_map { it[:remove] }.freeze
   private_constant :REMOVALS
 
+  # The refusal a person sees while the tables rebuild.
+  REBUILDING = "Pay and cost inputs are being rebuilt; try again in a minute."
+
   # Runs a read a write plans from, refused while this projection rebuilds,
-  # as the tables are then part written.
+  # as the tables are then part written. The block reads only these tables,
+  # so any refusal is this projection's.
   #
   # @yield while no rebuild can start
   # @return [Object] the block's value
   # @raise [ProjectionVersion::Rebuilding] while a rebuild holds the tables
-  def self.unless_rebuilding(&) = ProjectionVersion.unless_rebuilding(PROJECTION_NAME, &)
+  def self.unless_rebuilding(&)
+    ProjectionVersion.unless_rebuilding(PROJECTION_NAME, &)
+  rescue ProjectionVersion::Rebuilding
+    raise ProjectionVersion::Rebuilding, REBUILDING
+  end
 
   # @return [Array<Class>]
   def self.handled_events

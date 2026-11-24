@@ -91,6 +91,21 @@ class Plans::BudgetLinesControllerTest < ActionDispatch::IntegrationTest
       assert_empty lines(@plan_id).select { it[:source] == "plan" }
     end
 
+    should "be sent back to the tab while pay and cost inputs rebuild, told why, when pay is hidden from them" do
+      inputs = TenantPlanningInputs::Projections::Tables::PROJECTION_NAME
+      checking = ProjectionVersion.method(:unless_rebuilding)
+      rebuilding = ->(name, &block) { name == inputs ? raise(ProjectionVersion::Rebuilding) : checking.call(name, &block) }
+
+      TeamPlanning::Budget.stub(:money_shown?, false) do
+        ProjectionVersion.stub(:unless_rebuilding, rebuilding) do
+          get edit_budget_line_plan_path(@plan_id, budget_line_id: @line, scenario: @q1)
+        end
+      end
+
+      assert_redirected_to budget_plan_path(@plan_id, scenario: @q1)
+      assert_equal TenantPlanningInputs::Projections::Tables::REBUILDING, flash[:alert]
+    end
+
     should "get a 404 for a line the scenario doesn't hold" do
       get edit_budget_line_plan_path(@plan_id, budget_line_id: SecureRandom.uuid_v7, scenario: @q1)
       assert_response :not_found

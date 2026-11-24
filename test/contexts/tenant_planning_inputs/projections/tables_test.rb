@@ -70,6 +70,14 @@ class TenantPlanningInputs::Projections::TablesTest < ActiveSupport::TestCase
     assert_equal live, everything
   end
 
+  should "refuse a read during a rebuild in words that name pay and cost inputs" do
+    error = ProjectionVersion.stub(:unless_rebuilding, ->(*) { raise ProjectionVersion::Rebuilding }) do
+      assert_raises(ProjectionVersion::Rebuilding) { TenantPlanningInputs::Projections::Tables.unless_rebuilding { flunk } }
+    end
+
+    assert_equal TenantPlanningInputs::Projections::Tables::REBUILDING, error.message
+  end
+
   should "leave another tenant's rows alone" do
     other = create(:tenant)
     ActsAsTenant.with_tenant(other) { save_planning_input!(:pay_bands, band("Fixtureland")) }
