@@ -192,6 +192,8 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
         sentence += " (was “#{was}”)"
       end
       sentence
+    when :suggestion_kept
+      "#{actor} accepted a suggestion to keep this as “#{valence_label(entry.valence)}”"
     when :removed
       sentence = "#{actor} removed this feedback from this behaviour"
       sentence += " — #{entry.reason}" if entry.reason.present?
