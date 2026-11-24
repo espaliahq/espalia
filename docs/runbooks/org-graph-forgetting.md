@@ -40,10 +40,18 @@ The schedule ships off for every tenant. `OrgGraph::ForgetDueLeaversJob` runs da
    ```
 
    A tenant admin can run it through the `tenants_forgetting_dry_run` MCP tool too. It prints the count and the person ids due today. Look up a few ids in a console if the number surprises you.
-3. Turn it on with that count. A tenant admin calls `tenants_enable_scheduled_forgetting` with `confirm_count` set to the dry run's number. If the number has moved since, the call is refused: run the dry run again. The tenant records when it was turned on and by which tenant user.
+3. Turn it on with that count. A tenant admin calls `tenants_enable_scheduled_forgetting` with `confirm_count` set to the dry run's number. If the number has moved since, the call is refused: run the dry run again. The tenant records when it was turned on and by whom.
 4. The next run logs `[OrgGraph::Forgetting] scheduled tenant=<id> reason=retention count=<n> person_ids=…`.
 
 `tenants_disable_scheduled_forgetting` turns it off. A run already going stops before the next person, and anyone already forgotten stays forgotten. A run also reads the retention period afresh for each person, so lengthening it spares anyone it no longer covers. Shortening it, or moving it from never to a number of years, turns the schedule off, since the count it was turned on with no longer holds. Run the dry run again and turn it back on.
+
+### Where the settings live
+
+The period and the schedule are events on the tenant's `TenantSettings` stream, projected to `tenant_retention_settings`. Each change also writes the old keys of `tenants.org_graph_config`, because the release before this one reads and writes only those during a deploy. A command first records whatever that release wrote there alone, then makes its change in both places.
+
+Until [#539](https://github.com/espaliahq/espalia/issues/539) Track C drops those keys, a run asks both places. A tenant is scheduled only when both say so, and the longer of the two periods decides who is due, so neither release can forget someone the other would keep. A tenant with no row reads as seven years, off. The panel shows who turned the schedule on and when, and "a former member" once that admin is forgotten too.
+
+A run holds the stream's lock shared, then the tenant row, for each person. A change from either release waits for that person to finish, or the run sees it before the next one.
 
 ## Forgetting one leaver on request
 
