@@ -21,11 +21,11 @@ class OrgLeaver < ApplicationRecord
   #
   # @param tenant [Tenant]
   # @param on [Date]
+  # @param retention_years [Integer, nil] the period already read, when the caller reports it
   # @return [Array<String>] person ids
-  def self.due_to_be_forgotten(tenant, on: Date.current)
-    cutoff = TenantRetentionSetting.forget_left_on_or_before(tenant, on)
-    return [] unless cutoff
+  def self.due_to_be_forgotten(tenant, on: Date.current, retention_years: TenantRetentionSetting.longer_period(tenant))
+    return [] unless retention_years
 
-    where(tenant:, left_on: ..cutoff).order(:left_on, :person_id).pluck(:person_id)
+    where(tenant:, left_on: ..(on - retention_years.years)).order(:left_on, :person_id).pluck(:person_id)
   end
 end

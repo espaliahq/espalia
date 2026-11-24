@@ -352,8 +352,21 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
 
       report = forgetting(active: [ "hb-2" ]).dry_run(on: TODAY)
 
-      assert_equal OrgGraph::Forgetting::Report.new(count: 1, person_ids: [ @leaver.id ]), report
+      assert_equal OrgGraph::Forgetting::Report.new(count: 1, person_ids: [ @leaver.id ], retention_years: 7), report
       assert_not @leaver.reload.forgotten?
+    end
+
+    should "report the period that chose them, though it changes while the HRIS is asked" do
+      tenant = @tenant
+      hris = Object.new
+      hris.define_singleton_method(:active_external_ids) do
+        TenantSettings::CommandHandler.new(Tenant.find(tenant.id)).set_retention_period(30)
+        []
+      end
+
+      report = OrgGraph::Forgetting.new(@tenant, hris:).dry_run(on: TODAY)
+
+      assert_equal [ 7, [ @leaver.id ] ], [ report.retention_years, report.person_ids ]
     end
   end
 

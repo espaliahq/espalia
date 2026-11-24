@@ -40,8 +40,10 @@ class OrgGraph::Forgetting
   #
   # @!attribute count [Integer]
   # @!attribute person_ids [Array<String>]
-  Report = Data.define(:count, :person_ids) do
-    def self.of(person_ids) = new(count: person_ids.size, person_ids: person_ids)
+  Report = Data.define(:count, :person_ids, :retention_years) do
+    def self.of(person_ids, retention_years: nil) = new(count: person_ids.size, person_ids:, retention_years:)
+
+    def initialize(count:, person_ids:, retention_years: nil) = super
   end
 
   # Notification params that copy a person's name by value, each beside the
@@ -150,13 +152,16 @@ class OrgGraph::Forgetting
     @hris = hris
   end
 
-  # Who {#forget_due} would forget today, after the same HRIS check.
+  # Who {#forget_due} would forget today, after the same HRIS check. The
+  # period is read once, before the HRIS is asked, and reported with them.
   #
   # @param on [Date]
-  # @return [Report]
+  # @return [Report] with the retention_years that chose them
   # @raise [Hris::Hibob::Errors::Error] and the like, when the HRIS can't be reached
   def dry_run(on: Date.current)
-    Report.of(candidates(on))
+    years = TenantRetentionSetting.longer_period(@tenant)
+    due = within_tenant { OrgLeaver.due_to_be_forgotten(@tenant, on:, retention_years: years) }
+    Report.of(candidate_ids(due), retention_years: years)
   end
 
   # Forgets every leaver whose retention period has ended and whom the HRIS

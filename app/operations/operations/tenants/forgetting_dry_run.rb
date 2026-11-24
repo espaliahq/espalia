@@ -27,8 +27,7 @@ class Operations::Tenants::ForgettingDryRun < Operations::Base
     report = self.class.report(tenant)
     Rails.logger.info("[OrgGraph::Forgetting] dry_run tenant=#{tenant.id} requested_by=#{context.tenant_user&.id} " \
                       "reason=#{params[:reason] || 'retention'} count=#{report.count} person_ids=#{report.person_ids.join(',')}")
-    { tenant_id: tenant.id, retention_years: TenantRetentionSetting.longer_period(tenant),
-      count: report.count, person_ids: report.person_ids }
+    { tenant_id: tenant.id, retention_years: report.retention_years, count: report.count, person_ids: report.person_ids }
   end
 
   # @param tenant [Tenant]
