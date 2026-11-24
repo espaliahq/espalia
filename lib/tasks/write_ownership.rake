@@ -8,7 +8,10 @@ namespace :write_ownership do
 
     violations = WriteOwnership.load.violations(WriteCatalogueReport.load)
     if violations.any?
-      violations.each { |v| warn "#{v[:table]}: #{v[:projection] ? "inside #{v[:projection]}, " : ''}#{v[:reason]}" }
+      violations.each do |v|
+        where = ("inside #{v[:projection]}#{" at #{v[:file]}" if v[:file]}, " if v[:projection])
+        warn "#{v[:table]}: #{where}#{v[:reason]}"
+      end
       abort <<~MSG
         #{violations.size} write(s) config/write_ownership.yml doesn't allow.
         Name the file among the table's writers, with the reason, or move the write behind the table's owner.
