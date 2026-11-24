@@ -79,13 +79,7 @@ class TenantSettings::CommandHandler
   # The previous release, still serving during a deploy, writes the JSON
   # only. Record what it holds first, as reconcile would, so the command
   # acts on the settings the tenant has rather than a stale stream.
-  def settle(settings, config)
-    settings.record_held(
-      retention_years: config.retention_years, scheduled_forgetting: config.scheduled_forgetting,
-      enabled_at: config.scheduled_forgetting_enabled_at,
-      enabled_by_id: TenantUser.unscoped.where(id: config.scheduled_forgetting_enabled_by_id).pick(:person_id)
-    )
-  end
+  def settle(settings, config) = settings.record_held(**TenantSettings::Held.from(config))
 
   # The JSON names the admin by account, where the stream names their person.
   def write_json(settings, config, was_on, enabled_by_account_id)

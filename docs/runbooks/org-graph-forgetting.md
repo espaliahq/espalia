@@ -47,7 +47,7 @@ The schedule ships off for every tenant. `OrgGraph::ForgetDueLeaversJob` runs da
 
 ### Where the settings live
 
-The period and the schedule are events on the tenant's `TenantSettings` stream, projected to `tenant_retention_settings`. Each change also writes the old keys of `tenants.org_graph_config`, because the release before this one reads and writes only those during a deploy. A command first records whatever that release wrote there alone, then makes its change in both places.
+The period and the schedule are events on the tenant's `TenantSettings` stream, projected to `tenant_retention_settings`. Each change also writes the old keys of `tenants.org_graph_config`, because the release before this one reads and writes only those during a deploy. A command first records whatever that release wrote there alone, then makes its change in both places. Each deploy's `events:reconcile` records it too.
 
 Until [#539](https://github.com/espaliahq/espalia/issues/539) Track C drops those keys, a run asks both places. A tenant is scheduled only when both say so, and the longer of the two periods decides who is due, so neither release can forget someone the other would keep. A tenant with no row reads as seven years, off. The panel shows who turned the schedule on and when, and "a former member" once that admin is forgotten too.
 
