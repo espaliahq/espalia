@@ -77,6 +77,33 @@ class TenantPlanningInputs::ReconciliationTest < ActiveSupport::TestCase
     end
   end
 
+  context "a row recorded before a column was added" do
+    setup do
+      rows = TenantPlanningInputs::Rows
+      old = held_band("", position: 1)
+      new = held_band("Fixtureland", position: 2)
+      TenantPlanningInputs::Repository.new.with_aggregate do |inputs|
+        { old => %w[location location_key], new => [] }.each do |band, unknown|
+          inputs.record_held(:pay_bands, id: band.id, row: rows.dump(:pay_bands, band).except(*unknown),
+                                         created_at: rows.time(band.created_at), updated_at: rows.time(band.updated_at),
+                                         last_changed_by_id: nil)
+        end
+      end
+    end
+
+    should "rebuild beside rows that name the column, reading it as the column's default" do
+      before = everything
+
+      TenantPlanningInputs::Projections::Tables.reset!(tenant: @tenant)
+
+      assert_equal before, everything
+    end
+
+    should "leave reconcile nothing to record" do
+      assert_equal [ 0, 0, 0 ], reconcile.to_h.values_at(:added, :removed, :changed)
+    end
+  end
+
   should "take the band list's lock before the stream's, as a command does, so the previous release's band writes wait" do
     order = []
     repository = TenantPlanningInputs::Repository.new

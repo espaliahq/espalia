@@ -60,7 +60,7 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
   # values would record a change on every run.
   def changed?(record, entry)
     table = table_of(record)
-    Rows.cast(table, Rows.dump(table, record)) != Rows.cast(table, entry.row) ||
+    Rows.cast(table, Rows.dump(table, record)) != Rows.cast(table, Rows.complete(table, entry.row)) ||
       Rows.time(record.updated_at) != entry.updated_at
   end
 

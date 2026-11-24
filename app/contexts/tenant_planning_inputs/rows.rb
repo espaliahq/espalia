@@ -30,6 +30,20 @@ module TenantPlanningInputs::Rows
     columns(table).to_h { [ it, dump_value(model(table).type_for_attribute(it).type, record.public_send(it)) ] }
   end
 
+  # A row as the table's columns now stand: an event recorded before a
+  # column was added reads it as the column's default, and a dropped column
+  # is left out. Without this, one added column fails every rebuild, as
+  # insert_all needs every row to name the same columns.
+  #
+  # @param table [Symbol]
+  # @param row [Hash]
+  # @return [Hash{String => Object}]
+  def self.complete(table, row)
+    row = row.stringify_keys
+    defaults = model(table).column_defaults
+    columns(table).to_h { [ it, row.fetch(it) { defaults[it] } ] }
+  end
+
   # The row as the table types read it, so a row from the table and one from
   # the stream compare equal when the table holds what the stream does.
   #

@@ -50,7 +50,7 @@ class TenantPlanningInputs::Projections::Tables
         TenantPlanningInputs::Rows::TABLES.each_key do |table|
           model = TenantPlanningInputs::Rows.model(table)
           model.where(tenant_id: tenant.id).delete_all
-          rows = inputs.entries(table).map { |id, entry| row_for(tenant, id, entry) }
+          rows = inputs.entries(table).map { |id, entry| row_for(tenant, table, id, entry) }
           model.insert_all!(rows, record_timestamps: false) if rows.any?
         end
         Tenant.where(id: tenant.id).update_all(pay_bands_changed_at: inputs.bands_changed_at) if inputs.bands_changed_at
@@ -59,12 +59,13 @@ class TenantPlanningInputs::Projections::Tables
   end
 
   # @param tenant [Tenant]
+  # @param table [Symbol] one of {TenantPlanningInputs::Rows::TABLES}
   # @param id [String]
   # @param entry [TenantPlanningInputs::Aggregate::Entry]
   # @return [Hash{String => Object}] the row as the table holds it. `updated_by_id` is the previous
   #   release's: clearing it tells reconcile which release last changed the row.
-  def self.row_for(tenant, id, entry)
-    entry.row.merge("id" => id, "tenant_id" => tenant.id, "created_at" => entry.created_at,
+  def self.row_for(tenant, table, id, entry)
+    TenantPlanningInputs::Rows.complete(table, entry.row).merge("id" => id, "tenant_id" => tenant.id, "created_at" => entry.created_at,
                     "updated_at" => entry.updated_at, "updated_by_person_id" => entry.updated_by_person_id,
                     "updated_by_id" => nil)
   end
@@ -89,7 +90,7 @@ class TenantPlanningInputs::Projections::Tables
     if REMOVALS.include?(event.class)
       model.where(tenant_id: tenant.id, id: data[:id]).delete_all
     elsif data[:row]
-      upsert(tenant, model, data)
+      upsert(tenant, table, data)
     end
     return unless table == :pay_bands
 
@@ -99,13 +100,13 @@ class TenantPlanningInputs::Projections::Tables
 
   # A row reconcile records may already be in the table, so a write is an
   # upsert that keeps the row's created_at.
-  def upsert(tenant, model, data)
+  def upsert(tenant, table, data)
     entry = TenantPlanningInputs::Aggregate::Entry.new(
       row: data[:row].deep_stringify_keys, created_at: data[:created_at] || data[:at], updated_at: data[:at],
       updated_by_person_id: data[:changed_by_id] || data[:last_changed_by_id]
     )
-    row = self.class.row_for(tenant, data[:id], entry)
-    model.upsert_all([ row ], unique_by: :id, record_timestamps: false,
+    row = self.class.row_for(tenant, table, data[:id], entry)
+    TenantPlanningInputs::Rows.model(table).upsert_all([ row ], unique_by: :id, record_timestamps: false,
                               update_only: row.keys - %w[id tenant_id created_at])
   end
 
