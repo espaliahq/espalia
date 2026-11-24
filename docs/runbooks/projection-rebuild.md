@@ -101,7 +101,7 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection now also writes `tenant_users.person_id` from `AccountLinkedToPerson` and `AccountUnlinkedFromPerson`. Its reset sets a link the stream records and keeps one it doesn't. A link to a person since destroyed stays as the table has it, which is clear.
 
-The order matters. Step 2b runs the new `account_links` reconciler, which records every live link as `already_held`. Step 3 then rebuilds, and its reset leaves every link where the table has it. A link or an erase the previous release wrote between steps 2b and 3 survives the reset, since the stream doesn't record it, and step 6 records it: an erased link as an unlink with reason `forgotten`.
+The order matters. Step 2b runs the new `account_links` reconciler, which records every live link as `already_held`. Step 3 then rebuilds, and its reset leaves every link where the table has it. The previous release changes a link in only three ways, and each survives a reset between steps 2b and 3. It links an account with no person, which the stream doesn't record, so the reset keeps it. It erases an account, which marks the account forgotten, and the reset touches only live accounts. And it destroys a person, which clears the column, and the reset finds no person to restore. Step 6 then records each: an erased link as an unlink with reason `forgotten`. No quiet window is needed.
 
 **Deploy this only onto a release that holds [PR #561](https://github.com/espaliahq/espalia/pull/561).** That release loads both link events and ignores them in `AccountFlags`, so it keeps serving while step 2b writes them.
 
