@@ -24,6 +24,8 @@ Every replayable projection declares `CODE_VERSION` (integer). The `projection_v
 
 Just before `verify`, `events:projections:stamp_if_no_events` resets and stamps any never-stamped projection while none of its handled events exist in the store. A rebuild would replay nothing, so a newly registered projection over new event types needs no deploy step. It stamps nothing while another projection is stale, and never stamps a `CODE_VERSION` bump.
 
+Earlier, at step 2b, `events:reconcile` adopts a projection whose table a release used to write directly: once its reconciler has made the stream hold what the table holds, for every tenant, the projection is stamped without a reset. Like `stamp_if_no_events`, it stamps only a projection with no stamp at all. See [event-sourcing.md](../guidelines/event-sourcing.md#moving-a-plain-table-onto-a-tenant-stream).
+
 **A failed predeploy stops only the service that runs it.** In the shipped `render.yaml` only the web service has a `preDeployCommand`, so the worker goes live on the new commit while web stays on the old one. Each later commit retries and fails the same way until the stamp is fixed. Migrations have run by then, so the old web release must work against the new schema, which an additive migration allows.
 
 The version is a human-decided signal: bump it when handler logic or `reset!` semantics change in a way that requires reprocessing past events. See [event-sourcing.md](../guidelines/event-sourcing.md) for bump rules.
@@ -109,11 +111,13 @@ Measured on the seeded dev database (194 handled events, one tenant): 4.7 s, Rai
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection is new and now the only writer of `tenant_users.org_graph_editor` and `tenant_users.team_planner`.
 
-Predeploy step 2b, `account_grants:reconcile`, first records each flag already set as an `already_held` event with no grantor, an account with no person included. The rebuild's reset then sets both flags on every live account to what the stream holds, in one statement, and its replay changes nothing. So no grant is ever cleared, and a rebuild that stops part way leaves the flags right. Step 6 runs the task again and records any grant the previous release gave or took back after the rebuild. If the task fails for any tenant, it fails the deploy before the rebuild.
+Predeploy step 2b, `account_grants:reconcile` (since renamed `events:reconcile`), first records each flag already set as an `already_held` event with no grantor, an account with no person included. The rebuild's reset then sets both flags on every live account to what the stream holds, in one statement, and its replay changes nothing. So no grant is ever cleared, and a rebuild that stops part way leaves the flags right. Step 6 runs the task again and records any grant the previous release gave or took back after the rebuild. If the task fails for any tenant, it fails the deploy before the rebuild.
 
 **On this first deploy, nobody may add or remove an editor or a planner between step 2b and step 3.** The previous release writes only the flag, and the reset sets the flags from the events step 2b wrote, so a change in those seconds is undone. After step 3 it is safe: step 6 records it, and a later command on that account first records what its flag says. Later deploys don't need the rule, since the release they replace writes events.
 
 Forgetting the variable is safe. Step 4 finds events for a projection that was never stamped, so it resets nothing, `verify` fails and the previous release keeps serving. Set the variable and deploy again.
+
+**Since `events:reconcile`, a database that still lacks this stamp needs neither the variable nor the rule.** Step 2b records the flags and then adopts the projection, stamping it without a reset, so step 3 logs that it is already current and skips the rebuild. Step 6 records any change the previous release made in between.
 
 #### Recorded: `org_graph/structure` v3 (a copied type remembers its source, [#494](https://github.com/espaliahq/espalia/issues/494))
 

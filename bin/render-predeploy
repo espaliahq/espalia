@@ -36,14 +36,15 @@ log "step 2: db:prepare (4 databases)"
 rake db:prepare
 log "step 2: done"
 
-# 2b. Record the editor and planner grants the account flags already hold as
-#     AccountGrants events, before step 3 or 4 can reset the flags their
-#     projection derives. Idempotent: a run that finds nothing new writes
-#     nothing. The previous release never reads the stream, so events left by
-#     a deploy that fails at verify are harmless. A failure for any tenant
-#     stops the deploy here, before step 3 can clear that tenant's flags.
-log "step 2b: account_grants:reconcile"
-rake account_grants:reconcile
+# 2b. Record what each table in Projections::Reconcilers holds as events on
+#     its tenant stream, before step 3 or 4 can reset the tables their
+#     projections derive, then adopt any never-stamped projection whose table
+#     now matches its stream. Idempotent: a run that finds nothing new writes
+#     nothing. The previous release never reads these streams, so events left
+#     by a deploy that fails at verify are harmless. A failure for any tenant
+#     stops the deploy here, before step 3 can reset that tenant's table.
+log "step 2b: events:reconcile"
+rake events:reconcile
 log "step 2b: done"
 
 # 3. Optional inline projection rebuild — only when explicitly authorized for
@@ -89,8 +90,8 @@ log "step 5: org_graph:claim_hris_facts"
 rake org_graph:claim_hris_facts
 log "step 5: done"
 
-# 6. Record any grant the previous release gave or took back through the flags
+# 6. Record anything the previous release wrote to those tables directly
 #    since step 2b, while it was still serving.
-log "step 6: account_grants:reconcile"
-rake account_grants:reconcile
+log "step 6: events:reconcile"
+rake events:reconcile
 log "step 6: done — predeploy complete"

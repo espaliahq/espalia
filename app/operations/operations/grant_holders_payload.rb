@@ -3,7 +3,7 @@
 # The list the editor and planner tools return: the accounts holding a grant,
 # each with when it took effect and who gave it, and the admins, who need none.
 #
-# The flag on tenant_users says who holds the grant; the AccountGrants stream
+# The flag on tenant_users says who holds the grant; the TenantAccountGrants stream
 # says since when and from whom. A flag the stream doesn't hold yet reads with
 # those left nil until the deploy's reconcile records it.
 module Operations::GrantHoldersPayload

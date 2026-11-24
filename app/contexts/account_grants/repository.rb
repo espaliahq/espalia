@@ -1,66 +1,57 @@
 # frozen_string_literal: true
 
-# Loads and stores a tenant's account grants via RailsEventStore.
+# Loads and saves a tenant's account grants, held in one stream per tenant:
+# `TenantAccountGrants`.
 #
-# Builds the stream name through EventStreamNaming and puts the tenant on
-# every event's metadata, as the other contexts' repositories do.
+# The grants used to live in `AccountGrants`, and a release still serving
+# during a deploy writes there. Until that can't happen, the two streams are
+# kept equal by linking: an event is recorded once and indexed in both. The
+# lock keeps the old stream's name, so both releases take the same lock.
+# Under it, events only in the old stream are linked into the new one before
+# loading, and events appended to the new one are linked back. A read without
+# the lock uses the old stream, the only one complete while both releases
+# write. [#539](https://github.com/espaliahq/espalia/issues/539) Track B stops
+# the linking back and moves that read to the new stream in the same change.
 #
-class AccountGrants::Repository
-  # @param event_store [RailsEventStore::JSONClient] defaults to global config
-  def initialize(event_store: Rails.configuration.event_store)
-    @event_store = event_store
-    @repository = AggregateRoot::Repository.new(event_store)
-  end
-
-  # Loads the tenant's grants, yields them, and stores any new events,
-  # holding the stream's lock until the transaction ends.
-  #
-  # @yield [AccountGrants::Aggregate]
-  # @return [AccountGrants::Aggregate] the grants as stored
-  # @raise [ArgumentError] if no tenant context is available
-  def with_grants(&block)
-    stream = EventStreamNaming.account_grants_stream(tenant: current_tenant!)
-    grants = AccountGrants::Aggregate.new
-    @event_store.with_metadata({ tenant_id: current_tenant!.id }) do
-      ActiveRecord::Base.transaction do
-        lock_stream(stream)
-        @repository.with_aggregate(grants, stream, &block)
-      end
-    end
-    grants
-  end
-
-  # Loads the tenant's grants under the stream's lock and yields them,
-  # storing nothing. A grant can't be written until the transaction ends.
-  #
-  # @yield [AccountGrants::Aggregate]
-  # @raise [ArgumentError] if no tenant context is available
-  def reading_locked
-    stream = EventStreamNaming.account_grants_stream(tenant: current_tenant!)
+# @example
+#   AccountGrants::Repository.new.with_grants { |grants| grants.add(:team_planner, ...) }
+class AccountGrants::Repository < TenantStreams::Repository
+  # @see TenantStreams::Repository#with_aggregate
+  def with_aggregate(&block)
     ActiveRecord::Base.transaction do
-      lock_stream(stream)
-      yield @repository.load(AccountGrants::Aggregate.new, stream)
+      super.tap { link_missing(from: stream_name(current_tenant!), to: legacy_stream_name(current_tenant!)) }
     end
   end
 
-  # Loads the tenant's grants to read, taking no lock and storing nothing.
+  # Reads the old stream, which holds every grant whichever release wrote it.
+  # It stops being complete once the linking back stops.
   #
   # @return [AccountGrants::Aggregate]
-  # @raise [ArgumentError] if no tenant context is available
-  def load_grants
-    @repository.load(AccountGrants::Aggregate.new, EventStreamNaming.account_grants_stream(tenant: current_tenant!))
+  def load_aggregate
+    @repository.load(new_aggregate, legacy_stream_name(current_tenant!))
   end
+
+  alias with_grants with_aggregate
+  alias load_grants load_aggregate
 
   private
 
-  # The expected version only catches a write between load and store; the
-  # lock also holds the no-op check a duplicate add makes.
-  def lock_stream(stream)
-    sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", stream ])
-    ActiveRecord::Base.connection.execute(sql)
+  def new_aggregate = AccountGrants::Aggregate.new
+
+  def stream_name(tenant) = EventStreamNaming.tenant_account_grants_stream(tenant:)
+
+  def legacy_stream_name(tenant) = EventStreamNaming.account_grants_stream(tenant:)
+
+  def lock_key(tenant) = legacy_stream_name(tenant)
+
+  def lock_stream(tenant)
+    super
+    link_missing(from: legacy_stream_name(tenant), to: stream_name(tenant))
   end
 
-  def current_tenant!
-    ActsAsTenant.current_tenant or raise ArgumentError, "No tenant context available"
+  def link_missing(from:, to:)
+    linked = @event_store.read.stream(to).map(&:event_id).to_set
+    missing = @event_store.read.stream(from).map(&:event_id).reject { linked.include?(it) }
+    @event_store.link(missing, stream_name: to) if missing.any?
   end
 end

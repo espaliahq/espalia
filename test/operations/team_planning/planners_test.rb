@@ -25,7 +25,7 @@ class Operations::TeamPlanning::PlannersTest < ActiveSupport::TestCase
   def names(list) = list.pluck(:name)
 
   def grant_events
-    Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant: @tenant)).to_a
+    Rails.configuration.event_store.read.stream(EventStreamNaming.tenant_account_grants_stream(tenant: @tenant)).to_a
   end
 
   def call_over_mcp(operation, **params)

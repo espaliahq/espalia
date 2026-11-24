@@ -18,7 +18,7 @@ class AccountGrants::CommandHandlerTest < ActiveSupport::TestCase
   def grants = AccountGrants::Repository.new.load_grants
 
   def stream_events
-    Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant: @tenant)).to_a
+    Rails.configuration.event_store.read.stream(EventStreamNaming.tenant_account_grants_stream(tenant: @tenant)).to_a
   end
 
   def remove

@@ -340,7 +340,7 @@ holds is open to:
 
 - **A tenant admin**, always.
 - **An Org Graph editor.** A tenant-level role for the people team. An admin gives it,
-  and each grant is an event in the tenant's `AccountGrants` stream that says who gave it
+  and each grant is an event in the tenant's `TenantAccountGrants` stream that says who gave it
   and when.
 - **A unit's owners.** A unit can have several, with none primary: a product manager and
   an engineering manager can both own a squad. An owner may edit the unit and the units
@@ -1011,7 +1011,8 @@ result for each kind of id separately.
   forgetting one person on request stays off MCP. Operating it, the key and what a restore
   undoes: [org-graph-forgetting.md](../runbooks/org-graph-forgetting.md).
 - Free text that names the person, in evidence, comments, feedback and alignment notes, is
-  not erased until shreddable fields land ([#110](https://github.com/espaliahq/espalia/issues/110)).
+  kept. It belongs to its author as much as its subject, so forgetting one of them leaves
+  it for the other ([org-graph-forgetting.md](../runbooks/org-graph-forgetting.md#what-is-not-erased)).
 - The sync must not undo it. An HRIS often keeps returning a person long after they
   leave, and a sync that upserts every row it is given would write the name back. The
   row keeps a keyed hash of the external id, enough to recognise the person and nothing

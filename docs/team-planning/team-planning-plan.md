@@ -464,7 +464,7 @@ Tal decided all seven on 14 Nov 2026, each as recommended.
    places them. The data design's "Erasure inside a live plan" section says the same.
    Shapes 2.1 and 2.5.
 7. **Who may create a plan.** Decided: people a tenant admin gives a planner role. Shapes
-   1.2. Each grant is an event in the tenant's `AccountGrants` stream, and
+   1.2. Each grant is an event in the tenant's `TenantAccountGrants` stream, and
    `team_planning_planners` says who gave it and since when. No web screen lists planners yet.
 
 ## Out of the first version
