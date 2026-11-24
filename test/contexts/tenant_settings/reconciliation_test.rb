@@ -35,6 +35,16 @@ class TenantSettings::ReconciliationTest < ActiveSupport::TestCase
     assert_equal [ 4, true, enabled_at, @admin.person_id ], row.slice(:retention_years, :scheduled_forgetting, :enabled_at, :enabled_by_id).values
   end
 
+  should "write nothing once commands have written the JSON and the stream alike" do
+    handler = TenantSettings::CommandHandler.new(Tenant.find(@tenant.id))
+    handler.set_retention_period(4, set_by: @admin)
+    handler.enable_scheduled_forgetting(enabled_by: @admin) { 0 }
+    before = stream.size
+
+    assert_equal 0, reconcile.recorded
+    assert_equal before, stream.size
+  end
+
   should "write nothing when run again" do
     previous_release_writes(retention_years: 4)
     reconcile
