@@ -4,6 +4,41 @@ Every table is written by a projection from events, or it is not. This page list
 
 Of the 74 tables, 46 are read models. The other 28 are below, with the columns on read-model tables that something besides their projection writes.
 
+The rules now live in [`config/write_ownership.yml`](../../config/write_ownership.yml), one entry per table, and CI holds every write to them. This page keeps the reasons at length.
+
+## Declaring a table or a writer
+
+Each entry is keyed by its table and has an `owner`:
+
+| `owner` | Means | Also takes |
+|---|---|---|
+| a projection's name, such as `org_graph/structure` | That projection writes the table. | `columns`, when it owns only those |
+| `event_store` | RailsEventStore writes it. | nothing |
+| `plain` | Plain state, not written from events. | `reason`, required |
+
+`writers` lists the files in `app/` or `lib/` allowed to write the table outside its owner. A projection's table with writers, a table whose projection owns only some columns, and a plain table each need a `reason` of one line.
+
+```yaml
+pay_bands:
+  owner: plain
+  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  writers:
+    - app/models/pay_band.rb
+    - app/operations/operations/tenants/pay_band_support.rb
+```
+
+**A new table** gets an entry in the same PR as its migration, or `test/db/write_ownership_test.rb` fails. The test also fails on an entry whose table is gone, an owner that is no projection, a missing reason, or a writer that is no file.
+
+**A table moving onto a stream** changes its entry from `plain` to its projection. Leave the old writers listed, with the reason, until the PR that stops their writes removes them.
+
+**A new writer** is added to its table's `writers`. CI's test job runs the suite with `WRITE_CATALOGUE=1`, then `bin/rails write_ownership:check`, which fails on:
+
+- a write from a file the entry doesn't name;
+- a projection writing a table another projection owns;
+- a projection writing a column its entry doesn't give it.
+
+A write a test makes itself is never checked. The check matches files, not lines, so moving code within a file doesn't break it. It sees only what the unit tests write: a writer only a system test reaches still belongs in the entry, but CI won't fail without it. To check those too, run the whole suite with `WRITE_CATALOGUE=1 bin/rails test:all`, then the check.
+
 ## How the list was made
 
 A test run records every database write, then a rake task reports on them.
@@ -15,7 +50,7 @@ bin/rails development:write_catalogue
 
 `test/support/write_catalogue.rb` subscribes to `sql.active_record` and keeps each `INSERT`, `UPDATE` and `DELETE` with its table, its columns, the projection it ran inside (if any) and the nearest frame in `app/` or `lib/`. A write a test makes, even from a stub, has no site. A run first empties `tmp/write_catalogue/`, then each worker writes `<pid>.json` there. The rake task merges them into `tmp/write_catalogue/report.md` and prints the findings.
 
-It is off unless `WRITE_CATALOGUE=1`, so CI and the precommit don't pay for it. Turned on, it cost about 4% on the non-system suite (349s against 336s). The run behind this page covered every test, system tests included.
+It is off unless `WRITE_CATALOGUE=1`. CI's test job turns it on, which cost about 4% on the non-system suite (349s against 336s); the precommit leaves it off. The run behind this page covered every test, system tests included.
 
 **A finding** is a write from our code, outside a projection, to a table whose rows a projection writes, or an update to a column a projection writes. An upsert counts as an update to the columns its `ON CONFLICT … DO UPDATE` sets. The run checks that from what projections actually wrote, so it needs no list of owners. An insert names every column whether it sets it or not, so inserts into `people` and `tenant_users`, whose projections own only columns, are listed under their tables below rather than as findings.
 
