@@ -153,7 +153,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     plan_with_quinn
     grant_as_quinn
     erased = User.find_by!(email: ERASED_EMAIL)
-    PayBand.create!(level: @fx.e_levels.fetch(2), currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3,
+    add_pay_band!(level: @fx.e_levels.fetch(2), currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3,
                     updated_by: erased)
     ExchangeRate.create!(from_currency: "NZD", to_currency: "AUD", rate: 1, applies_from: Date.current, updated_by: erased)
     ReferenceCurrency.create!(currency: "AUD", updated_by: erased)
