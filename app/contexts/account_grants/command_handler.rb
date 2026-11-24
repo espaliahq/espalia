@@ -42,6 +42,8 @@ class AccountGrants::CommandHandler
 
   # Sets an account's role, after recording every role the table holds that
   # the stream doesn't, so the last-admin check counts the admins there are.
+  # The live accounts stay share-locked until it commits, so a forget can't
+  # take an admin the check has counted.
   #
   # @param account [TenantUser]
   # @param role [String, Symbol] one of {AccountGrants::Aggregate::ROLES}
@@ -51,6 +53,7 @@ class AccountGrants::CommandHandler
   # @raise [AccountGrants::Aggregate::LastAdmin] when it would demote the last admin
   def set_role(account, role, set_by_id: nil, effective_on: nil)
     @repository.with_grants do |grants|
+      hold_live_accounts
       AccountGrants::RoleReconciliation.new(ActsAsTenant.current_tenant, repository: @repository).reconcile(grants)
       grants.set_role(tenant_user_id: account.id, person_id: account.person_id, role:,
                       effective_on: effective_on || today, set_by_id:)
@@ -71,6 +74,14 @@ class AccountGrants::CommandHandler
   end
 
   private
+
+  # Lock order: the grants stream, then tenant_users rows. A forget takes the
+  # person's row, then its tenant_users rows, and never the grants lock; if it
+  # ever writes to this stream, it must take the grants lock before those rows.
+  # A forget that committed first is re-read here and drops out of the count.
+  def hold_live_accounts
+    TenantUser.where(tenant_id: ActsAsTenant.current_tenant.id).order(:id).lock("FOR SHARE").pluck(:id)
+  end
 
   # A release before this stream, still serving during a deploy, writes only
   # the flag. Record what the flag says first, as reconcile would, so the
