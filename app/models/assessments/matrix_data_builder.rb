@@ -329,11 +329,11 @@ class Assessments::MatrixDataBuilder
         # drives the lighter pill/chip treatment and the "to confirm"
         # counts. Agreeing the cell confirms both sides. Below the floor the
         # scale already assumes the cell met, so a carried value there asks
-        # nothing (#480). Same privacy gate as the values: where the agreed
-        # value is hidden, the self side goes by its source alone.
-        current_frequency_carried: asks_confirmation?(
-          ordinal, hidden ? rating&.self_rating_carried? : rating&.self_rating_unconfirmed?
-        ),
+        # nothing (#480). The manager's flag takes the values' privacy
+        # gate. The self flag doesn't: it shows no value, the assessee saw
+        # the agreed one when it was agreed, and every count of their side
+        # (Assessments::LevelCoverage) reads the cell the same way.
+        current_frequency_carried: asks_confirmation?(ordinal, rating&.self_rating_unconfirmed?),
         manager_frequency_carried: !hidden && asks_confirmation?(ordinal, rating&.manager_rating_unconfirmed?),
         # Whether the record reads this cell (ADR-22).
         in_home_scope: @home_scope.include?(capability.stable_id, ordinal),

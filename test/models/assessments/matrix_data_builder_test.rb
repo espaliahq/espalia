@@ -104,16 +104,14 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       assert_nil hidden[:aligned_frequency]
     end
 
-    should "not let a carried self value show that a hidden cell is agreed" do
+    should "read the assessee's agreed carried value as confirmed, as level coverage does, even where the value is hidden" do
       AssessmentLevelRating.find_by!(person_id: @person_id, cycle_id: @cycle_id,
         capability_stable_id: @capability.stable_id, level_ordinal: 2).update!(self_rating_source: "seeded")
-      cell_for = ->(data) { data[:categories].first[:capabilities].first[:cells][2] }
-      disclosed = Assessments::Disclosure.new([ [ @capability.stable_id, 2 ] ])
 
-      assert_not cell_for.call(build_at(level: @level, disclosure: disclosed))[:current_frequency_carried],
-        "agreed and disclosed: confirmed"
-      assert cell_for.call(build_at(level: @level))[:current_frequency_carried],
-        "the agreed value is hidden, so the self side goes by its source"
+      hidden = build_at(level: @level)[:categories].first[:capabilities].first[:cells][2]
+
+      assert_nil hidden[:aligned_frequency], "the value stays hidden"
+      assert_not hidden[:current_frequency_carried]
     end
 
     should "keep whole-page manager scores withheld even with a disclosed cell" do

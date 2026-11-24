@@ -111,7 +111,7 @@ class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
       assert_equal "consistent", l2.dig(:ratings, :self)
     end
 
-    should "not let the assessee's own carried flag show that a hidden cell is agreed" do
+    should "read the assessee's agreed carried value as confirmed while the agreed value stays hidden" do
       ActsAsTenant.with_tenant(@tenant) do
         AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
           capability_stable_id: @cap.stable_id, level_ordinal: 2)
@@ -120,7 +120,7 @@ class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
 
       l2 = call_assessment_op[:expectations].find { |e| e[:level_ordinal] == 2 }
       assert_nil l2.dig(:ratings, :aligned)
-      assert_equal true, l2.dig(:ratings, :self_carried)
+      assert_equal false, l2.dig(:ratings, :self_carried)
     end
 
     should "expose manager fields to the manager viewer" do
