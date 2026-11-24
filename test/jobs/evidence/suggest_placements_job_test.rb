@@ -71,7 +71,7 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     end
     ActsAsTenant.with_tenant(@tenant) do
       EvidencePlacementSuggestion.find_by(evidence_id: item.id, capability_stable_id: @collaboration.stable_id)
-        .decide!(status: "dismissed", by: @alex)
+        .update!(status: "dismissed", decided_by_id: @alex.id, decided_at: Time.current)
     end
 
     fake = with_fake_suggestion_model(proposals: [ proposal(@ownership, confidence: 0.4), proposal(@collaboration) ]) do

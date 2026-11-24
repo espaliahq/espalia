@@ -37,11 +37,6 @@ evidence_links:
   owner: person_development/evidence_collection
 evidence_placement_suggestions:
   owner: person_development/evidence_suggestions
-  reason: The job and the decisions still write rows directly, until they go through the suggestion commands.
-  writers:
-    - app/controllers/concerns/evidence_diff_submit.rb
-    - app/jobs/evidence/suggest_placements_job.rb
-    - app/models/evidence_placement_suggestion.rb
 evidence_requests:
   owner: person_development/evidence_requests
 person_development_comments:
