@@ -30,7 +30,7 @@ class AccountGrants::Projections::AccountFlags
     org_graph_editor = COALESCE(id IN (:org_graph_editor), false),
     team_planner = COALESCE(id IN (:team_planner), false),
     role = CASE WHEN id IN (:admin) THEN 'admin' WHEN id IN (:member) THEN 'member' ELSE role END,
-    person_id = COALESCE(CAST(CAST(:links AS jsonb) ->> CAST(id AS text) AS uuid), person_id)
+    person_id = COALESCE((SELECT people.id FROM people WHERE people.id = CAST(CAST(:links AS jsonb) ->> CAST(tenant_users.id AS text) AS uuid)), person_id)
   SQL
   private_constant :RESET
 
@@ -42,7 +42,8 @@ class AccountGrants::Projections::AccountFlags
   # Sets both grants, the role and the link on every live account of the
   # tenant to what the stream holds, in one statement. A link the stream
   # doesn't hold is kept: the previous release may have written it since the
-  # last reconcile, which records it next. A reset that clears them would
+  # last reconcile, which records it next. So is the column when the stream's
+  # person was destroyed, which nullifies the link without an event. A reset that clears them would
   # leave a rebuild that stops before its replay with every flag clear, and the next
   # deploy's reconcile would record each grant as removed. It holds the
   # stream's lock, so a grant a command writes meanwhile can't be overwritten.

@@ -131,6 +131,17 @@ class AccountGrants::LinksTest < ActiveSupport::TestCase
       assert_equal [ @ada.id, @bo.id ], [ column(@account), column(@other) ]
     end
 
+    should "leave the link clear through a reset when the stream's person was destroyed" do
+      as_tenant do
+        @account.link_to!(@ada, match: :sign_in)
+        Person.find(@ada.id).destroy!
+      end
+
+      AccountGrants::Projections::AccountFlags.reset!(tenant: @tenant)
+
+      assert_nil column(@account)
+    end
+
     should "clear only the person it unlinked" do
       as_tenant { @account.link_to!(@ada, match: :sign_in) }
       @account.update_columns(person_id: @bo.id)
