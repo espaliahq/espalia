@@ -17,7 +17,10 @@ class TenantSettings::Aggregate
   # Turning scheduled forgetting on when the guards don't allow it.
   class Refused < StandardError; end
 
-  DEFAULT_RETENTION_YEARS = OrgGraphConfig::DEFAULT_RETENTION_YEARS
+  # Where every stream starts, so frozen like an event's shape: a tenant
+  # that never set a period records nothing, and a new default would move
+  # them all without an event.
+  DEFAULT_RETENTION_YEARS = 7
 
   # @return [Integer, nil] years after leaving that a person is forgotten, nil for never
   attr_reader :retention_years

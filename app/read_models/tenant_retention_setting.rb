@@ -24,7 +24,7 @@ class TenantRetentionSetting < ApplicationRecord
   # @param tenant [Tenant]
   # @return [TenantRetentionSetting] the tenant's row, or an unsaved one at the defaults
   def self.for(tenant)
-    unscoped.find_by(tenant_id: tenant.id) || new(tenant:, retention_years: OrgGraphConfig::DEFAULT_RETENTION_YEARS, scheduled_forgetting: false)
+    unscoped.find_by(tenant_id: tenant.id) || new(tenant:, retention_years: TenantSettings::Aggregate::DEFAULT_RETENTION_YEARS, scheduled_forgetting: false)
   end
 
   # @return [ActiveRecord::Relation<Tenant>] the tenants both places say forget on a schedule
