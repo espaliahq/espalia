@@ -310,6 +310,20 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
     end
 
+    should "leave an account unlinked when another account holds its person" do
+      build_adapter(@fixture["employees"]).sync_people
+      user = create(:user, email: "alice@example.com")
+      account = ActsAsTenant.with_tenant(@tenant) do
+        alice = Person.find_by!(email: "alice@example.com")
+        create(:tenant_user, tenant: @tenant, person: nil).link_to!(alice, match: :admin)
+        create(:tenant_user, tenant: @tenant, user: user, person: nil)
+      end
+
+      build_adapter(@fixture["employees"]).sync_people
+
+      assert_nil TenantUser.unscoped.find(account.id).person_id
+    end
+
     should "update last_synced_at on the config" do
       adapter = build_adapter(@fixture["employees"])
 

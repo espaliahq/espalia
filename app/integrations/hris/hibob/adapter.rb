@@ -794,11 +794,19 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
   # Links TenantUser records to Person records by matching email.
   #
-  # Runs after upsert so newly created Person records are available for matching.
+  # Runs after upsert so newly created Person records are available for
+  # matching. A person another account already holds keeps that link.
   def auto_link_tenant_users
-    TenantUser.where(person_id: nil).includes(:user).find_each do |tu|
-      person = Person.find_by(email: tu.user.email)
-      tu.update!(person: person) if person
+    with_hris_event_context do
+      TenantUser.where(person_id: nil).includes(:user).find_each do |tu|
+        person = Person.find_by(email: tu.user.email)
+        next unless person
+        next Rails.logger.warn("[hris] account #{tu.id} left unlinked: another account holds its person") if TenantUser.exists?(person_id: person.id)
+
+        tu.link_to!(person, match: :hris_email)
+      rescue AccountGrants::Aggregate::LinkRefused => e
+        Rails.logger.warn("[hris] account #{tu.id} left unlinked: #{e.message}")
+      end
     end
   end
 

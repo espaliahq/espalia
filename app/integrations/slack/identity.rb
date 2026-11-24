@@ -36,7 +36,7 @@ class Slack::Identity
 
     ActsAsTenant.with_tenant(tenant) do
       membership = TenantUser.find_by(slack_user_id: slack_user_id)
-      return new(tenant: tenant, tenant_user: membership, person: membership.person || membership.ensure_person!) if membership
+      return new(tenant: tenant, tenant_user: membership, person: person_of(membership)) if membership
 
       email = (client || Slack::Client.new(bot_token: tenant.slack_bot_token)).user_email(slack_user_id)
       return new(tenant: tenant) if email.blank?
@@ -44,12 +44,22 @@ class Slack::Identity
       membership = membership_for(email)
       if membership
         membership.update_column(:slack_user_id, slack_user_id)
-        new(tenant: tenant, tenant_user: membership, person: membership.person || membership.ensure_person!, email: email)
+        new(tenant: tenant, tenant_user: membership, person: person_of(membership), email: email)
       else
         new(tenant: tenant, person: Person.where("LOWER(email) = ?", email.downcase).first, email: email)
       end
     end
   end
+
+  # A member whose link was refused acts as no one, so the request is declined
+  # rather than raising.
+  def self.person_of(membership)
+    membership.person || membership.ensure_person!
+  rescue AccountGrants::Aggregate::LinkRefused => e
+    Rails.logger.warn("Slack identity: link refused for TenantUser #{membership.id}: #{e.class}")
+    nil
+  end
+  private_class_method :person_of
 
   def self.membership_for(email)
     user = User.find_by("LOWER(email) = ?", email.downcase)

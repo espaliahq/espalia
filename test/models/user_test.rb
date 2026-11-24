@@ -151,6 +151,23 @@ class UserTest < ActiveSupport::TestCase
       assert_equal({ tenant_user.id => "member" }, roles)
     end
 
+    should "create the account unlinked when another account holds the matching Person" do
+      tenant = create(:tenant)
+      person, holder = ActsAsTenant.with_tenant(tenant) do
+        held = create(:person, tenant: tenant, email: "erin@example.com")
+        [ held, create(:tenant_user, tenant: tenant, person: nil).tap { it.link_to!(held, match: :admin) } ]
+      end
+
+      result, reason = User.from_google_omniauth(build_auth(email: "erin@example.com", uid: "uid-11"))
+
+      assert_nil reason
+      account = TenantUser.find_by!(user_id: result.id)
+      assert_nil account.person_id
+      assert_equal person.id, holder.reload.person_id
+      roles = ActsAsTenant.with_tenant(tenant) { AccountGrants::Repository.new.reading_locked(&:roles) }
+      assert_equal "member", roles[account.id]
+    end
+
     should "refuse with :no_matching_account when no User and no Person matches" do
       user, reason = User.from_google_omniauth(build_auth(email: "stranger@example.com", uid: "uid-x"))
       assert_nil user
