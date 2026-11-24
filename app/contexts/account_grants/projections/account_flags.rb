@@ -13,9 +13,7 @@ class AccountGrants::Projections::AccountFlags
   PROJECTION_NAME = "account_grants/account_flags"
 
   # Bump when `reset!` or any handler would write different state from the
-  # same event payload than before. Taking over `role` needed none: a reset
-  # leaves a role the stream doesn't record as it is, and no role events
-  # existed before.
+  # same event payload than before.
   CODE_VERSION = 1
 
   COLUMNS = (AccountGrants::Aggregate::GRANTS.map(&:to_s) + %w[role]).freeze
@@ -66,7 +64,8 @@ class AccountGrants::Projections::AccountFlags
     tenant = Tenant.find(event.metadata[:tenant_id]) unless tenant&.id == event.metadata[:tenant_id]
 
     ActsAsTenant.with_tenant(tenant) do
-      TenantUser.where(id: event.data[:tenant_user_id]).update_all(column => value, updated_at: Time.current)
+      TenantUser.where(id: event.data[:tenant_user_id]).where.not(column => value)
+                .update_all(column => value, updated_at: Time.current)
     end
   end
 end
