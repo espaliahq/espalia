@@ -13,7 +13,9 @@
 # recognise the person without identifying them. Without the key nothing is
 # forgotten.
 #
-# Every result is a count and person ids, never a name or an email.
+# Every result is a count and person ids, never a name or an email. Anyone
+# held back because they hold the tenant's only admin account is a count
+# alone.
 #
 # @example
 #   forgetting = OrgGraph::Forgetting.new(tenant)
@@ -23,6 +25,15 @@
 class OrgGraph::Forgetting
   # A forgetting the guards don't allow.
   class Refused < StandardError; end
+
+  # The person holds every admin account the tenant has, so forgetting them
+  # would leave no one able to run it.
+  class LastAdmin < Refused
+    def initialize(msg = "This person holds the organisation's only admin account. " \
+                         "Make someone else an admin, then forget them.")
+      super
+    end
+  end
 
   # The tenant turned scheduled forgetting off while a scheduled run was going.
   class ScheduleTurnedOff < StandardError; end
@@ -40,10 +51,13 @@ class OrgGraph::Forgetting
   #
   # @!attribute count [Integer]
   # @!attribute person_ids [Array<String>]
-  Report = Data.define(:count, :person_ids, :retention_years) do
-    def self.of(person_ids, retention_years: nil) = new(count: person_ids.size, person_ids:, retention_years:)
+  # @!attribute held_back [Integer] how many are due but hold the only admin account
+  Report = Data.define(:count, :person_ids, :retention_years, :held_back) do
+    def self.of(person_ids, retention_years: nil, held_back: 0)
+      new(count: person_ids.size, person_ids:, retention_years:, held_back:)
+    end
 
-    def initialize(count:, person_ids:, retention_years: nil) = super
+    def initialize(count:, person_ids:, retention_years: nil, held_back: 0) = super
   end
 
   # Notification params that copy a person's name by value, each beside the
@@ -154,6 +168,7 @@ class OrgGraph::Forgetting
 
   # Who {#forget_due} would forget today, after the same HRIS check. The
   # period is read once, before the HRIS is asked, and reported with them.
+  # It takes them in the same order, so it holds back the same admins.
   #
   # @param on [Date]
   # @return [Report] with the retention_years that chose them
@@ -161,7 +176,8 @@ class OrgGraph::Forgetting
   def dry_run(on: Date.current)
     years = TenantRetentionSetting.longer_period(@tenant)
     due = within_tenant { OrgLeaver.due_to_be_forgotten(@tenant, on:, retention_years: years) }
-    Report.of(candidate_ids(due), retention_years: years)
+    forgotten, held_back = without_the_last_admin(candidate_ids(due))
+    Report.of(forgotten, retention_years: years, held_back:)
   end
 
   # Forgets every leaver whose retention period has ended and whom the HRIS
@@ -177,10 +193,16 @@ class OrgGraph::Forgetting
   def forget_due(on: Date.current, scheduled: false)
     self.class.key!
     forgotten = []
-    candidates(on).each { |person_id| forgotten << person_id if erase_due(person_id, on:, scheduled:) }
-    Report.of(forgotten)
+    held_back = 0
+    candidates(on).each do |person_id|
+      case erase_due(person_id, on:, scheduled:)
+      when true then forgotten << person_id
+      when :held_back then held_back += 1
+      end
+    end
+    Report.of(forgotten, held_back:)
   rescue ScheduleTurnedOff
-    Report.of(forgotten)
+    Report.of(forgotten, held_back:)
   end
 
   # Forgets one leaver at a tenant admin's request. A leaver not yet due is
@@ -195,6 +217,7 @@ class OrgGraph::Forgetting
   # @raise [Pundit::NotAuthorizedError] unless the requester is a tenant admin
   # @raise [Refused] for anyone not due without `before_due`, or whom the HRIS
   #   still employs, and for a requester with no tenant membership to record
+  # @raise [LastAdmin] when they hold the tenant's only admin account
   # @raise [KeyMissing]
   def forget(person_id, requested_by:, before_due: false, on: Date.current)
     self.class.key!
@@ -238,6 +261,8 @@ class OrgGraph::Forgetting
     erase(person_id, on:, reason: "retention", scheduled:)
   rescue ScheduleTurnedOff
     raise
+  rescue LastAdmin
+    :held_back
   rescue => e
     Rails.error.report(e, context: { tenant_id: @tenant.id, person_id: })
     Rails.logger.error("[OrgGraph::Forgetting] tenant=#{@tenant.id} person=#{person_id} failed: #{e.class}")
@@ -286,6 +311,27 @@ class OrgGraph::Forgetting
     end
   end
 
+  # The check {#erase_identifiers} makes, taken in order as {#forget_due}
+  # takes them: each person forgotten takes their accounts out of the count.
+  def without_the_last_admin(person_ids)
+    within_tenant do
+      admins = TenantUser.where(role: "admin").pluck(:id)
+      accounts = TenantUser.where(person_id: person_ids).pluck(:person_id, :id).group_by(&:first)
+      held_back = 0
+      forgotten = person_ids.select do |person_id|
+        theirs = accounts.fetch(person_id, []).map(&:last)
+        if admins.any? && (admins - theirs).empty?
+          held_back += 1
+          next false
+        end
+
+        admins -= theirs
+        true
+      end
+      [ forgotten, held_back ]
+    end
+  end
+
   def due?(person_id, config, on)
     cutoff = TenantRetentionSetting.forget_left_on_or_before(@tenant, on, config:)
     cutoff.present? && OrgLeaver.where(tenant: @tenant, person_id:, left_on: ..cutoff).exists?
@@ -312,6 +358,10 @@ class OrgGraph::Forgetting
                           forgotten_external_id_digest: digest, forgotten_at: now, updated_at: now)
     accounts = AuditMetadata.wrap_event_store { AccountGrants::CommandHandler.new.unlink_forgotten(person.id) }
     TenantUser.where(id: accounts).update_all(user_id: nil, slack_user_id: nil, forgotten_at: now, updated_at: now)
+  rescue AccountGrants::Aggregate::LastAdmin
+    # Raised inside erase's transaction, so it rolls back everything before
+    # it: the scrubs, the events, the plan keys and the role reconcile.
+    raise LastAdmin
   end
 
   # Their own inbox in this tenant. The login is global and stays, so
