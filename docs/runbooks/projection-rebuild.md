@@ -101,6 +101,8 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 No `CODE_VERSION` bump and no `REBUILD_ON_DEPLOY`. The projection now also writes `tenant_users.role` from `AccountRoleSet`, and its reset keeps a role the stream doesn't record. No role event exists before this deploy, and the `account_roles` reconciler records every account's role at step 2b and again at step 6. A rebuild at step 3 would gain nothing, and would undo a role the previous release changed between steps 2b and 3. Step 6 records that change instead.
 
+**Deploy this only onto a release that holds [PR #560](https://github.com/espaliahq/espalia/pull/560), and confirm that release is serving before you start.** Step 2b writes role events to `TenantAccountGrants` while the previous release still serves. A release without #560 has no class for them, so every grant command it runs fails until the deploy ends, and rolling back leaves it failing.
+
 #### Recorded: `account_grants/account_flags` v1 (grants as events, [#539](https://github.com/espaliahq/espalia/issues/539)), 2026-11-23
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection is new and now the only writer of `tenant_users.org_graph_editor` and `tenant_users.team_planner`.
