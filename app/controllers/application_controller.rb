@@ -21,6 +21,7 @@ class ApplicationController < ActionController::Base
   around_action :wrap_with_audit_metadata
 
   rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
+  rescue_from AccountGrants::Aggregate::LinkRefused, with: :link_refused
 
   private
 
@@ -75,6 +76,21 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  # A page that needs the account's person, where the link to them was
+  # refused: the person is held by another account, or was forgotten.
+  #
+  # @param exception [AccountGrants::Aggregate::LinkRefused]
+  # @return [void]
+  def link_refused(exception)
+    Rails.logger.warn("link refused for #{controller_path}##{action_name}: #{exception.class}")
+    message = "This account can't be linked to its person. An admin needs to fix the link."
+    if turbo_frame_request?
+      render_turbo_frame_recovery(message)
+    else
+      redirect_back fallback_location: root_path, alert: message
+    end
+  end
+
   # Renders the requested Turbo Frame wrapping a recoverable message + a
   # top-level reload link, so a denied/expired frame fetch degrades into a
   # clean refresh rather than a silent broken frame. Intentionally NOT
@@ -109,7 +125,7 @@ class ApplicationController < ActionController::Base
   # @return [void]
   def auto_link_person(tenant_user)
     tenant_user&.ensure_person!
-  rescue ActiveRecord::RecordInvalid => e
+  rescue ActiveRecord::RecordInvalid, AccountGrants::Aggregate::LinkRefused => e
     Rails.logger.warn(
       "ensure_person! failed for TenantUser #{tenant_user&.id}: #{e.message}"
     )

@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# A role change and a forget on two connections, so each must see the other's committed rows.
+# A role change or a link, and a forget, on two connections, so each must see the other's committed rows.
 class AccountGrants::RoleLockingTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
 
@@ -11,6 +11,8 @@ class AccountGrants::RoleLockingTest < ActiveSupport::TestCase
     as_tenant do
       @ada = account(:admin)
       @bo = account(:admin)
+      @cy = create(:tenant_user, tenant: @tenant, person: nil)
+      @dee = create(:person, tenant: @tenant)
     end
   end
 
@@ -22,7 +24,7 @@ class AccountGrants::RoleLockingTest < ActiveSupport::TestCase
            unlinked AS (DELETE FROM event_store_events_in_streams WHERE event_id IN (SELECT event_id FROM linked))
       DELETE FROM event_store_events WHERE event_id IN (SELECT event_id FROM linked)
     SQL
-    users = [ @ada, @bo ].compact.map(&:user_id)
+    users = [ @ada, @bo, @cy ].compact.map(&:user_id)
     TenantUser.unscoped.where(tenant_id: @tenant.id).delete_all
     User.where(id: users).delete_all
     Person.unscoped.where(tenant_id: @tenant.id).delete_all
@@ -64,6 +66,76 @@ class AccountGrants::RoleLockingTest < ActiveSupport::TestCase
     assert_equal "admin", role_of(@ada)
   end
 
+  should "make a forget wait while a link holds the grants lock, then unlink the person it linked" do
+    forget = nil
+
+    holding(-> { TenantUser.find(@cy.id).link_to!(@dee, match: :admin) }) do
+      pids = Queue.new
+      forget = Thread.new { on_another_connection { |connection| pids << backend_pid(connection); erase_person(@dee.id) } }
+      assert_waiting(pids, forget)
+    end
+
+    forget.join
+    cy = TenantUser.unscoped.find(@cy.id)
+    assert_nil cy.person_id
+    assert cy.forgotten_at, "the forget erases the account linked while it waited"
+  end
+
+  should "make a link wait while a forget holds the grants lock, then refuse the forgotten person" do
+    refused = nil
+
+    holding(-> { erase_person(@dee.id) }) do
+      pids = Queue.new
+      refused = Thread.new do
+        on_another_connection do |connection|
+          pids << backend_pid(connection)
+          TenantUser.find(@cy.id).link_to!(@dee, match: :admin)
+          nil
+        rescue AccountGrants::Aggregate::PersonForgotten => error
+          error
+        end
+      end
+      assert_waiting(pids, refused)
+    end
+
+    assert_instance_of AccountGrants::Aggregate::PersonForgotten, refused.value
+    assert_nil TenantUser.unscoped.find(@cy.id).person_id
+  end
+
+  should "make a link wait for a forget holding the person's row, without taking the grants lock first" do
+    locked = Queue.new
+    go = Queue.new
+    forget = Thread.new do
+      on_another_connection do
+        Person.lock.find(@dee.id)
+        locked << true
+        go.pop
+        erase_person(@dee.id)
+      end
+    end
+    flunk "the forget never locked the person" unless locked.pop(timeout: 10)
+
+    pids = Queue.new
+    refused = Thread.new do
+      on_another_connection do |connection|
+        pids << backend_pid(connection)
+        TenantUser.find(@cy.id).link_to!(@dee, match: :admin)
+        nil
+      rescue AccountGrants::Aggregate::PersonForgotten => error
+        error
+      end
+    end
+    assert_waiting(pids, refused)
+    go << true
+
+    assert forget.join(15), "the forget finished"
+    assert_instance_of AccountGrants::Aggregate::PersonForgotten, refused.value
+    assert_nil TenantUser.unscoped.find(@cy.id).person_id
+  ensure
+    go << true
+    [ forget, refused ].compact.each { it.join(15) || it.kill }
+  end
+
   private
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
@@ -72,10 +144,15 @@ class AccountGrants::RoleLockingTest < ActiveSupport::TestCase
 
   def role_of(account) = TenantUser.unscoped.find(account.id).role
 
-  # The write OrgGraph::Forgetting#erase_identifiers makes to the person's accounts.
-  def erase(account)
-    TenantUser.where(person_id: account.person_id)
-      .update_all(person_id: nil, user_id: nil, slack_user_id: nil, forgotten_at: Time.current, updated_at: Time.current)
+  # The writes OrgGraph::Forgetting#erase_identifiers makes: the person's row,
+  # then the grants lock, then their accounts.
+  def erase(account) = erase_person(account.person_id)
+
+  def erase_person(person_id)
+    now = Time.current
+    Person.where(id: person_id).update_all(name: Person::FORMER_MEMBER, email: nil, external_id: nil, forgotten_at: now)
+    ids = AccountGrants::CommandHandler.new.unlink_forgotten(person_id)
+    TenantUser.where(id: ids).update_all(user_id: nil, slack_user_id: nil, forgotten_at: now, updated_at: now)
   end
 
   def backend_pid(connection) = connection.select_value("SELECT pg_backend_pid()")

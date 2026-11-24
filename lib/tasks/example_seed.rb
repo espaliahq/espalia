@@ -144,10 +144,8 @@ class ExampleSeed
         u.password_confirmation = PASSWORD
       end
       TenantUser.transaction do
-        account = TenantUser.find_or_create_by!(tenant: tenant, user: user) do |tu|
-          tu.role = :member
-          tu.person = person(key)
-        end
+        account = TenantUser.find_or_create_by!(tenant: tenant, user: user) { it.role = :member }
+        account.link_to!(person(key), match: :provisioned) if account.person_id.nil?
         AccountGrants::CommandHandler.new.record_new_account(account) if account.previously_new_record?
       end
     end

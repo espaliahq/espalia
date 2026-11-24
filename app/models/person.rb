@@ -90,9 +90,9 @@ class Person < ApplicationRecord
 
         account = User.find_or_create_by!(email: email.to_s.downcase) { |u| u.password = SecureRandom.hex(24) }
         membership = TenantUser.find_or_initialize_by(tenant: tenant, user: account)
-        membership.person ||= self
         membership.role ||= :member
         membership.save!
+        membership.link_to!(self, match: :provisioned) if membership.person_id.nil?
         AccountGrants::CommandHandler.new.record_new_account(membership) if membership.previously_new_record?
         account
       end
