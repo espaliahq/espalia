@@ -28,7 +28,8 @@ if Rails.env.production?
   if slug && name
     tenant = Tenant.find_or_create_by!(slug: slug) { |t| t.name = name }
     ActsAsTenant.with_tenant(tenant) do
-      TenantUser.find_or_create_by!(tenant: tenant, user: admin_user) { |tu| tu.role = :admin }
+      account = TenantUser.find_or_create_by!(tenant: tenant, user: admin_user) { |tu| tu.role = :admin }
+      AccountGrants::CommandHandler.new.record_new_account(account) if account.previously_new_record?
     end
     puts "Workspace ready: #{name} (#{slug})"
     if ENV["SEED_FRAMEWORK_FILE"].present?

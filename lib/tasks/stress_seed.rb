@@ -257,8 +257,11 @@ class StressSeed
         u.password_confirmation = PASSWORD
       end
       tenant_user = TenantUser.find_or_initialize_by(tenant: @tenant, user: user)
-      tenant_user.assign_attributes(role: role, person: person)
+      tenant_user.role = role if tenant_user.new_record?
+      tenant_user.person = person
       tenant_user.save! if tenant_user.changed?
+      handler = AccountGrants::CommandHandler.new
+      tenant_user.previously_new_record? ? handler.record_new_account(tenant_user) : handler.set_role(tenant_user, role)
     end
   end
 
