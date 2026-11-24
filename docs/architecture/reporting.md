@@ -109,11 +109,13 @@ aggregates the existing read models at query time.
   self rating at their **assessed level**. Aligned is the one explicit milestone
   (`AssessmentCycleProgress.status == "aligned"`). There is no explicit self/manager
   "completion" event. `CurrentAssessment` stamps `self_completed_at` /
-  `manager_completed_at` on every rating event from `Assessments::LevelCoverage`
-  ([assessments/lifecycle.md](../guidelines/assessments/lifecycle.md)), which is
-  not quite the funnel's rule: it counts only human ratings (the funnel counts
-  anything not seeded), reads the live assignment's role (the funnel reads the
-  enrollment snapshot), and refreshes only when someone rates. So a stamp can
+  `manager_completed_at` from `Assessments::LevelCoverage`
+  ([assessments/lifecycle.md](../guidelines/assessments/lifecycle.md)) on every
+  rating event, and when a carried cell at the assessed level is agreed or its
+  agreed value cleared. Both count the same vetted sides: a value a person
+  rated or confirmed, or a carried one on an agreed cell. They still differ in
+  two ways: the stamp reads the live assignment's role (the funnel reads the
+  enrollment snapshot), and it refreshes only on those events. So a stamp can
   disagree with `self_done` / `manager_done` after a role change or a framework
   publish, until the next rating.
 - **At-risk**: not yet aligned AND (past the cycle's `planned_end_at` OR ≥14 days
