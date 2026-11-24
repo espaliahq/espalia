@@ -72,7 +72,7 @@ bin/rails "org_graph:forgetting:forget[<tenant id>,<person id>,<admin's tenant u
 Forgetting erases a person's accounts, so it refuses anyone whose accounts hold every admin the tenant has. Otherwise nobody would be left to run the organisation. A tenant with no admin at all forgets as before.
 
 - **A scheduled run** carries on past them and counts them as `held_back`. It reports a warning with the tenant id and that count, never an id. They stay due, so the warning comes back every day until it's fixed.
-- **The dry run** counts them the same way, taking leavers in the run's order. Two due admins and no other admin give a count of one and one held back. The confirm count leaves them out.
+- **The dry run** counts them the same way, taking leavers in the run's order. Two due admins and no other admin give a count of one and one held back. The confirm count leaves them out. The dry run assumes everyone before them is forgotten, so if the first admin's erase fails that day, the run forgets the second instead of holding them back.
 - **A manual forget** refuses with "This person holds the organisation's only admin account. Make someone else an admin, then forget them."
 
 The refusal rolls back the whole erase, so the person is untouched. To clear it, ask a tenant admin to make someone else an admin. The next run forgets them.
