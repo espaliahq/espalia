@@ -1045,6 +1045,12 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         capability_stable_id: @cap.stable_id, level_ordinal: 1, frequency: "consistent", cycle_id: @cycle_id,
         source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
 
+      # A refresh would recount level 2 and take the stamp away.
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person_id, level_ordinal: 2)
+          .update!(self_rating_source: "seeded")
+      end
+
       emit(PersonDevelopment::Events::AssessmentAligned,
         capability_stable_id: @cap.stable_id, level_ordinal: 1,
         aligned_frequency: "consistent", cycle_id: @cycle_id)
