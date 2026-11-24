@@ -26,6 +26,15 @@ module Assessments::CarriedCell
     source == "seeded" && aligned_frequency.nil?
   end
 
+  # Whether a side counts as vetted this cycle: it holds a value, and the
+  # value no longer waits. {AssessmentLevelRating::SELF_VETTED_SQL} in Ruby.
+  #
+  # @param frequency [String, nil] the side's rated frequency
+  # @return [Boolean]
+  def vetted?(frequency, source, aligned_frequency)
+    frequency.present? && !unconfirmed?(source, aligned_frequency)
+  end
+
   # @param cell [Hash, nil] one cell from {Assessments::MatrixDataBuilder}
   # @param context [Symbol] :self, :manager or :alignment
   # @return [Boolean]

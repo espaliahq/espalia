@@ -39,6 +39,11 @@ class AssessmentLevelRating < ApplicationRecord
   MANAGER_VETTED_SQL = "manager_rated_frequency IS NOT NULL AND " \
                        "(manager_rating_source IS DISTINCT FROM 'seeded' OR aligned_frequency IS NOT NULL)"
 
+  # A side someone has worked on this cycle: vetted, or cleared by a person
+  # (a human source with no value). Tells "In progress" from "To confirm".
+  SELF_TOUCHED_SQL = "self_rating_source = 'human' OR (#{SELF_VETTED_SQL})".freeze
+  MANAGER_TOUCHED_SQL = "manager_rating_source = 'human' OR (#{MANAGER_VETTED_SQL})".freeze
+
   acts_as_tenant :tenant
 
   belongs_to :tenant

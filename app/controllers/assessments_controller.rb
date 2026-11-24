@@ -492,10 +492,8 @@ class AssessmentsController < ApplicationController
         :cycle_id, :person_id,
         Arel.sql("COUNT(*) FILTER (WHERE self_rated_frequency IS NOT NULL)"),
         Arel.sql("COUNT(*) FILTER (WHERE manager_rated_frequency IS NOT NULL)"),
-        Arel.sql("COUNT(*) FILTER (WHERE self_rating_source = 'human' " \
-                 "OR (#{AssessmentLevelRating::SELF_VETTED_SQL}))"),
-        Arel.sql("COUNT(*) FILTER (WHERE manager_rating_source = 'human' " \
-                 "OR (#{AssessmentLevelRating::MANAGER_VETTED_SQL}))")
+        Arel.sql("COUNT(*) FILTER (WHERE #{AssessmentLevelRating::SELF_TOUCHED_SQL})"),
+        Arel.sql("COUNT(*) FILTER (WHERE #{AssessmentLevelRating::MANAGER_TOUCHED_SQL})")
       )
       .each_with_object({}) do |(cid, pid, self_n, mgr_n, self_h, mgr_h), h|
         h[[ cid, pid ]] = { self_any: self_n.positive?, manager_any: mgr_n.positive?,

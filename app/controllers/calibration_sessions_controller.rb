@@ -294,7 +294,7 @@ class CalibrationSessionsController < ApplicationController
     human_touched = AssessmentLevelRating
       .for_cycle(@session.cycle_id)
       .within(scopes)
-      .where("manager_rating_source = 'human' OR (#{AssessmentLevelRating::MANAGER_VETTED_SQL})")
+      .where(AssessmentLevelRating::MANAGER_TOUCHED_SQL)
       .distinct.pluck(:person_id)
     any_rated = AssessmentLevelRating
       .for_cycle(@session.cycle_id)

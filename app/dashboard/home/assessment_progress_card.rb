@@ -59,9 +59,10 @@ class Home::AssessmentProgressCard < Home::Card
       .self_rated
     # The self side counts as started only on a vetted value — the row-level
     # progress status also flips on the MANAGER's first rating, and carried
-    # (seeded) values don't count until their cell is agreed. Mirrors the
+    # (seeded) values don't count until their cell is agreed. Follows the
     # index's self_human predicate (AssessmentsController#build_card_statuses)
-    # so the two surfaces' Start/Continue verbs can't disagree.
+    # so the two surfaces' Start/Continue verbs agree, but for a rating the
+    # person made and cleared: that reads Continue there and Start here.
     self_started = self_rated.self_vetted.exists?
 
     Views::Home::Cards::AssessmentProgress.new(

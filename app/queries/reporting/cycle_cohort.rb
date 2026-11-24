@@ -195,8 +195,8 @@ class Reporting::CycleCohort
       # Assessments::LevelCoverage and the /assessments chips, so the cohort
       # report and the individual list never disagree on what "done" means.
       bucket = acc[person_id]
-      bucket[:self] << stable_id if self_freq.present? && !Assessments::CarriedCell.unconfirmed?(self_src, aligned)
-      bucket[:manager] << stable_id if manager_freq.present? && !Assessments::CarriedCell.unconfirmed?(manager_src, aligned)
+      bucket[:self] << stable_id if Assessments::CarriedCell.vetted?(self_freq, self_src, aligned)
+      bucket[:manager] << stable_id if Assessments::CarriedCell.vetted?(manager_freq, manager_src, aligned)
     end
 
     last_at = last_rating_activity(scope_by_person.keys)
