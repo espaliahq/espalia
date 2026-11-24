@@ -188,7 +188,7 @@ tenant_users:
     - org_graph_editor
     - team_planner
   reason: >-
-    Links an account to a tenant, a person and a Slack user. The role stays plain until #540 moves it
+    Links an account to a tenant, a person and a Slack user. The role stays plain until https://github.com/espaliahq/espalia/issues/540 moves it
     to events.
   writers:
     - app/contexts/org_graph/forgetting.rb
@@ -218,7 +218,7 @@ tenants:
   owner: plain
   reason: >-
     The tenant's configuration and operational stamps. Retention and scheduled forgetting stay plain
-    until Track C of #539 moves them to events.
+    until Track C of https://github.com/espaliahq/espalia/issues/539 moves them to events.
   writers:
     - app/contexts/org_graph/people_cutover.rb
     - app/contexts/org_graph/person_development_cutover.rb
@@ -269,31 +269,31 @@ mcp_pending_approvals:
 
 pay_bands:
   owner: plain
-  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
   writers:
     - app/models/pay_band.rb
     - app/operations/operations/tenants/pay_band_support.rb
     - app/operations/operations/tenants/remove_pay_band.rb
 exchange_rates:
   owner: plain
-  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
   writers:
     - app/operations/operations/tenants/pay_band_support.rb
     - app/operations/operations/tenants/remove_exchange_rate.rb
 reference_currencies:
   owner: plain
-  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
   writers:
     - app/operations/operations/tenants/pay_band_support.rb
 budget_lines:
   owner: plain
-  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
   writers:
     - app/operations/operations/tenants/pay_band_support.rb
     - app/operations/operations/tenants/remove_budget_line.rb
 planning_rule_defaults:
   owner: plain
-  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
   writers:
     - app/operations/operations/tenants/set_planning_rule.rb
 

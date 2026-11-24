@@ -16,15 +16,16 @@ Each entry is keyed by its table and has an `owner`:
 | `event_store` | RailsEventStore writes it. | nothing |
 | `plain` | Plain state, not written from events. | `reason`, required |
 
-`writers` lists the files in `app/` or `lib/` allowed to write the table outside its owner. A projection's table with writers, a table whose projection owns only some columns, and a plain table each need a `reason` of one line.
+`writers` lists the files in `app/` or `lib/` allowed to write the table outside its owner. A projection's table with writers, a table whose projection owns only some columns, and a plain table each need a `reason` of one line. Write an issue as its full link: in YAML, ` #` starts a comment and cuts the reason short.
 
 ```yaml
 pay_bands:
   owner: plain
-  reason: Pay and cost inputs, until Track A of #539 moves them to events.
+  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
   writers:
     - app/models/pay_band.rb
     - app/operations/operations/tenants/pay_band_support.rb
+    - app/operations/operations/tenants/remove_pay_band.rb
 ```
 
 **A new table** gets an entry in the same PR as its migration, or `test/db/write_ownership_test.rb` fails. The test also fails on an entry whose table is gone, an owner that is no projection, a missing reason, or a writer that is no file.
