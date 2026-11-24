@@ -142,8 +142,9 @@ class Operations::Assessments::CapabilityGet < Operations::Base
         # Carried-forward values still waiting to be confirmed, per side —
         # an MCP client should present these as "carried from the previous
         # cycle", matching the web's dashed-pill treatment. False once the
-        # cell is agreed. Same privacy gate as the values themselves.
-        self_carried: row.self_rating_unconfirmed?,
+        # cell is agreed. Same privacy gate as the values themselves: where
+        # the agreed value is hidden, the self side goes by its source alone.
+        self_carried: hide_others ? row.self_rating_carried? : row.self_rating_unconfirmed?,
         manager_carried: hide_others ? false : row.manager_rating_unconfirmed?
       }
     end

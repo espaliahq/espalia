@@ -104,6 +104,18 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       assert_nil hidden[:aligned_frequency]
     end
 
+    should "not let a carried self value show that a hidden cell is agreed" do
+      AssessmentLevelRating.find_by!(person_id: @person_id, cycle_id: @cycle_id,
+        capability_stable_id: @capability.stable_id, level_ordinal: 2).update!(self_rating_source: "seeded")
+      cell_for = ->(data) { data[:categories].first[:capabilities].first[:cells][2] }
+      disclosed = Assessments::Disclosure.new([ [ @capability.stable_id, 2 ] ])
+
+      assert_not cell_for.call(build_at(level: @level, disclosure: disclosed))[:current_frequency_carried],
+        "agreed and disclosed: confirmed"
+      assert cell_for.call(build_at(level: @level))[:current_frequency_carried],
+        "the agreed value is hidden, so the self side goes by its source"
+    end
+
     should "keep whole-page manager scores withheld even with a disclosed cell" do
       disclosed = Assessments::Disclosure.new([ [ @capability.stable_id, 2 ] ])
       data = build_at(level: @level, disclosure: disclosed)
@@ -395,8 +407,11 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
         capability_stable_id: @capability2.stable_id, level_ordinal: 2
       ).update!(aligned_frequency: "some")
 
-      %i[self manager].each do |context|
-        data = build_completion(context)
+      # The assessee sees an agreed value only where a started alignment
+      # disclosed the cell, as a start does.
+      disclosed = Assessments::Disclosure.new([ [ @capability2.stable_id, 2 ] ])
+      views = { self: build_at(level: @level, disclosure: disclosed), manager: build_completion(:manager) }
+      views.each do |context, data|
         cell = data[:categories].first[:capabilities]
           .find { |cap| cap[:capability].stable_id == @capability2.stable_id }[:cells][2]
 

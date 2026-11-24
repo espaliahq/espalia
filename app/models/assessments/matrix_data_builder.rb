@@ -329,8 +329,11 @@ class Assessments::MatrixDataBuilder
         # drives the lighter pill/chip treatment and the "to confirm"
         # counts. Agreeing the cell confirms both sides. Below the floor the
         # scale already assumes the cell met, so a carried value there asks
-        # nothing (#480). Same privacy gate as the values.
-        current_frequency_carried: asks_confirmation?(ordinal, rating&.self_rating_unconfirmed?),
+        # nothing (#480). Same privacy gate as the values: where the agreed
+        # value is hidden, the self side goes by its source alone.
+        current_frequency_carried: asks_confirmation?(
+          ordinal, hidden ? rating&.self_rating_carried? : rating&.self_rating_unconfirmed?
+        ),
         manager_frequency_carried: !hidden && asks_confirmation?(ordinal, rating&.manager_rating_unconfirmed?),
         # Whether the record reads this cell (ADR-22).
         in_home_scope: @home_scope.include?(capability.stable_id, ordinal),
@@ -693,11 +696,11 @@ class Assessments::MatrixDataBuilder
   end
 
   # Whether every capability with a cell at the person's current level has a
-  # VETTED (human-owned) rating in the viewer's perspective — the "Assessment
+  # VETTED rating in the viewer's perspective — the "Assessment
   # Complete" signal. Same denominator as the hero's coverage gate, but a
   # DELIBERATELY stricter numerator: the hero counts carried values (score is
-  # about data), while Complete excludes them until confirmed (the pill is
-  # about this cycle's work). A role with no current-level cells is never
+  # about data), while Complete excludes them until confirmed or agreed (the
+  # pill is about this cycle's work). A role with no current-level cells is never
   # "complete" (nothing to finish).
   def current_level_complete?(categories)
     cells = categories
