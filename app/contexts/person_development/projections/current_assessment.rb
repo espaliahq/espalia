@@ -866,7 +866,8 @@ class PersonDevelopment::Projections::CurrentAssessment
   # Agreeing a cell, or clearing its agreed value, moves completion only
   # where a side is carried and the cell is at the assessed level: agreement
   # is what vets a seeded value. A start agrees every matching cell of the
-  # role, one event each, so the rest skip the coverage count.
+  # role, one event each, so every other cell skips the coverage count, and
+  # each carried one at the level pays it.
   def refresh_completion_after_agreement(event, rating)
     return unless rating.self_rating_carried? || rating.manager_rating_carried?
 

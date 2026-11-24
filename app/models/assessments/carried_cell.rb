@@ -1,10 +1,14 @@
 # frozen_string_literal: true
 
-# Whether a cell's value, in the viewer's own perspective, still asks to be
-# confirmed this cycle: carried from the last cycle and not frozen by a
-# started alignment (#480). The one definition behind the status pill, the
-# hero, the card chip, the category link and the review page, so they can't
-# disagree about the same work.
+# What a carried-forward rating still asks, in two questions.
+#
+# {.unconfirmed?} and {.vetted?} say whether a side's value has been stood
+# behind this cycle: counts and completion read these (#550).
+#
+# {.to_confirm?} says whether a cell asks the viewer to act: carried from
+# the last cycle and not frozen by a started alignment (#480). The one
+# definition behind the status pill, the hero, the card chip, the category
+# link and the review page, so they can't disagree about the same work.
 module Assessments::CarriedCell
   # Agreed values are never carried, so alignment has no key.
   CARRIED_KEYS = {
@@ -15,9 +19,8 @@ module Assessments::CarriedCell
   module_function
 
   # Whether a side's carried value still waits to be confirmed: seeded, on a
-  # cell nobody has agreed. Agreeing a cell confirms both sides, so readers
-  # that pluck columns ask here; the SQL twin is
-  # {AssessmentLevelRating::SELF_VETTED_SQL}.
+  # cell nobody has agreed. Agreeing a cell confirms both sides. Readers
+  # that pluck columns ask here.
   #
   # @param source [String, nil] the side's `*_rating_source`
   # @param aligned_frequency [String, nil] the cell's agreed value
@@ -30,6 +33,8 @@ module Assessments::CarriedCell
   # value no longer waits. {AssessmentLevelRating::SELF_VETTED_SQL} in Ruby.
   #
   # @param frequency [String, nil] the side's rated frequency
+  # @param source [String, nil] the side's `*_rating_source`
+  # @param aligned_frequency [String, nil] the cell's agreed value
   # @return [Boolean]
   def vetted?(frequency, source, aligned_frequency)
     frequency.present? && !unconfirmed?(source, aligned_frequency)

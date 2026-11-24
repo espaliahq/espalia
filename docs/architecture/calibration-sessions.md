@@ -1311,9 +1311,10 @@ Known gap: the mirror case — fresh manager values against carried
 Every marker is also stated in a `title`/aria string: per the palette's rule,
 carried state must never rest on decoration alone.
 
-Only `manager_rating_source == "seeded"` counts as carried — `nil` is a
-legacy or factory row and is treated as human, matching
-`Assessments::LevelCoverage`. Dev seeds emit ~15% genuinely carried ratings
+A manager rating counts as carried while its `manager_rating_source` is
+`"seeded"` and its cell has no agreed value
+(`Assessments::CarriedCell.unconfirmed?`) — `nil` is a legacy or factory row
+and is treated as human, matching `Assessments::LevelCoverage`. Dev seeds emit ~15% genuinely carried ratings
 so the markers are demo-able.
 
 ## Open questions

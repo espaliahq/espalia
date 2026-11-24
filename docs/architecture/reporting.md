@@ -114,10 +114,11 @@ aggregates the existing read models at query time.
   rating event, and when a carried cell at the assessed level is agreed or its
   agreed value cleared. Both count the same vetted sides: a value a person
   rated or confirmed, or a carried one on an agreed cell. They still differ in
-  two ways: the stamp reads the live assignment's role (the funnel reads the
-  enrollment snapshot), and it refreshes only on those events. So a stamp can
-  disagree with `self_done` / `manager_done` after a role change or a framework
-  publish, until the next rating.
+  two ways: the stamp reads the home role and level the projection tracks from
+  its own events (the funnel reads the enrollment snapshot), and it refreshes
+  only on those events. So a stamp can disagree with `self_done` /
+  `manager_done` after a role change or a framework publish, until the next
+  rating or agreement.
 - **At-risk**: not yet aligned AND (past the cycle's `planned_end_at` OR ≥14 days
   with no enrolment/lifecycle/rating activity).
 - **Grouping**: by manager subtree / role / level (enrollment snapshot columns).
