@@ -87,6 +87,16 @@ class Operations::Assessments::ConfirmCarriedRatingsTest < ActiveSupport::TestCa
     assert_equal "occasional", row.self_rated_frequency, "a stale list must never untoggle a confirmed rating"
   end
 
+  should "skip a carried rating whose cell is agreed as not carried" do
+    seed("occasional")
+    row.update!(aligned_frequency: "occasional")
+
+    result = confirm([ cell ])
+
+    assert_equal [ "not carried" ], result[:skipped].map { |skip| skip[:reason] }
+    assert_equal "seeded", row.self_rating_source
+  end
+
   should "skip a cell with no rating at all" do
     result = confirm([ cell ])
 
