@@ -9,8 +9,8 @@ namespace :events do
       AuditMetadata.with(acting_via: :system, correlation_id: SecureRandom.uuid) do
         Projections::Reconcilers.names.each do |name|
           report = AuditMetadata.wrap_event_store { Projections::Reconcilers.fetch(name).new(tenant).call }
-          recorded = report.added + report.removed
-          puts "#{name} [#{tenant.id}] #{recorded.zero? ? "nothing to record" : "recorded #{report.added} already held, #{report.removed} removed"}"
+          summary = "recorded #{report.added} already held, #{report.removed} removed, #{report.changed} changed"
+          puts "#{name} [#{tenant.id}] #{report.recorded.zero? ? "nothing to record" : summary}"
         rescue => e
           Rails.error.report(e, handled: true, context: { tenant_id: tenant.id, reconciler: name })
           puts "#{name} [#{tenant.id}] failed: #{e.class}: #{e.message}"

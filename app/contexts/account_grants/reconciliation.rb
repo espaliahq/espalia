@@ -10,7 +10,7 @@
 #
 # @example
 #   AccountGrants::Reconciliation.new(tenant).call
-#   # => #<data Report added=1, removed=0>
+#   # => #<data Report added=1, removed=0, changed=0>
 class AccountGrants::Reconciliation < TenantStreams::Reconciliation
   # @return [AccountGrants::Repository]
   def self.repository = AccountGrants::Repository.new

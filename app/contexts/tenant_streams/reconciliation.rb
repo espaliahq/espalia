@@ -5,21 +5,27 @@
 #
 # An entry in the table and not the stream becomes an `already_held` event,
 # and an entry in the stream and not the table becomes a removal. Neither
-# names an actor. An entry whose row was forgotten is left as it is. Writing
+# names an actor. An entry whose row was forgotten is left as it is, never
+# removed or changed; the table must not hold a forgotten row at all. Writing
 # only what differs makes a second run write nothing, so predeploy can run
 # it before and after the rebuild.
 #
 # A subclass names its repository and answers five questions: what the
 # table holds, what the stream holds, which entries were forgotten, and how
 # to record an addition and a removal. Entries are keyed the same way on
-# both sides.
+# both sides. A table whose rows change in place also says when an entry
+# held on both sides differs, and how to record the change, again with no
+# actor. Without that, an entry on both sides counts as equal.
 #
 # @example
 #   AccountGrants::Reconciliation.new(tenant).call
-#   # => #<data Report added=1, removed=0>
+#   # => #<data Report added=1, removed=0, changed=0>
 class TenantStreams::Reconciliation
   # What a run recorded.
-  Report = Data.define(:added, :removed)
+  Report = Data.define(:added, :removed, :changed) do
+    # @return [Integer] every event the run recorded
+    def recorded = added + removed + changed
+  end
 
   # @param tenant [Tenant]
   # @param repository [TenantStreams::Repository]
@@ -54,9 +60,16 @@ class TenantStreams::Reconciliation
     cleared = stream.except(*table.keys)
     cleared = cleared.except(*forgotten(cleared.keys)) if cleared.any?
 
+    differing = table.slice(*stream.keys).filter_map { |key, row| [ key, row, stream[key] ] if changed?(row, stream[key]) }
+    if differing.any?
+      left_alone = forgotten(differing.map(&:first)).to_set
+      differing = differing.reject { |key, *| left_alone.include?(key) }
+    end
+
     missing.each { |key, row| record_held(aggregate, key, row) }
     cleared.each { |key, recorded| record_removed(aggregate, key, recorded) }
-    Report.new(added: missing.size, removed: cleared.size)
+    differing.each { |key, row, recorded| record_changed(aggregate, key, row, recorded) }
+    Report.new(added: missing.size, removed: cleared.size, changed: differing.size)
   end
 
   private
@@ -71,7 +84,7 @@ class TenantStreams::Reconciliation
     raise NotImplementedError, "#{self.class} must define #held_in_stream"
   end
 
-  # @param keys [Array<Object>] entries the stream holds and the table doesn't
+  # @param keys [Array<Object>] entries the stream holds that would be removed or changed
   # @return [Array<Object>] those whose row was forgotten, to leave alone
   def forgotten(keys)
     raise NotImplementedError, "#{self.class} must define #forgotten"
@@ -83,6 +96,16 @@ class TenantStreams::Reconciliation
 
   def record_removed(aggregate, key, recorded)
     raise NotImplementedError, "#{self.class} must define #record_removed"
+  end
+
+  # @param row [Object] what the table holds for an entry the stream also holds
+  # @param recorded [Object] what the stream holds for it
+  # @return [Boolean] whether to record the table's row as a change
+  def changed?(row, recorded) = false
+
+  # Called only for an entry {#changed?} says differs.
+  def record_changed(aggregate, key, row, recorded)
+    raise NotImplementedError, "#{self.class} must define #record_changed"
   end
 
   def today

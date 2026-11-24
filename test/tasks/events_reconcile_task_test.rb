@@ -52,8 +52,8 @@ class EventsReconcileTaskTest < ActiveSupport::TestCase
   should "record each grant the flags hold as already held, with no grantor, as the system" do
     out = reconcile
 
-    assert_match "account_grants [#{@tenant.id}] recorded 2 already held, 0 removed", out
-    assert_match "account_roles [#{@tenant.id}] recorded 3 already held, 0 removed", out
+    assert_match "account_grants [#{@tenant.id}] recorded 2 already held, 0 removed, 0 changed", out
+    assert_match "account_roles [#{@tenant.id}] recorded 3 already held, 0 removed, 0 changed", out
     assert_equal %w[member member member], role_events.map { it.data[:role] }
     editor, planner = events
     assert_equal [ AccountGrants::Events::OrgGraphEditorAdded, AccountGrants::Events::PlannerAdded ], events.map(&:class)
