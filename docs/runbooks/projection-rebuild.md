@@ -105,6 +105,8 @@ The order matters. Step 2b runs the new `account_links` reconciler, which record
 
 **Deploy this only onto a release that holds [PR #561](https://github.com/espaliahq/espalia/pull/561).** That release loads both link events and ignores them in `AccountFlags`, so it keeps serving while step 2b writes them.
 
+**If this deploys together with [#550](https://github.com/espaliahq/espalia/issues/550),** set `REBUILD_ON_DEPLOY=person_development/current_assessment,account_grants/account_flags`. That deploy blanks every assessment while it runs, as the #550 entry below says. If #550 deployed first and the variable was removed, set it again to `account_grants/account_flags`.
+
 #### Recorded: `person_development/current_assessment` v11 (agreeing a cell vets its carried ratings, [#550](https://github.com/espaliahq/espalia/issues/550))
 
 Path A: `REBUILD_ON_DEPLOY=person_development/current_assessment`, removed once the deploy is live. `AssessmentAligned` and `AlignmentCleared` now refresh the completion stamps when the cell is at the assessed level and a side is carried. The rebuild stamps `self_completed_at` and `manager_completed_at` on a participation whose carried cells were agreed, at the time of the agreement that completed the side. Nothing else changes: no rating, status or alignment row differs.
