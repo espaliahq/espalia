@@ -64,6 +64,7 @@ class PersonDevelopment::Aggregate
     @evidence = {}       # evidence_id => { links: { [capability_stable_id, level_ordinal] => valence, ... }, ever_linked: Set, status: }
     @evidence_requests = {} # request_id => { status:, requestee_person_id:, capability_stable_id:, level_ordinal: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, evidence_id:, parent_id:, author_id:, status: }
+    @suggestions = {}    # suggestion_id => { evidence_id:, cell: [capability_stable_id, level_ordinal], status: }
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
     @assessed_framework_version = nil # framework version the CURRENT cycle is assessed against
     # Declared explorations (ADR-22) — intent facts that outlive cycles:
@@ -222,6 +223,13 @@ class PersonDevelopment::Aggregate
 
   # @return [String, nil] the cycle the person is enrolled in
   attr_reader :current_cycle_id
+
+  # No command writes suggestion events yet: a release loads them before any
+  # release writes them (#539).
+  #
+  # @param suggestion_id [String]
+  # @return [String, nil] "pending", "accepted", "dismissed" or "superseded"; nil when none is recorded
+  def suggestion_status(suggestion_id) = @suggestions.dig(suggestion_id.to_s, :status)
 
   # ── Manager-rating delegation ──
 
@@ -1791,6 +1799,7 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::EvidenceLinkAdded do |event|
+    accept_suggestion(event.data[:via_suggestion_id])
     state = @evidence[event.data[:evidence_id]]
     next unless state
 
@@ -1807,6 +1816,7 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::EvidenceLinkRevalenced do |event|
+    accept_suggestion(event.data[:via_suggestion_id])
     state = @evidence[event.data[:evidence_id]]
     next unless state
 
@@ -1898,5 +1908,32 @@ class PersonDevelopment::Aggregate
     next unless state
 
     state[:status] = "deleted"
+  end
+
+  on PersonDevelopment::Events::EvidencePlacementSuggested do |event|
+    @suggestions[event.data[:suggestion_id]] = {
+      evidence_id: event.data[:evidence_id],
+      cell: [ event.data[:capability_stable_id], event.data[:level_ordinal] ],
+      status: event.data[:status] == "edited" ? "accepted" : event.data[:status] || "pending"
+    }
+  end
+
+  on PersonDevelopment::Events::EvidencePlacementSuggestionsSuperseded do |event|
+    Array(event.data[:suggestion_ids]).each do |id|
+      state = @suggestions[id]
+      state[:status] = "superseded" if state&.dig(:status) == "pending"
+    end
+  end
+
+  on PersonDevelopment::Events::EvidencePlacementSuggestionDismissed do |event|
+    state = @suggestions[event.data[:suggestion_id]]
+    state[:status] = "dismissed" if state
+  end
+
+  # A suggestion recorded before suggestions were events is unknown here, so
+  # accepting it changes nothing.
+  def accept_suggestion(suggestion_id)
+    state = suggestion_id && @suggestions[suggestion_id]
+    state[:status] = "accepted" if state
   end
 end

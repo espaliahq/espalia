@@ -126,6 +126,20 @@ Evidence and feedback:
       The suggestion itself is plain state, not an event: machine output,
       regenerable, worthless once decided (assessments/evidence.md →
       Suggested placement and valence).
+  EvidencePlacementSuggested { suggestion_id, evidence_id, capability_stable_id,
+                               level_ordinal, valence, confidence, rationale?, provider,
+                               model, prompt_version, generated_at, already_held,
+                               status?, decided_by_id?, decided_at? }
+  EvidencePlacementSuggestionsSuperseded { evidence_id, suggestion_ids }
+  EvidencePlacementSuggestionDismissed { suggestion_id, evidence_id, dismissed_by_id?,
+                                         reason?, dismissed_at, already_held }
+    ← LOADED, NOT YET WRITTEN. A release loads these before any release writes
+      them, so the release still serving during the deploy that starts writing
+      them can load the stream (#539 c3). The aggregate tracks each
+      suggestion's status: a link event's via_suggestion_id marks it accepted,
+      and superseding never reopens a decided one. status, decided_by_id and
+      decided_at appear only with already_held, on a suggestion recorded from
+      the table.
   EvidenceUpdated { evidence_id, title?, content, evidence_type, custom_type_label?,
                     external_reference?, edited_by_id }
   EvidenceWithdrawn { evidence_id, reason, withdrawn_by_id }
