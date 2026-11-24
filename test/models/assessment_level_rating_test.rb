@@ -64,15 +64,52 @@ class AssessmentLevelRatingTest < ActiveSupport::TestCase
     end
   end
 
+  context "vetted sides" do
+    should "count a rated or confirmed value, and a legacy row with no source" do
+      human = rate(@alice, @engineer_cap, 2, self_rating_source: "human")
+      legacy = rate(@alice, @manager_cap, 2, self_rating_source: nil)
+
+      assert_equal [ human, legacy ].map(&:id).sort, AssessmentLevelRating.across_all_roles.self_vetted.pluck(:id).sort
+      assert_not human.self_rating_unconfirmed?
+      assert_not legacy.self_rating_unconfirmed?
+    end
+
+    should "leave out a carried value until its cell is agreed" do
+      carried = rate(@alice, @engineer_cap, 2, self_rating_source: "seeded",
+        manager_rated_frequency: "consistent", manager_rating_source: "seeded")
+
+      assert_empty AssessmentLevelRating.across_all_roles.self_vetted
+      assert_empty AssessmentLevelRating.across_all_roles.manager_vetted
+      assert carried.self_rating_unconfirmed?
+      assert carried.manager_rating_unconfirmed?
+
+      carried.update!(aligned_frequency: "consistent")
+
+      assert_equal [ carried ], AssessmentLevelRating.across_all_roles.self_vetted.to_a
+      assert_equal [ carried ], AssessmentLevelRating.across_all_roles.manager_vetted.to_a
+      assert_not carried.self_rating_unconfirmed?
+      assert_not carried.manager_rating_unconfirmed?
+      assert carried.self_rating_carried?, "provenance stays seeded for the rating operations"
+    end
+
+    should "never count a side with no value, agreed or not" do
+      rate(@alice, @engineer_cap, 2, self_rated_frequency: nil, self_rating_source: "human",
+        manager_rated_frequency: "some", aligned_frequency: "some")
+
+      assert_empty AssessmentLevelRating.across_all_roles.self_vetted
+      assert_equal 1, AssessmentLevelRating.across_all_roles.manager_vetted.count
+    end
+  end
+
   private
 
   def scope_of(role_id, *cells)
     Assessments::RoleScope.new(role_id: role_id, framework_id: @framework_id, bindings: [], cells: cells)
   end
 
-  def rate(person_id, stable_id, ordinal)
+  def rate(person_id, stable_id, ordinal, **attrs)
     create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: person_id,
       framework_id: @framework_id, capability_stable_id: stable_id, level_ordinal: ordinal,
-      self_rated_frequency: "consistent")
+      self_rated_frequency: "consistent", **attrs)
   end
 end

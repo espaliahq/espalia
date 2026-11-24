@@ -102,6 +102,22 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Continue self-assessment"
     end
 
+    should "read a carried self value as started once its cell is agreed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_level_rating,
+          tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @person.id,
+          framework_id: @cycle.framework_id, capability_stable_id: role_capability, level_ordinal: 3,
+          self_rated_frequency: "some", self_rating_source: "seeded",
+          manager_rated_frequency: "some", manager_rating_source: "seeded", aligned_frequency: "some")
+      end
+
+      sign_in @user
+      get home_card_path(card: "assessment_progress", key: @cycle.cycle_id)
+
+      assert_response :success
+      assert_includes response.body, "Continue self-assessment"
+    end
+
     should "tell a person who has finished rating that the next move is the manager's" do
       ActsAsTenant.with_tenant(@tenant) do
         AssessmentCycleProgress.find_by!(cycle_id: @cycle.cycle_id, person_id: @person.id)

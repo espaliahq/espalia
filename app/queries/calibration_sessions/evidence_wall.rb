@@ -132,9 +132,10 @@ class CalibrationSessions::EvidenceWall
       .within(Assessments::RoleScope.for_people(
         cycle_id: @session.cycle_id, framework_id: @session.framework_id, person_ids: calibrant_ids
       ))
-      .pluck(:person_id, :level_ordinal, :manager_rated_frequency, :manager_rating_source)
-      .to_h do |person_id, ordinal, frequency, source|
-        [ [ person_id, ordinal ], { frequency: frequency, carried: source == "seeded" } ]
+      .pluck(:person_id, :level_ordinal, :manager_rated_frequency, :manager_rating_source, :aligned_frequency)
+      .to_h do |person_id, ordinal, frequency, source, aligned|
+        [ [ person_id, ordinal ],
+          { frequency: frequency, carried: Assessments::CarriedCell.unconfirmed?(source, aligned) } ]
       end
   end
 

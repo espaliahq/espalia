@@ -90,10 +90,11 @@ class Operations::Assessments::ConfirmCarriedRatings < Operations::Base
   def side_of(row)
     return [ nil, false ] unless row
 
+    # An agreed cell is already confirmed, as assessments_capability_get reports it.
     if perspective == "self"
-      [ row.self_rated_frequency, row.self_rating_carried? ]
+      [ row.self_rated_frequency, row.self_rating_unconfirmed? ]
     else
-      [ row.manager_rated_frequency, row.manager_rating_carried? ]
+      [ row.manager_rated_frequency, row.manager_rating_unconfirmed? ]
     end
   end
 
