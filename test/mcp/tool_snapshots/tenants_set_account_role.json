@@ -1,0 +1,30 @@
+{
+  "name": "tenants_set_account_role",
+  "description": "Set the role of a person's account in the active tenant: member, or admin. An admin manages the tenant's people, settings and permissions. Refused unless the caller is a tenant admin, and refused when it would leave the tenant with no admin. Returns the person and their role.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "person_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "role": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "required": [
+      "person_id",
+      "role"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false
+  },
+  "approval": "in_app"
+}

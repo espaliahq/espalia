@@ -35,18 +35,26 @@ class EventsReconcileTaskTest < ActiveSupport::TestCase
 
   def reconcile = run_task("events:reconcile")
 
-  def events(tenant = @tenant)
-    Rails.configuration.event_store.read.stream(EventStreamNaming.tenant_account_grants_stream(tenant:)).to_a
+  GRANT_EVENTS = AccountGrants::Aggregate::EVENTS.values.flat_map(&:values).freeze
+
+  def events(tenant = @tenant, of: GRANT_EVENTS)
+    Rails.configuration.event_store.read.stream(EventStreamNaming.tenant_account_grants_stream(tenant:)).of_type(of).to_a
   end
 
-  def flags(account) = TenantUser.unscoped.find(account.id).slice(*PROJECTION::COLUMNS).values
+  def role_events(tenant = @tenant)
+    events(tenant, of: [ AccountGrants::Events::AccountRoleSet, AccountGrants::Events::AccountRoleRemoved ])
+  end
+
+  def flags(account) = TenantUser.unscoped.find(account.id).slice(*AccountGrants::Aggregate::GRANTS.map(&:to_s)).values
 
   def holds?(grant, account) = as_tenant { AccountGrants::Repository.new.load_grants.holds?(grant, account.id) }
 
   should "record each grant the flags hold as already held, with no grantor, as the system" do
     out = reconcile
 
-    assert_match "account_grants [#{@tenant.id}] recorded 2 already held, 0 removed", out
+    assert_match "account_grants [#{@tenant.id}] recorded 2 already held, 0 removed, 0 changed", out
+    assert_match "account_roles [#{@tenant.id}] recorded 3 already held, 0 removed, 0 changed", out
+    assert_equal %w[member member member], role_events.map { it.data[:role] }
     editor, planner = events
     assert_equal [ AccountGrants::Events::OrgGraphEditorAdded, AccountGrants::Events::PlannerAdded ], events.map(&:class)
     assert_equal({ tenant_user_id: @editor.id, person_id: @editor.person_id, effective_on: @tenant.today.iso8601,
@@ -169,7 +177,7 @@ class EventsReconcileTaskTest < ActiveSupport::TestCase
     should "leave the stamp alone when run again" do
       stamped_at = ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).applied_at
 
-      assert_no_match "adopted", reconcile
+      assert_no_match "#{PROJECTION::PROJECTION_NAME}: adopted", reconcile
       assert_equal stamped_at, ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).applied_at
     end
   end
@@ -178,7 +186,7 @@ class EventsReconcileTaskTest < ActiveSupport::TestCase
     ProjectionVersion.stamp!(PROJECTION)
     ProjectionVersion.where(name: PROJECTION::PROJECTION_NAME).update_all(version: PROJECTION::CODE_VERSION - 1)
 
-    assert_no_match "adopted", reconcile
+    assert_no_match "#{PROJECTION::PROJECTION_NAME}: adopted", reconcile
     assert_equal PROJECTION::CODE_VERSION - 1, ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME).version
   end
 end
