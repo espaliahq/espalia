@@ -72,9 +72,14 @@ class Tenant::UsersController < ApplicationController
                          status: :see_other
     end
 
-    Operations::Tenants::SetAccountRole.call(
-      context: pundit_user, params: { person_id: @tenant_user.ensure_person!.id, role: new_role }
-    )
+    person = @tenant_user.ensure_person!
+    if TenantUser.where(person_id: person.id).many?
+      return redirect_to tenant_user_path(@tenant_user),
+                         alert: "#{person.name} has more than one account here, so the role can't be changed.",
+                         status: :see_other
+    end
+
+    Operations::Tenants::SetAccountRole.call(context: pundit_user, params: { person_id: person.id, role: new_role })
     redirect_to tenant_user_path(@tenant_user), notice: "Tenant role updated."
   rescue Operations::Base::ParameterError => e
     redirect_to tenant_user_path(@tenant_user), alert: "The role could not be changed: #{e.message.sub(/\A\w+: /, '')}."
