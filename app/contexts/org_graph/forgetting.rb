@@ -241,6 +241,13 @@ class OrgGraph::Forgetting
 
   # The tenant row is read under a share lock, so its retention period and
   # schedule can't change until this person is done.
+  #
+  # Lock order: the sync lock, the tenant row (shared), the person's row, the
+  # Org Graph stream, the plan keys, then the grants lock and only after it
+  # the person's tenant_users rows. A link, a role change and a sign-in take
+  # the grants lock before any tenant_users row, so none waits on an erase in
+  # a cycle. The grants lock comes last, so an erase holds it only for the
+  # unlink and the commit.
   def erase(person_id, on:, reason:, requested_by_id: nil, scheduled: false)
     within_tenant do
       Person.transaction do
@@ -290,8 +297,8 @@ class OrgGraph::Forgetting
     digest = self.class.digest(@tenant, person.hris_source, person.external_id) if person.external_id.present?
     person.update_columns(name: Person::FORMER_MEMBER, email: nil, external_id: nil, hris_raw_data: nil,
                           forgotten_external_id_digest: digest, forgotten_at: now, updated_at: now)
-    TenantUser.where(person_id: person.id)
-      .update_all(person_id: nil, user_id: nil, slack_user_id: nil, forgotten_at: now, updated_at: now)
+    accounts = AuditMetadata.wrap_event_store { AccountGrants::CommandHandler.new.unlink_forgotten(person.id) }
+    TenantUser.where(id: accounts).update_all(user_id: nil, slack_user_id: nil, forgotten_at: now, updated_at: now)
   end
 
   # Their own inbox in this tenant. The login is global and stays, so
