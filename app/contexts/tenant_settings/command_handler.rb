@@ -66,9 +66,9 @@ class TenantSettings::CommandHandler
   # projection is settled too.
   def change(enabled_by_account_id: nil)
     ActsAsTenant.with_tenant(@tenant) do
-      @repository.with_settings { |settings| @tenant.with_lock { settle(settings, @tenant.org_graph_config) } }
+      settle
       ActiveRecord::Base.transaction do
-        @repository.with_settings { |settings| @tenant.with_lock { settle(settings, @tenant.org_graph_config) } }
+        settle
         @repository.with_settings do |settings|
           @tenant.with_lock do
             was_on = settings.scheduled_forgetting?
@@ -82,8 +82,17 @@ class TenantSettings::CommandHandler
 
   # The previous release, still serving during a deploy, writes the JSON
   # only. Record what it holds first, as reconcile would, so the command
-  # acts on the settings the tenant has rather than a stale stream.
-  def settle(settings, config) = settings.record_held(**TenantSettings::Held.from(config))
+  # acts on the settings the tenant has rather than a stale stream. That
+  # release made the change, not this command's admin, so the events name no
+  # actor.
+  def settle
+    Rails.configuration.event_store.with_metadata(acting_via: "system", actor_id: nil, client_application_id: nil,
+                                                  impersonator_id: nil, impersonation_active: nil) do
+      @repository.with_settings do |settings|
+        @tenant.with_lock { settings.record_held(**TenantSettings::Held.from(@tenant.org_graph_config)) }
+      end
+    end
+  end
 
   # The JSON names the admin by account, where the stream names their person.
   def write_json(settings, config, was_on, enabled_by_account_id)

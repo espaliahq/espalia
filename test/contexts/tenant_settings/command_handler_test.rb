@@ -94,6 +94,19 @@ class TenantSettings::CommandHandlerTest < ActiveSupport::TestCase
       assert_not row.scheduled_forgetting
     end
 
+    should "record what it wrote as the system, while the command itself names the admin" do
+      previous_release_writes(retention_years: 3)
+
+      AuditMetadata.with(acting_via: :web, actor_id: @admin.person_id, correlation_id: "request-1") do
+        AuditMetadata.wrap_event_store { handler.set_retention_period(5, set_by: @admin) }
+      end
+
+      held, set = stream.last(2)
+      assert_equal [ 3, true ], [ held.data[:retention_years], held.data[:already_held] ]
+      assert_equal [ "system", nil, "request-1" ], held.metadata.to_h.values_at(:acting_via, :actor_id, :correlation_id)
+      assert_equal [ "web", @admin.person_id ], set.metadata.to_h.values_at(:acting_via, :actor_id)
+    end
+
     should "keep the time and account it recorded when the schedule stays on" do
       at = 2.days.ago.round
       previous_release_writes(scheduled_forgetting: true, scheduled_forgetting_enabled_at: at, scheduled_forgetting_enabled_by_id: @admin.id)
