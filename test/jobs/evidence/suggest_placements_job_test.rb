@@ -31,6 +31,16 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     assert_equal @alex.id, row.person_id
   end
 
+  should "record the run on the person's development stream, as the system" do
+    item = record_peer_feedback
+    with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+
+    stream = EventStreamNaming.person_development_stream(@alex.id, @framework_id, tenant: @tenant)
+    event = Rails.configuration.event_store.read.stream(stream).of_type([ PersonDevelopment::Events::EvidencePlacementSuggested ]).to_a.sole
+    assert_equal suggestions_for(item).sole.id, event.data[:suggestion_id]
+    assert_equal "system", event.metadata[:acting_via]
+  end
+
   should "store a placement that comes with no rationale, as a decision model's do" do
     item = record_peer_feedback
     with_fake_suggestion_model(proposals: [ proposal(@ownership, confidence: 0.62, rationale: nil) ]) do
