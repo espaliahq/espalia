@@ -210,7 +210,7 @@ the only signal, and people believed they had finished. So:
   swaps Continue for a "N to confirm →" jump chip at that point; a carried
   capability's name row wears **To confirm**. All three use
   `Components::Shared::ToConfirmChip`, and "still asks" is one predicate,
-  `Concerns::RatedCount.to_confirm?` (carried on the viewer's side, not
+  `Assessments::CarriedCell.to_confirm?` (carried on the viewer's side, not
   frozen).
 - **A category confirms in bulk.** Its indicator cluster offers
   "Confirm N carried", a page (`Assessments::CarriedRatingsController`)

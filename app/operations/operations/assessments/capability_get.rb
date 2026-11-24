@@ -143,7 +143,7 @@ class Operations::Assessments::CapabilityGet < Operations::Base
         # an MCP client should present these as "carried from the previous
         # cycle", matching the web's dashed-pill treatment. False once the
         # cell is agreed. The manager's flag takes the values' privacy gate;
-        # the self flag reads as the web's does (MatrixDataBuilder).
+        # the self flag takes none, as on the web (MatrixDataBuilder).
         self_carried: row.self_rating_unconfirmed?,
         manager_carried: hide_others ? false : row.manager_rating_unconfirmed?
       }
