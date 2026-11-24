@@ -66,7 +66,7 @@ class AccountGrants::Projections::AccountFlagsTest < ActiveSupport::TestCase
       remove(:org_graph_editor, @cy)
       @handler.add(:org_graph_editor, @cy)
     end
-    stream = EventStreamNaming.account_grants_stream(tenant: @tenant)
+    stream = EventStreamNaming.tenant_account_grants_stream(tenant: @tenant)
     written = Rails.configuration.event_store.read.stream(stream).count
 
     PROJECTION.reset!(tenant: @tenant)
@@ -106,7 +106,7 @@ class AccountGrants::Projections::AccountFlagsTest < ActiveSupport::TestCase
       @handler.add(:org_graph_editor, @ada)
       remove(:org_graph_editor, @ada)
     end
-    added = Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant: @tenant)).first
+    added = Rails.configuration.event_store.read.stream(EventStreamNaming.tenant_account_grants_stream(tenant: @tenant)).first
 
     as_tenant { Projections::Replayer.with_replay_mode { PROJECTION.new.call(added) } }
 

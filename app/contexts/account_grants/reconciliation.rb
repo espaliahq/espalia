@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Records whatever the tenant_users flags hold that the AccountGrants stream doesn't: the flag is the truth.
+# Records whatever the tenant_users flags hold that the TenantAccountGrants stream doesn't: the flag is the truth.
 #
 # A flag set with no grant recorded becomes an `already_held` addition, and
 # a recorded grant whose flag is clear, or whose account was destroyed,

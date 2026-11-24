@@ -36,7 +36,7 @@ class EventsReconcileTaskTest < ActiveSupport::TestCase
   def reconcile = run_task("events:reconcile")
 
   def events(tenant = @tenant)
-    Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant:)).to_a
+    Rails.configuration.event_store.read.stream(EventStreamNaming.tenant_account_grants_stream(tenant:)).to_a
   end
 
   def flags(account) = TenantUser.unscoped.find(account.id).slice(*PROJECTION::COLUMNS).values

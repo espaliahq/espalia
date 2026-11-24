@@ -10,7 +10,7 @@
 #   class AccountGrants::Repository < TenantStreams::Repository
 #     private
 #     def new_aggregate = AccountGrants::Aggregate.new
-#     def stream_name(tenant) = EventStreamNaming.account_grants_stream(tenant:)
+#     def stream_name(tenant) = EventStreamNaming.tenant_account_grants_stream(tenant:)
 #   end
 class TenantStreams::Repository
   # @param event_store [RubyEventStore::Client]
@@ -70,9 +70,13 @@ class TenantStreams::Repository
   # The expected version only catches a write between load and store; the
   # lock also holds the no-op checks the aggregate makes, such as a duplicate add.
   def lock_stream(tenant)
-    sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", stream_name(tenant) ])
+    sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", lock_key(tenant) ])
     ActiveRecord::Base.connection.execute(sql)
   end
+
+  # @param tenant [Tenant]
+  # @return [String] the name the lock hashes; a moved stream keeps its old one
+  def lock_key(tenant) = stream_name(tenant)
 
   def current_tenant!
     ActsAsTenant.current_tenant or raise ArgumentError, "No tenant context available"

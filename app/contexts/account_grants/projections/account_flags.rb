@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Synchronous projection of the grant columns of `tenant_users` from the
-# AccountGrants stream: `org_graph_editor` and `team_planner`.
+# TenantAccountGrants stream: `org_graph_editor` and `team_planner`.
 #
 # The only writer of those two columns, and of nothing else on the row. A
 # forgotten account sits outside TenantUser's default scope, so neither a
