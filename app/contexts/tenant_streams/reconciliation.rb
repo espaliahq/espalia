@@ -5,7 +5,8 @@
 #
 # An entry in the table and not the stream becomes an `already_held` event,
 # and an entry in the stream and not the table becomes a removal. Neither
-# names an actor. An entry whose row was forgotten is left as it is. Writing
+# names an actor. An entry whose row was forgotten is left as it is, never
+# removed or changed; the table must not hold a forgotten row at all. Writing
 # only what differs makes a second run write nothing, so predeploy can run
 # it before and after the rebuild.
 #
@@ -58,7 +59,7 @@ class TenantStreams::Reconciliation
 
     differing = table.slice(*stream.keys).filter_map { |key, row| [ key, row, stream[key] ] if changed?(row, stream[key]) }
     if differing.any?
-      left_alone = forgotten(differing.map(&:first))
+      left_alone = forgotten(differing.map(&:first)).to_set
       differing = differing.reject { |key, *| left_alone.include?(key) }
     end
 
@@ -78,7 +79,7 @@ class TenantStreams::Reconciliation
     raise NotImplementedError, "#{self.class} must define #held_in_stream"
   end
 
-  # @param keys [Array<Object>] entries the stream holds and the table doesn't
+  # @param keys [Array<Object>] entries the stream holds that would be removed or changed
   # @return [Array<Object>] those whose row was forgotten, to leave alone
   def forgotten(keys)
     raise NotImplementedError, "#{self.class} must define #forgotten"
