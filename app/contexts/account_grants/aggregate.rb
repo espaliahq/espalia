@@ -11,6 +11,9 @@
 # and so does setting a role an account already has. The tenant always keeps
 # an admin, so demoting the last one is refused.
 #
+# It also reads the person each account is linked to, though no command here
+# writes a link yet: a release loads those events before any release writes them.
+#
 class AccountGrants::Aggregate
   include Shreddable::AggregateRoot
 
@@ -35,6 +38,7 @@ class AccountGrants::Aggregate
   def initialize
     @holdings = GRANTS.index_with { {} }
     @roles = {}
+    @links = {}
   end
 
   # @return [Hash{String => String}] each account's id to its role
@@ -42,7 +46,7 @@ class AccountGrants::Aggregate
     @roles.transform_values(&:first)
   end
 
-  # @return [Hash{String => String, nil}] each account with a role to its person's id
+  # @return [Hash{String => String, nil}] each account with a role to its person's id when the role was set
   def role_holders
     @roles.transform_values(&:last)
   end
@@ -51,6 +55,11 @@ class AccountGrants::Aggregate
   # @return [String, nil] the account's role, nil when none is recorded
   def role_of(tenant_user_id)
     @roles[tenant_user_id.to_s]&.first
+  end
+
+  # @return [Hash{String => String}] each linked account's id to its person's id
+  def links
+    @links.dup
   end
 
   # @param grant [Symbol] one of {GRANTS}
@@ -133,12 +142,14 @@ class AccountGrants::Aggregate
   # @param tenant_user_id [String] an account destroyed or forgotten since its role was set
   # @param person_id [String, nil]
   # @param effective_on [Date, String]
-  def remove_role(tenant_user_id:, person_id:, effective_on:)
+  # @param removed_by_id [String, nil] person_id of the actor, nil when reconcile records it
+  def remove_role(tenant_user_id:, person_id:, effective_on:, removed_by_id: nil)
     id = tenant_user_id.to_s
     return unless @roles.key?(id)
 
     apply(AccountGrants::Events::AccountRoleRemoved.new(data: {
-      tenant_user_id: id, person_id: person_id, effective_on: effective_on.to_date.iso8601
+      tenant_user_id: id, person_id: person_id, effective_on: effective_on.to_date.iso8601,
+      removed_by_id: removed_by_id
     }))
   end
 
@@ -157,6 +168,11 @@ class AccountGrants::Aggregate
     end
     on(events.fetch(:removed)) { |event| @holdings[grant].delete(event.data[:tenant_user_id]) }
   end
+
+  on(AccountGrants::Events::AccountLinkedToPerson) do |event|
+    @links[event.data[:tenant_user_id]] = event.data[:person_id]
+  end
+  on(AccountGrants::Events::AccountUnlinkedFromPerson) { |event| @links.delete(event.data[:tenant_user_id]) }
 
   private
 

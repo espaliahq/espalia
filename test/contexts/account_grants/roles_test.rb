@@ -111,7 +111,7 @@ class AccountGrants::RolesTest < ActiveSupport::TestCase
       report = reconcile
       assert_equal [ 1, 1 ], [ report.added, report.removed ]
       assert_equal({ @ada.id => "admin", @cy.id => "admin" }, roles)
-      assert_equal({ tenant_user_id: id, person_id:, effective_on: @tenant.today.iso8601 }, role_events.last.data)
+      assert_equal({ tenant_user_id: id, person_id:, effective_on: @tenant.today.iso8601, removed_by_id: nil }, role_events.last.data)
     end
   end
 
