@@ -100,13 +100,13 @@ class WriteOwnership
   end
 
   # A projection writes only its own table, and, where it owns some columns,
-  # only those, and no whole rows.
+  # only those, and no whole rows. An upsert's inserted columns count too.
   def projection_violation(entry, write)
     return "written inside #{write.projection}, which doesn't own it" unless write.projection == entry.projection
     return if entry.columns.empty?
     return "#{write.projection} deletes rows, though it owns only some columns" if write.op == "delete"
 
-    extra = written_columns(write) - entry.columns - WriteCatalogueReport::TIMESTAMPS
+    extra = write.columns - entry.columns - WriteCatalogueReport::TIMESTAMPS
     "#{write.projection} writes #{extra.join(', ')}, which it isn't declared to own" if extra.any?
   end
 

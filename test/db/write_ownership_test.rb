@@ -104,6 +104,8 @@ class WriteOwnershipTest < ActiveSupport::TestCase
                          write("org_units", op: "delete", projection: "org_graph/members"),
                          write("people", op: "delete", projection: "org_graph/people_columns"),
                          write("people", columns: %w[name], projection: "org_graph/people_columns"),
+                         write("people", op: "upsert", columns: %w[manager_id status], updates: %w[manager_id],
+                                         projection: "org_graph/people_columns"),
                          write("people", columns: %w[manager_id], site: "app/integrations/hibob.rb:7 save"),
                          write("people", op: "upsert", columns: %w[manager_id name], updates: %w[manager_id],
                                          site: "app/models/person.rb:20 sync"),
@@ -114,6 +116,7 @@ class WriteOwnershipTest < ActiveSupport::TestCase
         [ "org_units", "written inside org_graph/members, which doesn't own it" ],
         [ "people", "org_graph/people_columns deletes rows, though it owns only some columns" ],
         [ "people", "org_graph/people_columns writes name, which it isn't declared to own" ],
+        [ "people", "org_graph/people_columns writes status, which it isn't declared to own" ],
         [ "people", "app/integrations/hibob.rb writes it, and isn't one of its writers" ],
         [ "people", "app/models/person.rb writes manager_id, which org_graph/people_columns owns" ],
         [ "users", "app/controllers/x_controller.rb writes it, and isn't one of its writers" ]
