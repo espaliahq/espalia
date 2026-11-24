@@ -668,6 +668,50 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
     end
   end
 
+  context "rebuild contract for agreed carried cells" do
+    should "replay the completion stamps an agreement earned" do
+      role, level, cap = ActsAsTenant.with_tenant(@tenant) do
+        role_family = create(:framework_role_family, framework_id: @framework_id)
+        role = create(:framework_role, role_family_id: role_family.role_family_id, code: "E", track: "ic")
+        level = create(:framework_level, role_id: role.role_id, ordinal: 2, code: "E2")
+        category = create(:framework_capability_category, framework_id: @framework_id, ordinal: 1)
+        cap = create(:framework_capability, category_id: category.category_id)
+        create(:framework_capability_role_binding, capability_id: cap.capability_id, role_id: role.role_id)
+        create(:framework_behavioural_expectation, capability_id: cap.capability_id, level_ordinal: 2)
+        [ role, level, cap ]
+      end
+      manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Mgr") }
+      ids = { person_id: @person_id, framework_id: @framework_id }
+      seeded = { **ids, cycle_id: @cycle_id, capability_stable_id: cap.stable_id, level_ordinal: 2,
+                 frequency: "consistent", source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7 }
+
+      append_and_project(PersonDevelopment::Events::PersonAssignedToFramework,
+        **ids, role_id: role.role_id, level_id: level.level_id)
+      append_and_project(PersonDevelopment::Events::JoinedAssessmentCycle,
+        **ids, cycle_id: @cycle_id, framework_version: 1)
+      append_and_project(PersonDevelopment::Events::SelfRated, **seeded)
+      append_and_project(PersonDevelopment::Events::ManagerRated, **seeded)
+      append_and_project(PersonDevelopment::Events::AlignmentStarted,
+        **ids, cycle_id: @cycle_id, started_by_id: manager.id)
+      append_and_project(PersonDevelopment::Events::AssessmentAligned,
+        **ids, capability_stable_id: cap.stable_id, level_ordinal: 2, aligned_frequency: "consistent",
+        cycle_id: @cycle_id, comment: nil, aligned_by_id: manager.id)
+
+      progress = reload_progress
+      assert_not_nil progress.self_completed_at
+      assert_not_nil progress.manager_completed_at
+      before_snapshot = snapshot_read_models(PersonDevelopment::Projections::CurrentAssessment, @tenant)
+
+      PersonDevelopment::Projections::CurrentAssessment.reset!(tenant: @tenant)
+      Projections::Replayer.replay(
+        projection_class: PersonDevelopment::Projections::CurrentAssessment, tenant: @tenant
+      )
+
+      assert_equal before_snapshot, snapshot_read_models(PersonDevelopment::Projections::CurrentAssessment, @tenant)
+      assert_not_nil reload_progress.self_completed_at
+    end
+  end
+
   context "FrameworkVersionMigrated" do
     setup do
       @from_stable_id = SecureRandom.uuid_v7
@@ -951,6 +995,45 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         frequency: "consistent", cycle_id: @cycle_id, rationale: "Confirmed carried-forward rating")
 
       assert_not_nil reload_progress.self_completed_at
+    end
+
+    should "stamp both sides when a carried cell is agreed, and clear them when the agreement is" do
+      seeded = { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "consistent",
+                 cycle_id: @cycle_id, source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7 }
+      emit(PersonDevelopment::Events::SelfRated, **seeded)
+      emit(PersonDevelopment::Events::ManagerRated, **seeded)
+      assert_nil reload_progress.self_completed_at
+      assert_nil reload_progress.manager_completed_at
+
+      emit(PersonDevelopment::Events::AssessmentAligned,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        aligned_frequency: "consistent", cycle_id: @cycle_id)
+
+      progress = reload_progress
+      assert_not_nil progress.self_completed_at, "agreeing the cell vets the carried self value"
+      assert_not_nil progress.manager_completed_at
+
+      emit(PersonDevelopment::Events::AlignmentCleared,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2, cycle_id: @cycle_id)
+
+      progress = reload_progress
+      assert_nil progress.self_completed_at, "an unagreed carried value is to confirm again"
+      assert_nil progress.manager_completed_at
+    end
+
+    should "leave completion alone when the agreed carried cell is off the assessed level" do
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+      stamped = reload_progress.self_completed_at
+      emit(PersonDevelopment::Events::SelfRated,
+        capability_stable_id: @cap.stable_id, level_ordinal: 1, frequency: "consistent", cycle_id: @cycle_id,
+        source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
+
+      emit(PersonDevelopment::Events::AssessmentAligned,
+        capability_stable_id: @cap.stable_id, level_ordinal: 1,
+        aligned_frequency: "consistent", cycle_id: @cycle_id)
+
+      assert_equal stamped, reload_progress.self_completed_at
     end
 
     should "stamp manager_completed_at independently of self" do

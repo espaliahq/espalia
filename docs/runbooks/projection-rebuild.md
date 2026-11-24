@@ -95,6 +95,14 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: `person_development/current_assessment` v11 (agreeing a cell vets its carried ratings, [#550](https://github.com/espaliahq/espalia/issues/550))
+
+Path A: `REBUILD_ON_DEPLOY=person_development/current_assessment`, removed once the deploy is live. `AssessmentAligned` and `AlignmentCleared` now refresh the completion stamps when the cell is at the assessed level and a side is carried. The rebuild stamps `self_completed_at` and `manager_completed_at` on every participation whose carried cells were agreed, at the time of the agreement that completed the side. Nothing else changes: no rating, status or alignment row differs.
+
+This projection's rebuild blanks every assessment while it runs, as above. Deploy in a quiet window and take the snapshot first. Until the rebuild, a participation agreed before this release keeps empty stamps: the Team Assessments chips after a lens start, the calibration population badge and `assessments_get`'s `self_completed_at` read it as unfinished, while the cohort funnel and the calibration readiness card, which read the ratings, already count it.
+
+Measured on the seeded dev database (194 handled events, one tenant): 4.7 s, Rails boot included.
+
 #### Recorded: `account_grants/account_flags` v1 (grants as events, [#539](https://github.com/espaliahq/espalia/issues/539)), 2026-11-23
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection is new and now the only writer of `tenant_users.org_graph_editor` and `tenant_users.team_planner`.
