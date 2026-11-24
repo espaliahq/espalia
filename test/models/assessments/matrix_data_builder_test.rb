@@ -385,6 +385,28 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       assert build_completion(:self)[:current_level_complete]
     end
 
+    should "be true once a carried current-level cell is agreed, on either side" do
+      rate_capability2(self_rated_frequency: "some", self_rating_source: "seeded",
+        manager_rated_frequency: "some", manager_rating_source: "seeded")
+      assert_not build_completion(:manager)[:current_level_complete]
+
+      AssessmentLevelRating.find_by!(
+        cycle_id: @cycle_id, person_id: @person_id,
+        capability_stable_id: @capability2.stable_id, level_ordinal: 2
+      ).update!(aligned_frequency: "some")
+
+      %i[self manager].each do |context|
+        data = build_completion(context)
+        cell = data[:categories].first[:capabilities]
+          .find { |cap| cap[:capability].stable_id == @capability2.stable_id }[:cells][2]
+
+        assert data[:current_level_complete], "#{context}: agreeing the cell vets its carried value"
+        assert_equal({ unrated: 0, to_confirm: 0 }, data[:current_level_work])
+        assert_not cell[:current_frequency_carried]
+        assert_not cell[:manager_frequency_carried]
+      end
+    end
+
     should "count what is left at the current level: unrated cells and carried ones to confirm" do
       assert_equal({ unrated: 1, to_confirm: 0 }, build_completion(:self)[:current_level_work])
 

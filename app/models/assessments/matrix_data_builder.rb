@@ -325,13 +325,13 @@ class Assessments::MatrixDataBuilder
         current_frequency: rating&.self_rated_frequency,
         manager_frequency: hidden ? nil : rating&.manager_rated_frequency,
         aligned_frequency: hidden ? nil : rating&.aligned_frequency,
-        # Carried-forward (seeded, unconfirmed) values that still ask to be
-        # confirmed — drives the lighter pill/chip treatment and the "to
-        # confirm" counts. Below the floor the scale already assumes the cell
-        # met, so a carried value there asks nothing (#480). Same privacy
-        # gate as the values.
-        current_frequency_carried: asks_confirmation?(ordinal, rating&.self_rating_carried?),
-        manager_frequency_carried: !hidden && asks_confirmation?(ordinal, rating&.manager_rating_carried?),
+        # Carried-forward (seeded) values that still ask to be confirmed —
+        # drives the lighter pill/chip treatment and the "to confirm"
+        # counts. Agreeing the cell confirms both sides. Below the floor the
+        # scale already assumes the cell met, so a carried value there asks
+        # nothing (#480). Same privacy gate as the values.
+        current_frequency_carried: asks_confirmation?(ordinal, rating&.self_rating_unconfirmed?),
+        manager_frequency_carried: !hidden && asks_confirmation?(ordinal, rating&.manager_rating_unconfirmed?),
         # Whether the record reads this cell (ADR-22).
         in_home_scope: @home_scope.include?(capability.stable_id, ordinal),
         # The started alignment that froze self and manager ratings here —
@@ -706,7 +706,7 @@ class Assessments::MatrixDataBuilder
     return false if cells.empty?
 
     # Complete means VETTED: a carried-forward value doesn't count until
-    # confirmed or changed (mirrors Assessments::LevelCoverage).
+    # confirmed, changed or agreed (mirrors Assessments::LevelCoverage).
     cells.all? { |cell| primary_cell_frequency(cell).present? && !primary_cell_carried?(cell) }
   end
 

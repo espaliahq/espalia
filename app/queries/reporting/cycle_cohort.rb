@@ -184,19 +184,19 @@ class Reporting::CycleCohort
       .within(scope_by_person)
       .pluck(:person_id, :capability_stable_id, :level_ordinal,
              :self_rated_frequency, :manager_rated_frequency,
-             :self_rating_source, :manager_rating_source)
+             :self_rating_source, :manager_rating_source, :aligned_frequency)
 
     acc = Hash.new { |hash, key| hash[key] = { self: Set.new, manager: Set.new } }
-    rows.each do |person_id, stable_id, ordinal, self_freq, manager_freq, self_src, manager_src|
+    rows.each do |person_id, stable_id, ordinal, self_freq, manager_freq, self_src, manager_src, aligned|
       next unless ordinal == assessed_ordinal[person_id]
 
       # Funnel counts VETTED sides only — a carried (seeded) value isn't
-      # done, it's To confirm. Matches Assessments::LevelCoverage and the
-      # /assessments chips, so the cohort report and the individual list
-      # never disagree on what "done" means.
+      # done, it's To confirm, until its cell is agreed. Matches
+      # Assessments::LevelCoverage and the /assessments chips, so the cohort
+      # report and the individual list never disagree on what "done" means.
       bucket = acc[person_id]
-      bucket[:self] << stable_id if self_freq.present? && self_src != "seeded"
-      bucket[:manager] << stable_id if manager_freq.present? && manager_src != "seeded"
+      bucket[:self] << stable_id if self_freq.present? && !Assessments::CarriedCell.unconfirmed?(self_src, aligned)
+      bucket[:manager] << stable_id if manager_freq.present? && !Assessments::CarriedCell.unconfirmed?(manager_src, aligned)
     end
 
     last_at = last_rating_activity(scope_by_person.keys)

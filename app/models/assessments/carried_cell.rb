@@ -14,6 +14,18 @@ module Assessments::CarriedCell
 
   module_function
 
+  # Whether a side's carried value still waits to be confirmed: seeded, on a
+  # cell nobody has agreed. Agreeing a cell confirms both sides, so readers
+  # that pluck columns ask here; the SQL twin is
+  # {AssessmentLevelRating::SELF_VETTED_SQL}.
+  #
+  # @param source [String, nil] the side's `*_rating_source`
+  # @param aligned_frequency [String, nil] the cell's agreed value
+  # @return [Boolean]
+  def unconfirmed?(source, aligned_frequency)
+    source == "seeded" && aligned_frequency.nil?
+  end
+
   # @param cell [Hash, nil] one cell from {Assessments::MatrixDataBuilder}
   # @param context [Symbol] :self, :manager or :alignment
   # @return [Boolean]

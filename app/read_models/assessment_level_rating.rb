@@ -29,6 +29,16 @@ class AssessmentLevelRating < ApplicationRecord
   MIGRATION_STATUSES = %w[not_flagged flagged resolved].freeze
   SOURCES = %w[human agent seeded].freeze
 
+  # A side is vetted this cycle when it holds a value someone stood behind:
+  # one a person rated, revised or confirmed, or a carried (seeded) one on a
+  # cell the pair has since agreed. Starting alignment agrees matching
+  # carried cells and freezes the rest, so agreeing is the only confirmation
+  # left (ADR-20). A nil source is a legacy row and counts as human.
+  SELF_VETTED_SQL = "self_rated_frequency IS NOT NULL AND " \
+                    "(self_rating_source IS DISTINCT FROM 'seeded' OR aligned_frequency IS NOT NULL)"
+  MANAGER_VETTED_SQL = "manager_rated_frequency IS NOT NULL AND " \
+                       "(manager_rating_source IS DISTINCT FROM 'seeded' OR aligned_frequency IS NOT NULL)"
+
   acts_as_tenant :tenant
 
   belongs_to :tenant
@@ -54,6 +64,8 @@ class AssessmentLevelRating < ApplicationRecord
   scope :self_rated, -> { where.not(self_rated_frequency: nil) }
   scope :aligned, -> { where.not(aligned_frequency: nil) }
   scope :seeded, -> { where(source: "seeded") }
+  scope :self_vetted, -> { where(SELF_VETTED_SQL) }
+  scope :manager_vetted, -> { where(MANAGER_VETTED_SQL) }
   scope :human_entered, -> { where(source: "human") }
 
   # Ratings inside one role's scope, or inside each person's own scope
@@ -115,5 +127,20 @@ class AssessmentLevelRating < ApplicationRecord
   # @return [Boolean]
   def manager_rating_carried?
     manager_rating_source == "seeded"
+  end
+
+  # Whether the self side's carried value still waits to be confirmed
+  # ({Assessments::CarriedCell.unconfirmed?}). The readers that show or
+  # count "to confirm" ask this; the rating operations ask
+  # `*_rating_carried?`, which is provenance alone.
+  #
+  # @return [Boolean]
+  def self_rating_unconfirmed?
+    Assessments::CarriedCell.unconfirmed?(self_rating_source, aligned_frequency)
+  end
+
+  # @return [Boolean]
+  def manager_rating_unconfirmed?
+    Assessments::CarriedCell.unconfirmed?(manager_rating_source, aligned_frequency)
   end
 end

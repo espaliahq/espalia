@@ -452,7 +452,8 @@ class AssessmentsController < ApplicationController
     # Per side: "any" (a value exists — carried or human) and "human" (the
     # person touched the side this cycle: rated, revised, confirmed, or
     # explicitly cleared — provenance "human"; nil provenance counts as
-    # human for legacy rows). The view derives the tri+1-state from these:
+    # human for legacy rows — or the pair agreed a carried cell, which
+    # vets it). The view derives the tri+1-state from these:
     # Complete / In progress (human touch) / To confirm (all carried) /
     # Not started. Only the assessed role's cells count: rating a cell the
     # role doesn't read hasn't started this assessment.
@@ -492,9 +493,9 @@ class AssessmentsController < ApplicationController
         Arel.sql("COUNT(*) FILTER (WHERE self_rated_frequency IS NOT NULL)"),
         Arel.sql("COUNT(*) FILTER (WHERE manager_rated_frequency IS NOT NULL)"),
         Arel.sql("COUNT(*) FILTER (WHERE self_rating_source = 'human' " \
-                 "OR (self_rated_frequency IS NOT NULL AND self_rating_source IS NULL))"),
+                 "OR (#{AssessmentLevelRating::SELF_VETTED_SQL}))"),
         Arel.sql("COUNT(*) FILTER (WHERE manager_rating_source = 'human' " \
-                 "OR (manager_rated_frequency IS NOT NULL AND manager_rating_source IS NULL))")
+                 "OR (#{AssessmentLevelRating::MANAGER_VETTED_SQL}))")
       )
       .each_with_object({}) do |(cid, pid, self_n, mgr_n, self_h, mgr_h), h|
         h[[ cid, pid ]] = { self_any: self_n.positive?, manager_any: mgr_n.positive?,

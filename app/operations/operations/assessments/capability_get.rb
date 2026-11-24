@@ -139,12 +139,12 @@ class Operations::Assessments::CapabilityGet < Operations::Base
         self: row.self_rated_frequency,
         manager: hide_others ? nil : row.manager_rated_frequency,
         aligned: hide_others ? nil : row.aligned_frequency,
-        # Carried-forward (seeded, unconfirmed) provenance per side — an
-        # MCP client should present these as "carried from the previous
-        # cycle", matching the web's dashed-pill treatment. Same privacy
-        # gate as the values themselves.
-        self_carried: row.self_rating_carried?,
-        manager_carried: hide_others ? false : row.manager_rating_carried?
+        # Carried-forward values still waiting to be confirmed, per side —
+        # an MCP client should present these as "carried from the previous
+        # cycle", matching the web's dashed-pill treatment. False once the
+        # cell is agreed. Same privacy gate as the values themselves.
+        self_carried: row.self_rating_unconfirmed?,
+        manager_carried: hide_others ? false : row.manager_rating_unconfirmed?
       }
     end
     index.default = EMPTY_RATING
