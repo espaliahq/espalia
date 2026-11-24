@@ -94,6 +94,16 @@ Rebuild ordering:
 - **`rebuild_all`** uses `Projections::GlobalReplayer.replay_all` — truncate everything up front, replay all events in global insertion order. Order in `Projections::Registry::REPLAYABLE` is conventional only; correctness comes from the live event order.
 - **Sequential selective rebuilds** (running `rebuild[name]` back-to-back, or `REBUILD_ON_DEPLOY=a,b`): no semantic ordering requirement today because each projection owns its tables. The registry order is preserved as a defensive convention.
 
+## Moving a plain table onto a tenant stream
+
+A table a release writes directly becomes a projection's read model in three pieces, all under `app/contexts/tenant_streams/` and `lib/projections/`.
+
+- **The stream.** A tenant that keeps one aggregate in one stream subclasses `TenantStreams::Repository`, naming the aggregate and the stream from `EventStreamNaming`. Writes take the stream's advisory lock; a projection's `reset!` reads through `reading_locked`, so no command lands between its read and its write. `AccountGrants::Repository` is the example.
+- **The reconciler.** A subclass of `TenantStreams::Reconciliation` says what the table holds and what the stream holds, keyed alike, and how to record each difference. The table is the truth: an entry only in the table becomes an `already_held` event, an entry only in the stream becomes a removal, neither names an actor, and a forgotten row is left alone. A second run writes nothing.
+- **The list.** One line in `Projections::Reconcilers::LIST` names the reconciler and the projections it adopts. Predeploy runs every entry through `events:reconcile` at step 2b, before any rebuild, and again at step 6 to record what the previous release, still serving, wrote since. Anything it writes after step 6 waits for the next deploy.
+
+**Adoption** spares the first deploy a rebuild. Once every reconciler has run for every tenant without failing, the table is what a replay of the stream would write, so `events:reconcile` stamps each adopted projection that has no stamp yet, without a reset. A projection stamped at an older version is never adopted: it still needs its rebuild. Prove each adoption honest with a test that reconciles, rebuilds, and finds the table unchanged, as `test/tasks/events_reconcile_task_test.rb` does for grants.
+
 ## Externally-addressable read-model identity must be deterministic
 
 **Any read-model row addressed from outside by its primary key — a REST route param, an MCP resource URI (`assessment://<id>`), a bookmark, an id an MCP client cached — MUST have a PK that is a pure function of event-sourced data, so `reset!` + replay reproduces the same id.** A row whose PK is minted fresh at projection time (the default `SecureRandom.uuid_v7` from `ApplicationRecord`) gets a *new* id on every rebuild; every URL that captured the old id then 404s. This caused a production incident (evidence POSTed to a now-stale `PersonFrameworkAssignment` id surfaced as a 500).

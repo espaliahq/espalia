@@ -155,6 +155,42 @@ class EventStreamNamingTest < ActiveSupport::TestCase
     end
   end
 
+  context ".tenant_account_grants_stream" do
+    should "return one tenant-namespaced stream per tenant" do
+      assert_equal "tenant-#{@tenant.id}/TenantAccountGrants", EventStreamNaming.tenant_account_grants_stream(tenant: @tenant)
+    end
+
+    should "raise ArgumentError when no tenant context available" do
+      ActsAsTenant.without_tenant do
+        assert_raises(ArgumentError) { EventStreamNaming.tenant_account_grants_stream }
+      end
+    end
+  end
+
+  context ".tenant_settings_stream" do
+    should "return one tenant-namespaced stream per tenant" do
+      assert_equal "tenant-#{@tenant.id}/TenantSettings", EventStreamNaming.tenant_settings_stream(tenant: @tenant)
+    end
+
+    should "raise ArgumentError when no tenant context available" do
+      ActsAsTenant.without_tenant do
+        assert_raises(ArgumentError) { EventStreamNaming.tenant_settings_stream }
+      end
+    end
+  end
+
+  context ".tenant_planning_inputs_stream" do
+    should "return one tenant-namespaced stream per tenant" do
+      assert_equal "tenant-#{@tenant.id}/TenantPlanningInputs", EventStreamNaming.tenant_planning_inputs_stream(tenant: @tenant)
+    end
+
+    should "raise ArgumentError when no tenant context available" do
+      ActsAsTenant.without_tenant do
+        assert_raises(ArgumentError) { EventStreamNaming.tenant_planning_inputs_stream }
+      end
+    end
+  end
+
   context ".extract_tenant_id" do
     should "extract tenant ID from framework stream name" do
       tenant_id = SecureRandom.uuid_v7
