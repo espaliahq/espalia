@@ -38,6 +38,14 @@ class TenantSettings::Aggregate
   # @return [Boolean] whether leavers are forgotten on a schedule
   def scheduled_forgetting? = @scheduled_forgetting
 
+  # The JSON keeps a time to the millisecond, so two enables in one second
+  # are still two.
+  #
+  # @param a [Time, nil]
+  # @param b [Time, nil]
+  # @return [Boolean]
+  def self.same_enable?(a, b) = a&.floor(3) == b&.floor(3)
+
   # @return [Boolean] whether the stream holds any event, so a projection writes a row
   def recorded? = @recorded
 
@@ -95,7 +103,7 @@ class TenantSettings::Aggregate
   # @return [Integer] how many events it applied
   def record_held(retention_years:, scheduled_forgetting:, enabled_at: nil, enabled_by_id: nil)
     before = unpublished_events.count
-    restarted = scheduled_forgetting && scheduled_forgetting? && enabled_at && enabled_at.to_i != self.enabled_at.to_i
+    restarted = scheduled_forgetting && scheduled_forgetting? && enabled_at && !self.class.same_enable?(enabled_at, self.enabled_at)
     disable(already_held: true) if !scheduled_forgetting || restarted
     set_retention_period(retention_years, already_held: true)
     enable(enabled_by_id:, at: enabled_at || Time.current, already_held: true) if scheduled_forgetting

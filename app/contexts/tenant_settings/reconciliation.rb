@@ -31,7 +31,7 @@ class TenantSettings::Reconciliation < TenantStreams::Reconciliation
 
   def changed?(row, recorded)
     row[:retention_years] != recorded[:retention_years] || row[:scheduled_forgetting] != recorded[:scheduled_forgetting] ||
-      (row[:scheduled_forgetting] && row[:enabled_at] && row[:enabled_at].to_i != recorded[:enabled_at].to_i)
+      (row[:scheduled_forgetting] && row[:enabled_at] && !TenantSettings::Aggregate.same_enable?(row[:enabled_at], recorded[:enabled_at]))
   end
 
   def record_changed(aggregate, _key, row, _recorded) = aggregate.record_held(**row)

@@ -115,5 +115,14 @@ class TenantSettings::AggregateTest < ActiveSupport::TestCase
       assert_equal [ TenantSettings::Events::ScheduledForgettingDisabled, TenantSettings::Events::ScheduledForgettingEnabled ],
                    events.last(2).map(&:class)
     end
+
+    should "tell two enables in one second apart, to the millisecond the JSON keeps" do
+      first = Time.utc(2026, 11, 2, 9, 0, 0.1r)
+      on_since(first)
+
+      assert_equal 0, subject.record_held(retention_years: 7, scheduled_forgetting: true, enabled_at: first + 0.0004r)
+      assert_equal 2, subject.record_held(retention_years: 7, scheduled_forgetting: true, enabled_at: first + 0.5r, enabled_by_id: "p-2")
+      assert_equal [ first + 0.5r, "p-2" ], [ subject.enabled_at, subject.enabled_by_id ]
+    end
   end
 end

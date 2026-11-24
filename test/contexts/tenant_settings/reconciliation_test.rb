@@ -64,6 +64,15 @@ class TenantSettings::ReconciliationTest < ActiveSupport::TestCase
     assert_equal restarted_at, row.enabled_at
   end
 
+  should "record a schedule the previous release turned on again within the same second" do
+    TenantSettings::CommandHandler.new(Tenant.find(@tenant.id)).enable_scheduled_forgetting(enabled_by: @admin) { 0 }
+    restarted_at = row.enabled_at.floor(3) + 0.001r
+    previous_release_writes(scheduled_forgetting_enabled_at: restarted_at)
+
+    assert_equal 1, reconcile.changed
+    assert_equal restarted_at, row.enabled_at
+  end
+
   should "record a schedule turned on with no time as already held once" do
     previous_release_writes(scheduled_forgetting: true)
 
