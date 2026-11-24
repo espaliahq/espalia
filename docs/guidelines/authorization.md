@@ -248,9 +248,10 @@ the tenant's `TenantAccountGrants` stream (`tenant-{id}/TenantAccountGrants`):
 `PlannerRemoved`. Each names the account, its person, the date it took effect
 and who gave or took back the grant. Holders are keyed by account, so a person
 who comes back with a new account starts without the old one's grants.
-Every grant is also linked into the old `AccountGrants` stream, which the
-previous release reads while a deploy is under way. [#539](https://github.com/espaliahq/espalia/issues/539) stops that once no
-release reads it.
+Every grant is also linked into the old `AccountGrants` stream. Both releases
+read that stream without the lock while a deploy is under way, as it is the one
+complete stream. [#539](https://github.com/espaliahq/espalia/issues/539) stops
+the linking and moves those reads to the new stream together.
 
 The `account_grants/account_flags` projection writes
 `TenantUser#org_graph_editor` and `TenantUser#team_planner` from those events,
