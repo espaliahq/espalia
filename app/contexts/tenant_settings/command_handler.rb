@@ -58,11 +58,15 @@ class TenantSettings::CommandHandler
 
   private
 
-  # Settles, then changes, in one transaction, so both locks hold from the
-  # first read to the commit. The settled events are stored before the
-  # command's block runs, so what it reads of the projection is settled too.
+  # Settles in a transaction of its own first, so a command its block
+  # refuses still leaves what the JSON holds recorded, and a dry run then
+  # counts by it. Then settles again and changes in one transaction, so both
+  # locks hold from the first read to the commit. The settled events are
+  # stored before the command's block runs, so what it reads of the
+  # projection is settled too.
   def change(enabled_by_account_id: nil)
     ActsAsTenant.with_tenant(@tenant) do
+      @repository.with_settings { |settings| @tenant.with_lock { settle(settings, @tenant.org_graph_config) } }
       ActiveRecord::Base.transaction do
         @repository.with_settings { |settings| @tenant.with_lock { settle(settings, @tenant.org_graph_config) } }
         @repository.with_settings do |settings|

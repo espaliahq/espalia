@@ -84,6 +84,16 @@ class TenantSettings::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal 30, row.retention_years
     end
 
+    should "keep what it recorded when the command is refused, so the next dry run counts by it" do
+      previous_release_writes(retention_years: 3)
+
+      assert_raises(ArgumentError) { handler.enable_scheduled_forgetting { raise ArgumentError, "the count moved" } }
+
+      assert_equal 3, row.retention_years
+      assert_equal 3, TenantRetentionSetting.longer_period(Tenant.find(@tenant.id))
+      assert_not row.scheduled_forgetting
+    end
+
     should "keep the time and account it recorded when the schedule stays on" do
       at = 2.days.ago.round
       previous_release_writes(scheduled_forgetting: true, scheduled_forgetting_enabled_at: at, scheduled_forgetting_enabled_by_id: @admin.id)
