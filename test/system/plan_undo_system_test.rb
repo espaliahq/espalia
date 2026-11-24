@@ -29,7 +29,7 @@ class PlanUndoSystemTest < ApplicationSystemTestCase
         people.record_person(person.id, **ESPALIA, effective_on: since, employment_status: "employed", title: "Software Engineer", level: "5", fte: 1.0)
         people.set_membership(person.id, @payments, **ESPALIA, effective_on: since, allocation: 1.0)
       end
-      PayBand.create!(level: e5, currency: "EUR", period: "year", minimum: 61_000, midpoint: 100_000, maximum: 177_419)
+      add_pay_band!(level: e5, currency: "EUR", period: "year", minimum: 61_000, midpoint: 100_000, maximum: 177_419)
       ReferenceCurrency.create!(currency: "EUR")
       @level_id = e5.level_id
       @role_id = engineer.role_id

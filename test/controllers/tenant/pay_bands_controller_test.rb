@@ -11,7 +11,7 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
     @member_user = create(:user, password: "password123")
     ActsAsTenant.with_tenant(@tenant) do
       create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin,
-                           person: create(:person, tenant: @tenant, name: "Ada Admin"))
+                           person: @admin_person = create(:person, tenant: @tenant, name: "Ada Admin"))
       create(:tenant_user, tenant: @tenant, user: @member_user, role: :member, org_graph_editor: true)
       @family = create(:framework_role_family, tenant: @tenant, name: "Engineering")
       @role = create(:framework_role, tenant: @tenant, role_family_id: @family.role_family_id)
@@ -26,7 +26,7 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
 
   def stored_band(**attrs)
     ActsAsTenant.with_tenant(@tenant) do
-      PayBand.create!(level: @level, location: "Testonia",
+      add_pay_band!(level: @level, location: "Testonia",
                       currency: "NZD", period: "month", minimum: 8000, midpoint: 9000, maximum: 10_000, **attrs)
     end
   end
@@ -53,7 +53,7 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
 
       assert_redirected_to tenant_pay_bands_path
       band = ActsAsTenant.with_tenant(@tenant) { PayBand.sole }
-      assert_equal [ "AUD", BigDecimal("100000"), @admin_user ], [ band.currency, band.minimum, band.updated_by ]
+      assert_equal [ "AUD", BigDecimal("100000"), @admin_person.id ], [ band.currency, band.minimum, band.updated_by_person_id ]
 
       follow_redirect!
       assert_includes response.body, "Band added for Software Engineer, E2 Engineer II, Fixtureland at 1 in the list."
@@ -129,10 +129,9 @@ class Tenant::PayBandsControllerTest < ActionDispatch::IntegrationTest
     should "list the bands in order, flagging one that never has the last word" do
       role_band = stored_band(location: "Alpha")
       ActsAsTenant.with_tenant(@tenant) do
-        family_band = PayBand.new(location: "Alpha", currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3)
-                             .tap { it.match_on(role_family: @family) }
-        family_band.save!
-        PayBand.reorder!([ role_band.id, family_band.id ])
+        family_band = save_planning_input!(:pay_bands, PayBand.new(location: "Alpha", currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3)
+                                                              .tap { it.match_on(role_family: @family) })
+        reorder_pay_bands!([ role_band.id, family_band.id ])
       end
 
       get tenant_pay_bands_path

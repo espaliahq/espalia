@@ -17,12 +17,6 @@ class Operations::Tenants::ChangeExchangeRate < Operations::Base
 
   # @return [Hash] the rate, as tenants_exchange_rates lists it
   def perform
-    rate = find_rate(params[:exchange_rate_id])
-    rate.with_lock do
-      rate.rate = rate_value
-      rate_payload(save_setting!(rate))
-    end
-  rescue ActiveRecord::RecordNotFound
-    raise Operations::Base::ParameterError, "There is no such exchange rate"
+    rate_payload(save_setting!(:exchange_rates) { find_rate(params[:exchange_rate_id]).tap { it.rate = rate_value } })
   end
 end

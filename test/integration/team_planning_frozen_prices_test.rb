@@ -45,9 +45,9 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
       end
 
       ReferenceCurrency.create!(currency: "EUR")
-      PayBand.new(currency: "EUR", period: "year", minimum: 0, midpoint: 60_000, maximum: 70_000).tap { it.match_on(role: @engineer) }.save!
-      @band = PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
-      PayBand.create!(level: @e6, currency: "USD", period: "hour", minimum: 0, midpoint: 75, maximum: 150)
+      save_planning_input!(:pay_bands, PayBand.new(currency: "EUR", period: "year", minimum: 0, midpoint: 60_000, maximum: 70_000).tap { it.match_on(role: @engineer) })
+      @band = add_pay_band!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level: @e6, currency: "USD", period: "hour", minimum: 0, midpoint: 75, maximum: 150)
       @rate = ExchangeRate.create!(from_currency: "USD", to_currency: "EUR", rate: "0.9", applies_from: "2025-01-01")
       @line = BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 500_000, currency: "EUR",
                                  period: "year", cost_centre: "Platform", head_count: 4)
@@ -92,7 +92,7 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
 
   def changes
     { "a band's figures" => -> { @band.update!(midpoint: 120_000, maximum: 240_000) },
-      "a new band" => -> { PayBand.create!(level: @e5, location: "Mu", currency: "EUR", period: "year", minimum: 0, midpoint: 90_000, maximum: 95_000) },
+      "a new band" => -> { add_pay_band!(level: @e5, location: "Mu", currency: "EUR", period: "year", minimum: 0, midpoint: 90_000, maximum: 95_000) },
       "the reference currency" => -> { ReferenceCurrency.current.update!(currency: "USD") },
       "a rate" => -> { @rate.update!(rate: "0.5") },
       "a new rate" => -> { ExchangeRate.create!(from_currency: "USD", to_currency: "EUR", rate: "2", applies_from: "2025-12-10") },
@@ -108,7 +108,7 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
       "the open step horizon rule" => -> { rule("open_step_horizon", { months: "6" }) },
       "the budget strictness rule" => -> { rule("budget_strictness", TeamPlanning::RuleKinds::BudgetStrictness::PRESETS.fetch("envelope")) },
       "a removed band" => -> { PayBand.find_by(level_id: @e6.level_id).destroy! },
-      "the band order" => -> { PayBand.reorder!(PayBand.order(:position).pluck(:id).reverse) } }
+      "the band order" => -> { reorder_pay_bands!(PayBand.order(:position).pluck(:id).reverse) } }
   end
 
   should "give every pricing read the same figures after each input changes, until the plan is restored" do

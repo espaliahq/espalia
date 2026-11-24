@@ -100,7 +100,7 @@ class Operations::TeamPlanning::SetPlanScope < Operations::Base
     ids = changes.flat_map { line_ids(it) }.uniq
     return maps.transform_values { {} } if ids.empty?
 
-    tenant = ::BudgetLine.where(id: ids).pluck(:id, :cost_centre).to_h
+    tenant = TenantPlanningInputs::Projections::Tables.unless_rebuilding { ::BudgetLine.where(id: ids).pluck(:id, :cost_centre).to_h }
     maps.to_h do |scenario_id, map|
       held = (map.budget_lines + map.outside_lines).select { ids.include?(it.id) }.to_h { [ it.id, it.cost_centre ] }
       set = aggregate.resolution_chain(scenario_id).flat_map { aggregate.changes_in(it) }

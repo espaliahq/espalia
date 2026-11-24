@@ -17,7 +17,7 @@ class PlanDatesSystemTest < ApplicationSystemTestCase
       structure.create_unit(payments, "Payments", level_id: teams, effective_on: "2026-01-01")
       engineer = create(:framework_role, code: "E", name: "Software Engineer")
       senior = create(:framework_level, role_id: engineer.role_id, ordinal: 5, title: "Senior SWE")
-      PayBand.create!(level: senior, currency: "EUR", period: "year", minimum: 80_000, midpoint: 100_000, maximum: 120_000)
+      add_pay_band!(level: senior, currency: "EUR", period: "year", minimum: 80_000, midpoint: 100_000, maximum: 120_000)
       @plan_id = call(Operations::TeamPlanning::CreatePlan, name: "Next year", base_on: "2026-11-14")[:plan_id]
       @q1 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, relation: "then", name: "Q1 hires", ends_on: "2027-03-31")[:scenario_id]
       @q2 = call(Operations::TeamPlanning::ForkScenario, plan_id: @plan_id, parent_id: @q1, relation: "then", name: "Q2 settle",

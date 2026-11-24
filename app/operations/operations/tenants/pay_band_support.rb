@@ -11,6 +11,7 @@
 # [#368](https://github.com/espaliahq/espalia/issues/368).
 module Operations::Tenants::PayBandSupport
   include Operations::Tenants::EditorNames
+  include Operations::Tenants::PlanningInputWrites
 
   MATCHER_PARAMS = %i[role_family_id role_id level_ordinal level_id].freeze
   MATCHER_HELP = "A band matches on whichever of role_family_id, role_id (both from frameworks_get), level_ordinal " \
@@ -79,17 +80,6 @@ module Operations::Tenants::PayBandSupport
     end
   end
 
-  # @param record [PayBand, ExchangeRate, ReferenceCurrency]
-  # @raise [Operations::Base::ParameterError] naming what is wrong, never a figure or a rate
-  def save_setting!(record)
-    record.updated_by = context.user
-    return record if record.save
-
-    raise Operations::Base::ParameterError, record.errors.full_messages.to_sentence
-  rescue ActiveRecord::RecordNotUnique
-    raise Operations::Base::ParameterError, record.try(:duplicate_message) || "Someone else set it at the same moment; try again"
-  end
-
   # What the bands match on as the framework has it now, for naming them.
   #
   # @param bands [Array<PayBand>]
@@ -131,7 +121,7 @@ module Operations::Tenants::PayBandSupport
       period: band.period,
       **PayBand::FIGURES.to_h { [ it, band.figure(it) ] },
       updated_at: band.updated_at.iso8601,
-      updated_by: names[band.updated_by_id]
+      updated_by: names[editor_id(band)]
     }
   end
 

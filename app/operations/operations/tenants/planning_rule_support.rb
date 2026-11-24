@@ -10,6 +10,7 @@
 # sits outside any plan.
 module Operations::Tenants::PlanningRuleSupport
   include Operations::Tenants::EditorNames
+  include Operations::Tenants::PlanningInputWrites
 
   # @raise [Pundit::NotAuthorizedError] unless the caller is a tenant admin
   def policy_check
@@ -30,7 +31,7 @@ module Operations::Tenants::PlanningRuleSupport
       built_in_default: kind.default.deep_stringify_keys,
       tenant_default: record&.value,
       updated_at: record&.updated_at&.iso8601,
-      updated_by: record && names[record.updated_by_id]
+      updated_by: record && names[editor_id(record)]
     }
   end
 end

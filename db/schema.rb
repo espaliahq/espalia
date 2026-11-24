@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_23_075316) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_24_122130) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -180,8 +180,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_075316) do
     t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "updated_by_person_id"
     t.index ["tenant_id"], name: "index_budget_lines_on_tenant_id"
     t.index ["updated_by_id"], name: "index_budget_lines_on_updated_by_id"
+    t.index ["updated_by_person_id"], name: "index_budget_lines_on_updated_by_person_id"
     t.check_constraint "amount IS NOT NULL OR head_count IS NOT NULL", name: "budget_lines_amount_or_head_count"
     t.check_constraint "amount IS NULL OR amount >= 0::numeric AND currency IS NOT NULL AND period IS NOT NULL", name: "budget_lines_amount_has_currency"
     t.check_constraint "head_count IS NULL OR head_count > 0::numeric", name: "budget_lines_head_count_positive"
@@ -375,8 +377,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_075316) do
     t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "updated_by_person_id"
     t.index "tenant_id, LEAST(from_currency, to_currency), GREATEST(from_currency, to_currency), applies_from", name: "index_exchange_rates_on_pair_and_date", unique: true
     t.index ["updated_by_id"], name: "index_exchange_rates_on_updated_by_id"
+    t.index ["updated_by_person_id"], name: "index_exchange_rates_on_updated_by_person_id"
     t.check_constraint "from_currency::text <> to_currency::text", name: "exchange_rates_two_currencies"
     t.check_constraint "rate > 0::numeric", name: "exchange_rates_positive"
   end
@@ -1020,9 +1024,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_075316) do
     t.uuid "role_id"
     t.integer "level_ordinal"
     t.integer "position", null: false
+    t.uuid "updated_by_person_id"
     t.index ["tenant_id", "position"], name: "index_pay_bands_on_tenant_id_and_position"
     t.index ["tenant_id", "role_family_id", "role_id", "level_ordinal", "level_id", "location_key"], name: "index_pay_bands_one_per_matcher", unique: true, nulls_not_distinct: true
     t.index ["updated_by_id"], name: "index_pay_bands_on_updated_by_id"
+    t.index ["updated_by_person_id"], name: "index_pay_bands_on_updated_by_person_id"
     t.check_constraint "level_ordinal > 0", name: "pay_bands_level_number_positive"
     t.check_constraint "minimum <= midpoint AND midpoint <= maximum", name: "pay_bands_ordered"
     t.check_constraint "minimum >= 0::numeric", name: "pay_bands_not_negative"
@@ -1121,8 +1127,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_075316) do
     t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "updated_by_person_id"
     t.index ["tenant_id", "rule"], name: "index_planning_rule_defaults_on_tenant_id_and_rule", unique: true
     t.index ["updated_by_id"], name: "index_planning_rule_defaults_on_updated_by_id"
+    t.index ["updated_by_person_id"], name: "index_planning_rule_defaults_on_updated_by_person_id"
   end
 
   create_table "projection_versions", primary_key: "name", id: :string, force: :cascade do |t|
@@ -1148,8 +1156,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_075316) do
     t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "updated_by_person_id"
     t.index ["tenant_id"], name: "index_reference_currencies_on_tenant_id", unique: true
     t.index ["updated_by_id"], name: "index_reference_currencies_on_updated_by_id"
+    t.index ["updated_by_person_id"], name: "index_reference_currencies_on_updated_by_person_id"
   end
 
   create_table "team_planning_history_entries", id: :uuid, default: nil, force: :cascade do |t|

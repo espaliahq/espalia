@@ -30,7 +30,7 @@ class Operations::TeamPlanning::UploadActualPayTest < ActiveSupport::TestCase
       end
       create(:tenant_user, tenant: @tenant, person: @cy, user: create(:user, email: "cy.work@example.com"))
 
-      PayBand.create!(level: e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level: e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
       ReferenceCurrency.create!(currency: "EUR")
 
       @admin = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))

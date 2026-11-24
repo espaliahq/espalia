@@ -154,7 +154,8 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       # A family's band, so the walk covers a band wider than one role.
       family = create(:framework_role_family, role_family_id: engineer.role_family_id, name: "Engineering")
       PayBand.new(currency: "AUD", period: "year", minimum: 50_000, midpoint: 100_000, maximum: 150_000)
-             .tap { it.match_on(role_family: family, level_ordinal: 3) }.save!
+             .tap { it.match_on(role_family: family, level_ordinal: 3) }
+             .then { save_planning_input!(:pay_bands, it) }
       ReferenceCurrency.create!(currency: "AUD")
       TeamPlanning::RuleKinds.register(Hiring)
     end
@@ -565,7 +566,7 @@ class TeamPlanningPayPrivacyTest < ActiveSupport::TestCase
       family = create(:framework_role_family, name: "Engineering")
       engineer = create(:framework_role, code: "E", name: "Software Engineer", role_family_id: family.role_family_id)
       e5 = @e5 = create(:framework_level, role_id: engineer.role_id, ordinal: 5, title: "Senior SWE")
-      PayBand.create!(level: e5, currency: "AUD", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level: e5, currency: "AUD", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
       ReferenceCurrency.create!(currency: "AUD")
 
       @in, @half_actual, @half_full, @out = %w[In Halfactual Halffull Out].map { create(:person, tenant: @tenant, name: "#{it} Quill") }

@@ -542,7 +542,7 @@ class PlanTimelineSystemTest < ApplicationSystemTestCase
     ActsAsTenant.with_tenant(@tenant) do
       ReferenceCurrency.create!(currency: "EUR")
       level = FrameworkState::Level.find_by!(level_id: @level_id)
-      PayBand.create!(level:, currency: "EUR", period: "year", minimum: 80_000, midpoint: 100_000, maximum: 120_000)
+      add_pay_band!(level:, currency: "EUR", period: "year", minimum: 80_000, midpoint: 100_000, maximum: 120_000)
       BudgetLine.create!(starts_on: Date.current, ends_on: Date.current + 365, origin: "new", amount: 150_000, currency: "EUR",
                          period: "year", head_count: 2)
     end

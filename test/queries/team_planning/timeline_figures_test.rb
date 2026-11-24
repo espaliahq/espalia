@@ -28,7 +28,7 @@ class TeamPlanning::TimelineFiguresTest < ActiveSupport::TestCase
       people.set_membership(@ada.id, @payments, **ESPALIA, allocation: 1.0)
 
       ReferenceCurrency.create!(currency: "EUR")
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
       BudgetLine.create!(starts_on: "2026-01-01", ends_on: "2026-12-31", origin: "new", amount: 150_000, currency: "EUR", period: "year",
                          cost_centre: "Platform", head_count: 2)
 

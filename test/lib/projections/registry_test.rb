@@ -29,6 +29,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           team_planning/overrides
           team_planning/history
           account_grants/account_flags
+          tenant_planning_inputs/tables
         ].sort,
         Projections::Registry.names.sort
       )

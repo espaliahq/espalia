@@ -14,9 +14,9 @@ class Operations::Tenants::SetReferenceCurrency < Operations::Base
 
   # @return [Hash] `{ currency, updated_at, updated_by }`
   def perform
-    reference = ReferenceCurrency.current || ReferenceCurrency.new
-    reference.currency = params[:currency]
-    reference.currency_will_change!
-    reference_payload(save_setting!(reference))
+    reference = save_setting!(:reference_currencies) do
+      (ReferenceCurrency.current || ReferenceCurrency.new).tap { it.currency = params[:currency] }
+    end
+    reference_payload(reference)
   end
 end

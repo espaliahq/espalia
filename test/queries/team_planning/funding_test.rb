@@ -36,7 +36,7 @@ class TeamPlanning::FundingTest < ActiveSupport::TestCase
       people.set_membership(@cy.id, @payments, **ESPALIA, allocation: 1.0)
 
       ReferenceCurrency.create!(currency: "EUR")
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
 
       @planner = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
       @plan_id = SecureRandom.uuid_v7
