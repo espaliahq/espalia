@@ -39,9 +39,9 @@ The schedule ships off for every tenant. `OrgGraph::ForgetDueLeaversJob` runs da
    bin/rails "org_graph:forgetting:dry_run[<tenant id>]"
    ```
 
-   A tenant admin can run it through the `tenants_forgetting_dry_run` MCP tool too. It prints the count and the person ids due today. Look up a few ids in a console if the number surprises you.
+   A tenant admin can run it through the `tenants_forgetting_dry_run` MCP tool too. It prints the count and the person ids due today, and how many are held back as the only admin (below). Look up a few ids in a console if the number surprises you.
 3. Turn it on with that count. A tenant admin calls `tenants_enable_scheduled_forgetting` with `confirm_count` set to the dry run's number. If the number has moved since, the call is refused: run the dry run again. The tenant records when it was turned on and by whom.
-4. The next run logs `[OrgGraph::Forgetting] scheduled tenant=<id> reason=retention count=<n> person_ids=…`.
+4. The next run logs `[OrgGraph::Forgetting] scheduled tenant=<id> reason=retention count=<n> held_back=<n> person_ids=…`.
 
 `tenants_disable_scheduled_forgetting` turns it off. A run already going stops before the next person, and anyone already forgotten stays forgotten. A run also reads the retention period afresh for each person, so lengthening it spares anyone it no longer covers. Shortening it, or moving it from never to a number of years, turns the schedule off, since the count it was turned on with no longer holds. Run the dry run again and turn it back on.
 
@@ -65,6 +65,17 @@ bin/rails "org_graph:forgetting:forget[<tenant id>,<person id>,<admin's tenant u
 - A leaver whose retention period has not ended is refused unless you add `BEFORE_DUE=1`. The event then records `reason: request` and the admin's tenant user id.
 - A leaver the HRIS still shows as active, such as a rehire who hasn't started yet, is refused.
 - Running it twice is safe: the second run prints `was already forgotten`.
+- A leaver who holds the only admin account is refused (below).
+
+## Held back: the only admin
+
+Forgetting erases a person's accounts, so it refuses anyone whose accounts hold every admin the tenant has. Otherwise nobody would be left to run the organisation. A tenant with no admin at all forgets as before.
+
+- **A scheduled run** carries on past them and counts them as `held_back`. It reports a warning with the tenant id and that count, never an id. They stay due, so the warning comes back every day until it's fixed.
+- **The dry run** counts them the same way, taking leavers in the run's order. Two due admins and no other admin give a count of one and one held back. The confirm count leaves them out.
+- **A manual forget** refuses with "This person holds the organisation's only admin account. Make someone else an admin, then forget them."
+
+The refusal rolls back the whole erase, so the person is untouched. To clear it, ask a tenant admin to make someone else an admin. The next run forgets them.
 
 ## If a run fails
 
@@ -72,6 +83,7 @@ Each person is one transaction: the row, the membership, the notifications, thei
 
 - **The HRIS can't be reached**: nobody in that tenant is forgotten that day. The error is reported and the other tenants carry on.
 - **The key is missing**: the job fails before touching any tenant.
+- **A leaver holds the only admin account**: they're held back and the rest carry on. See *Held back: the only admin*.
 
 ## Restoring from a backup
 
