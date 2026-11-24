@@ -800,9 +800,12 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     with_hris_event_context do
       TenantUser.where(person_id: nil).includes(:user).find_each do |tu|
         person = Person.find_by(email: tu.user.email)
-        tu.link_to!(person, match: :hris_email) if person
-      rescue AccountGrants::Aggregate::LinkTaken, AccountGrants::Aggregate::PersonForgotten => e
-        Rails.logger.info("[hris] account #{tu.id} left unlinked: #{e.message}")
+        next unless person
+        next Rails.logger.warn("[hris] account #{tu.id} left unlinked: another account holds its person") if TenantUser.exists?(person_id: person.id)
+
+        tu.link_to!(person, match: :hris_email)
+      rescue AccountGrants::Aggregate::LinkRefused => e
+        Rails.logger.warn("[hris] account #{tu.id} left unlinked: #{e.message}")
       end
     end
   end
