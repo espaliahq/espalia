@@ -161,4 +161,4 @@ gem "diff-lcs", "~> 2.0"
 # gem "strong_migrations"
 
 # Claude API client for evidence placement suggestions (Evidence::SuggestionModel).
-gem "anthropic", "~> 2.8"
+gem "anthropic", "~> 2.10"
