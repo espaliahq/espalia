@@ -97,6 +97,7 @@ class PersonTest < ActiveSupport::TestCase
       assert_equal "newbie@example.com", account.email
       assert_equal account, person.reload.user
       assert_equal "member", person.tenant_user.role
+      assert_equal({ person.tenant_user.id => "member" }, AccountGrants::Repository.new.reading_locked(&:roles))
     end
 
     should "adopt an existing user (by email) + an unlinked membership rather than duplicate" do

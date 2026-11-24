@@ -97,6 +97,12 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: `account_grants/account_flags` takes the role, with no bump ([#540](https://github.com/espaliahq/espalia/issues/540)), 2026-11-24
+
+No `CODE_VERSION` bump and no `REBUILD_ON_DEPLOY`. The projection now also writes `tenant_users.role` from `AccountRoleSet`, and its reset keeps a role the stream doesn't record. No role event exists before this deploy, and the `account_roles` reconciler records every account's role at step 2b and again at step 6. A rebuild at step 3 would gain nothing, and would undo a role the previous release changed between steps 2b and 3. Step 6 records that change instead.
+
+**Deploy this only onto a release that holds [PR #560](https://github.com/espaliahq/espalia/pull/560), and confirm that release is serving before you start.** Step 2b writes role events to `TenantAccountGrants` while the previous release still serves. A release without #560 has no class for them, so every grant command it runs fails until the deploy ends, and rolling back leaves it failing.
+
 #### Recorded: `account_grants/account_flags` v1 (grants as events, [#539](https://github.com/espaliahq/espalia/issues/539)), 2026-11-23
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection is new and now the only writer of `tenant_users.org_graph_editor` and `tenant_users.team_planner`.

@@ -273,6 +273,23 @@ replay loses no grant. Each grant or removal first records what the
 account's flag says when the stream disagrees, since a release before the
 stream changed only the flag.
 
+### Where the tenant role lives
+
+An account's role, `member` or `admin`, is recorded in the same stream:
+`AccountRoleSet` names the account, its person, the role, the date and who set
+it, and `AccountRoleRemoved` marks an account destroyed or forgotten. The
+projection writes `TenantUser#role` from them. Change a role through
+`Operations::Tenants::SetAccountRole` (MCP `tenants_set_account_role`), which
+the users screen calls. A new account is inserted with its first role and
+recorded at once with `AccountGrants::CommandHandler#record_new_account`.
+
+The aggregate refuses to demote the last admin, counting only live accounts.
+Before each change it records any role the table holds and the stream
+doesn't, so an account a factory or the previous release wrote is counted
+too. `events:reconcile` does the same for every account at deploy.
+Role events stay out of the old `AccountGrants` stream, since the previous
+release has no class to load them.
+
 `org_graph_editors`, `team_planning_planners` and their add and remove tools
 give each holder `since`, `added_by` and `already_held` from the stream. Editor
 grants also show in the Org Graph's organisation activity
