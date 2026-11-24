@@ -189,7 +189,8 @@ class CalibrationSessions::OverviewStats
   #   self_value:, carried: }
   #
   # `carried` marks a value seeded from the rater's previous cycle and not
-  # confirmed this one (ADR-20). Carried values still COUNT — they are real
+  # confirmed this one, by the rater or by agreeing the cell (ADR-20).
+  # Carried values still COUNT — they are real
   # data, and excluding them would silently change every denominator on
   # screen — but the surfaces mark them, because a tendency nobody expressed
   # this cycle and a disagreement between two unexamined numbers are both
@@ -210,8 +211,8 @@ class CalibrationSessions::OverviewStats
       .where(level_ordinal: assessed_ordinals.values.uniq)
       .where.not(manager_rated_frequency: nil)
       .pluck(:person_id, :level_ordinal, :capability_stable_id,
-             :manager_rated_frequency, :self_rated_frequency, :manager_rating_source)
-      .filter_map do |person_id, level_ordinal, stable_id, manager_frequency, self_frequency, source|
+             :manager_rated_frequency, :self_rated_frequency, :manager_rating_source, :aligned_frequency)
+      .filter_map do |person_id, level_ordinal, stable_id, manager_frequency, self_frequency, source, aligned|
         # The level filter above is population-wide; keep only each person's
         # OWN assessed level.
         next unless assessed_ordinals[person_id] == level_ordinal
@@ -222,9 +223,8 @@ class CalibrationSessions::OverviewStats
           frequency: manager_frequency,
           value: FREQUENCY_VALUES.fetch(manager_frequency),
           self_value: self_frequency && FREQUENCY_VALUES.fetch(self_frequency),
-          # Only "seeded" is carried; nil is a legacy/factory row and counts
-          # as human, matching Assessments::LevelCoverage.
-          carried: source == "seeded"
+          # Matches Assessments::LevelCoverage: seeded and not agreed.
+          carried: Assessments::CarriedCell.unconfirmed?(source, aligned)
         }
       end
   end

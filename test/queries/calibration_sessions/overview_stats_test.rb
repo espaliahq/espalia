@@ -45,12 +45,12 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
-  def rate(person, capability, manager:, self_freq: nil, ordinal: 3, source: nil)
+  def rate(person, capability, manager:, self_freq: nil, ordinal: 3, source: nil, aligned: nil)
     create(:assessment_level_rating, tenant: @tenant,
            cycle_id: @cycle.cycle_id, person_id: person.id, framework_id: @framework_id,
            capability_stable_id: capability.stable_id, level_ordinal: ordinal,
            manager_rated_frequency: manager, self_rated_frequency: self_freq,
-           manager_rating_source: source)
+           manager_rating_source: source, aligned_frequency: aligned)
   end
 
   def stats
@@ -322,6 +322,25 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       assert_equal 1.0, row[:carried_pct]
       assert_equal "to_confirm", row[:ready_state]
       assert_equal 2, row[:carried_count]
+    end
+
+    should "read a rater whose carried cells are all agreed as ready, with nothing carried" do
+      rate(@r1, @cap_a, manager: "consistent", source: "seeded", aligned: "consistent")
+      rate(@r1, @cap_b, manager: "some", source: "seeded", aligned: "occasional")
+
+      row = mia_row
+      assert_equal "ready", row[:ready_state]
+      assert_equal 0, row[:carried_count]
+      assert_equal 0.0, row[:carried_pct]
+      assert_equal 1.0, row[:coverage_pct]
+    end
+
+    should "keep a rater to confirm while one carried cell is not agreed" do
+      rate(@r1, @cap_a, manager: "consistent", source: "seeded", aligned: "consistent")
+      rate(@r1, @cap_b, manager: "some", source: "seeded")
+
+      assert_equal "to_confirm", mia_row[:ready_state]
+      assert_equal 1, mia_row[:carried_count]
     end
 
     should "call a rater ready only when every cell is rated and confirmed" do
