@@ -126,6 +126,9 @@ module ProjectionReplayHelpers
       when "AccountGrants::Projections::AccountFlags"
         # Only the grant columns; the rest of the row is the account's own.
         { tenant_users: rows(TenantUser.select(:id, *AccountGrants::Projections::AccountFlags::COLUMNS), stable_id: true) }
+      when "TenantSettings::Projections::Retention"
+        # The PK derives from the tenant — assert it survives reset! + replay.
+        { tenant_retention_settings: rows(TenantRetentionSetting, stable_id: true) }
       when "OrgGraph::Projections::FactAges"
         # The PK derives from the person and the fact — assert it survives reset! + replay.
         { fact_ages: rows(OrgFactAge, stable_id: true) }

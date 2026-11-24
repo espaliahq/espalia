@@ -220,26 +220,26 @@ users:
 tenants:
   owner: plain
   reason: >-
-    The tenant's configuration and operational stamps. Retention and scheduled forgetting stay plain
-    until Track C of https://github.com/espaliahq/espalia/issues/539 moves them to events.
+    The tenant's configuration and operational stamps. Retention and scheduled forgetting are also
+    written here, beside tenant_retention_settings, until Track C of https://github.com/espaliahq/espalia/issues/539 drops the old keys.
   writers:
     - app/contexts/org_graph/people_cutover.rb
     - app/contexts/org_graph/person_development_cutover.rb
+    - app/contexts/tenant_settings/command_handler.rb
     - app/integrations/hris/hibob/adapter.rb
     - app/models/pay_band.rb
     - app/models/tenant.rb
     - app/operations/operations/integrations/hris_title_preview.rb
     - app/operations/operations/org_graph/update_staleness_threshold.rb
-    - app/operations/operations/tenants/disable_scheduled_forgetting.rb
-    - app/operations/operations/tenants/enable_scheduled_forgetting.rb
     - app/operations/operations/tenants/set_time_zone.rb
     - app/operations/operations/tenants/update_comparisons.rb
-    - app/operations/operations/tenants/update_retention_period.rb
     - app/operations/operations/tenants/update_scoring_vocabulary.rb
     - app/operations/operations/tenants/update_theme.rb
     - lib/tasks/evidence_suggestions_eval.rb
     - lib/tasks/example_seed.rb
     - lib/tasks/stress_seed.rb
+tenant_retention_settings:
+  owner: tenant_settings/retention
 
 # Sign-in and API access
 

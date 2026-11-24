@@ -102,7 +102,11 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         screenshot("forgetting_due_#{viewport}")
 
         click_button_with_js_fallback("org-graph-forgetting-on", expect_text: "Scheduled forgetting is on.")
-        within("#org-graph-forgetting") { assert_text "Each leaver is forgotten once their date comes." }
+        within("#org-graph-forgetting") do
+          assert_text "when Ada Admin turned it on. Each leaver is forgotten once their date comes."
+        end
+        page.scroll_to(find("#org-graph-forgetting"))
+        screenshot("forgetting_on_#{viewport}")
 
         click_button_with_js_fallback("org-graph-forgetting-off", expect_text: "Scheduled forgetting is off.")
         assert_selector "turbo-frame#org-graph-forgetting-due[complete]", visible: :all
