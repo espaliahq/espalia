@@ -85,13 +85,16 @@ class AccountGrants::CommandHandler
   # @raise [AccountGrants::Aggregate::LinkTaken] when the account or the person is linked elsewhere
   # @raise [AccountGrants::Aggregate::PersonForgotten] when the person was forgotten
   def link_account(account, person, match:, linked_by_id: nil)
-    @repository.with_grants do |grants|
-      ([ account.id ] | TenantUser.where(person_id: person.id).pluck(:id) | grants.accounts_of(person.id))
-        .each { settle_link(grants, it) }
-      raise AccountGrants::Aggregate::PersonForgotten, "a forgotten person can't be linked" if forgotten?(person.id)
+    ActiveRecord::Base.transaction do
+      hold_person(person.id)
+      @repository.with_grants do |grants|
+        ([ account.id ] | TenantUser.where(person_id: person.id).pluck(:id) | grants.accounts_of(person.id))
+          .each { settle_link(grants, it) }
+        raise AccountGrants::Aggregate::PersonForgotten, "a forgotten person can't be linked" if forgotten?(person.id)
 
-      grants.link_account(tenant_user_id: account.id, person_id: person.id, effective_on: today,
-                          linked_by_id:, match: match.to_s)
+        grants.link_account(tenant_user_id: account.id, person_id: person.id, effective_on: today,
+                            linked_by_id:, match: match.to_s)
+      end
     end
   end
 
@@ -119,12 +122,20 @@ class AccountGrants::CommandHandler
 
   private
 
-  # Lock order: the grants stream, then tenant_users rows. A forget takes the
-  # person's row, then the grants lock in {#unlink_forgotten}, and only then
-  # its tenant_users rows, so the two never wait on each other in a cycle. A
-  # forget that committed first is re-read here and drops out of the count.
+  # Lock order: the person's row, then the grants stream, then tenant_users
+  # rows. A forget takes the person's row, then the grants lock in
+  # {#unlink_forgotten}, and only then its tenant_users rows, so the two never
+  # wait on each other in a cycle. A forget that committed first is re-read
+  # here and drops out of the count.
   def hold_live_accounts
     TenantUser.where(tenant_id: ActsAsTenant.current_tenant.id).order(:id).lock("FOR SHARE").pluck(:id)
+  end
+
+  # The link's write to tenant_users.person_id takes this lock through the
+  # foreign key. Taken before the grants lock, it waits for a forget holding
+  # the row, rather than holding the grants lock the forget waits for.
+  def hold_person(person_id)
+    Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:id)
   end
 
   # A release before this stream, still serving during a deploy, writes only

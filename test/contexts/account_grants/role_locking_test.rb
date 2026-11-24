@@ -102,6 +102,40 @@ class AccountGrants::RoleLockingTest < ActiveSupport::TestCase
     assert_nil TenantUser.unscoped.find(@cy.id).person_id
   end
 
+  should "make a link wait for a forget holding the person's row, without taking the grants lock first" do
+    locked = Queue.new
+    go = Queue.new
+    forget = Thread.new do
+      on_another_connection do
+        Person.lock.find(@dee.id)
+        locked << true
+        go.pop
+        erase_person(@dee.id)
+      end
+    end
+    flunk "the forget never locked the person" unless locked.pop(timeout: 10)
+
+    pids = Queue.new
+    refused = Thread.new do
+      on_another_connection do |connection|
+        pids << backend_pid(connection)
+        TenantUser.find(@cy.id).link_to!(@dee, match: :admin)
+        nil
+      rescue AccountGrants::Aggregate::PersonForgotten => error
+        error
+      end
+    end
+    assert_waiting(pids, refused)
+    go << true
+
+    assert forget.join(15), "the forget finished"
+    assert_instance_of AccountGrants::Aggregate::PersonForgotten, refused.value
+    assert_nil TenantUser.unscoped.find(@cy.id).person_id
+  ensure
+    go << true
+    [ forget, refused ].compact.each { it.join(15) || it.kill }
+  end
+
   private
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
