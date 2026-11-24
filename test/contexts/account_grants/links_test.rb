@@ -142,6 +142,16 @@ class AccountGrants::LinksTest < ActiveSupport::TestCase
       assert_nil column(@account)
     end
 
+    should "leave an account the previous release erased out of a reset, though the stream still links it" do
+      as_tenant { @account.link_to!(@ada, match: :sign_in) }
+      Person.unscoped.where(id: @ada.id).update_all(name: Person::FORMER_MEMBER, email: nil, external_id: nil, forgotten_at: Time.current)
+      @account.update_columns(person_id: nil, forgotten_at: Time.current)
+
+      AccountGrants::Projections::AccountFlags.reset!(tenant: @tenant)
+
+      assert_nil column(@account)
+    end
+
     should "clear only the person it unlinked" do
       as_tenant { @account.link_to!(@ada, match: :sign_in) }
       @account.update_columns(person_id: @bo.id)
