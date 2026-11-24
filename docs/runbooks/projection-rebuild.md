@@ -105,6 +105,18 @@ Coverage is counted against the role's cells as the framework stands today, as i
 
 This projection's rebuild blanks every assessment while it runs, as above. Deploy in a quiet window and take the snapshot first. Until the rebuild, a participation agreed before this release keeps empty stamps. Everything that reads them shows it as unfinished: the Team Assessments chips and the Home card's "Ready for alignment" after a lens start, the calibration population badge, and the `self_completed_at` / `manager_completed_at` that `assessments_get`, `reporting_cycle_cohort` and `assessments_timeline` report. The cohort funnel and the calibration readiness card read the ratings, so they already count it.
 
+**Nobody may start alignment, agree a cell or clear an agreed value from the start of the deploy until traffic swaps.** The rebuild runs in predeploy while the previous release still serves. That release's handlers don't refresh the stamps, and nothing replays an event it projects after the rebuild has passed it. So an agreement or a clear on a carried cell in that window leaves that participation's stamps as they were. Nothing blocks those writes: the quiet window is the safeguard, and this is a rule for the operator, not a guard in the code.
+
+After the swap, count what slipped through, from the time the deploy started:
+
+```
+bin/rails runner 'puts Rails.configuration.event_store.read
+  .of_type([PersonDevelopment::Events::AssessmentAligned, PersonDevelopment::Events::AlignmentCleared])
+  .newer_than(Time.utc(2026, 11, 24, 6, 0)).count'
+```
+
+Zero means nothing to do. Otherwise the stamps of those participations may be stale. One refreshes at its next rating or at its next agreement on a carried cell; to settle them all, rebuild again from the Shell on the new release, in the next quiet window: `bin/rails "events:projections:rebuild[person_development/current_assessment]"`. A stale stamp misreports only what the paragraph above lists; no rating or agreed value is affected.
+
 Measured on the seeded dev database (194 handled events, one tenant): 4.7 s, Rails boot included.
 
 #### Recorded: `account_grants/account_flags` v1 (grants as events, [#539](https://github.com/espaliahq/espalia/issues/539)), 2026-11-23
