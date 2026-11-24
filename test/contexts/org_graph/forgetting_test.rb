@@ -33,6 +33,8 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
     person
   end
 
+  def settings = TenantSettings::CommandHandler.new(Tenant.find(@tenant.id))
+
   def forgetting(active: [])
     OrgGraph::Forgetting.new(@tenant, hris: FakeHris.new(active))
   end
@@ -156,7 +158,7 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
     should "spare a leaver whose retention period grew after the run began" do
       run = forgetting
       due = run.dry_run(on: TODAY).person_ids
-      Tenant.find(@tenant.id).tap { it.org_graph_config.retention_years = 10 }.save!
+      settings.set_retention_period(10)
 
       report = run.stub(:candidates, due) { run.forget_due(on: TODAY) }
 
@@ -165,7 +167,7 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
     end
 
     should "record the retention period in force when the person was forgotten" do
-      Tenant.find(@tenant.id).tap { it.org_graph_config.retention_years = 6 }.save!
+      settings.set_retention_period(6)
 
       forgetting.forget_due(on: TODAY)
 
@@ -174,7 +176,21 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
 
     should "stop a scheduled run once the schedule is turned off" do
       second = leaver("hb-4", left_on: "2026-09-01")
-      Tenant.find(@tenant.id).tap { it.org_graph_config.scheduled_forgetting = true }.save!
+      settings.enable_scheduled_forgetting { 2 }
+      run = forgetting
+      due = run.dry_run(on: TODAY).person_ids
+      settings.disable_scheduled_forgetting
+
+      report = run.stub(:candidates, due) { run.forget_due(on: TODAY, scheduled: true) }
+
+      assert_equal 0, report.count
+      assert_not second.reload.forgotten?
+      assert_not @leaver.reload.forgotten?
+    end
+
+    should "stop a scheduled run that the previous release turned off" do
+      second = leaver("hb-4", left_on: "2026-09-01")
+      settings.enable_scheduled_forgetting { 2 }
       run = forgetting
       due = run.dry_run(on: TODAY).person_ids
       Tenant.find(@tenant.id).tap { it.org_graph_config.scheduled_forgetting = false }.save!
@@ -183,6 +199,13 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
 
       assert_equal 0, report.count
       assert_not second.reload.forgotten?
+      assert_not @leaver.reload.forgotten?
+    end
+
+    should "forget nobody on a schedule only the previous release turned on" do
+      Tenant.find(@tenant.id).tap { it.org_graph_config.scheduled_forgetting = true }.save!
+
+      assert_equal 0, forgetting.forget_due(on: TODAY, scheduled: true).count
       assert_not @leaver.reload.forgotten?
     end
 
@@ -329,8 +352,21 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
 
       report = forgetting(active: [ "hb-2" ]).dry_run(on: TODAY)
 
-      assert_equal OrgGraph::Forgetting::Report.new(count: 1, person_ids: [ @leaver.id ]), report
+      assert_equal OrgGraph::Forgetting::Report.new(count: 1, person_ids: [ @leaver.id ], retention_years: 7), report
       assert_not @leaver.reload.forgotten?
+    end
+
+    should "report the period that chose them, though it changes while the HRIS is asked" do
+      tenant = @tenant
+      hris = Object.new
+      hris.define_singleton_method(:active_external_ids) do
+        TenantSettings::CommandHandler.new(Tenant.find(tenant.id)).set_retention_period(30)
+        []
+      end
+
+      report = OrgGraph::Forgetting.new(@tenant, hris:).dry_run(on: TODAY)
+
+      assert_equal [ 7, [ @leaver.id ] ], [ report.retention_years, report.person_ids ]
     end
   end
 

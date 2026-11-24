@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Daily (config/recurring.yml): forgets the leavers whose retention period
-# has ended, in every tenant that turned scheduled forgetting on. Each
+# has ended, in every tenant that turned scheduled forgetting on, as both
+# its settings and its JSON say. Each
 # person is one transaction, so a run that dies partway is finished by the
 # next. The log holds counts and person ids only.
 class OrgGraph::ForgetDueLeaversJob < ApplicationJob
@@ -11,7 +12,7 @@ class OrgGraph::ForgetDueLeaversJob < ApplicationJob
   # @return [void]
   # @raise [OrgGraph::Forgetting::KeyMissing] when any tenant is scheduled and the key is not set
   def perform
-    tenants = Tenant.where("(org_graph_config->>'scheduled_forgetting')::boolean")
+    tenants = TenantRetentionSetting.scheduled_tenants
     return unless tenants.exists?
 
     OrgGraph::Forgetting.key!

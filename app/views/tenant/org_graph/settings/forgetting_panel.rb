@@ -10,9 +10,11 @@ class Views::Tenant::OrgGraph::Settings::ForgettingPanel < Views::Base
   YEARS = [ 1, 2, 3, 5, 7, 10, 15, 20 ].freeze
 
   # @param config [OrgGraphConfig]
+  # @param settings [TenantRetentionSetting] the same settings as recorded in the stream
   # @param key_set [Boolean] whether this server holds the key forgetting needs
-  def initialize(config:, key_set:)
+  def initialize(config:, settings:, key_set:)
     @config = config
+    @settings = settings
     @key_set = key_set
   end
 
@@ -49,7 +51,7 @@ class Views::Tenant::OrgGraph::Settings::ForgettingPanel < Views::Base
   def schedule
     div(class: "mt-4 space-y-3 text-sm") do
       missing_key unless @key_set
-      if @config.scheduled_forgetting
+      if @config.scheduled_forgetting && @settings.scheduled_forgetting
         scheduled
       elsif @key_set && years.nil?
         p(class: "text-default") { "Nobody is forgotten while this is set to never." }
@@ -69,8 +71,9 @@ class Views::Tenant::OrgGraph::Settings::ForgettingPanel < Views::Base
   def scheduled
     p(class: "text-default") do
       plain "Scheduled forgetting is on"
-      plain " since #{@config.scheduled_forgetting_enabled_at.to_date.to_fs(:long)}" if @config.scheduled_forgetting_enabled_at
-      plain(years.nil? ? ", but nobody is forgotten while the period is never." : ". Each leaver is forgotten once their date comes.")
+      plain " since #{@settings.enabled_at.to_date.to_fs(:long)}" if @settings.enabled_at
+      plain ", when #{enabled_by} turned it on" if @settings.enabled_by
+      plain(kept_for_ever? ? ", but nobody is forgotten while the period is never." : ". Each leaver is forgotten once their date comes.")
     end
     settings_form(tenant_org_graph_settings_forgetting_schedule_path, method: :delete) do
       render Components::Kit::Button.new(variant: :outline, tone: :danger, type: :submit, id: "org-graph-forgetting-off") do
@@ -80,4 +83,12 @@ class Views::Tenant::OrgGraph::Settings::ForgettingPanel < Views::Base
   end
 
   def years = @config.retention_years
+
+  # Either place set to never keeps everyone, as TenantRetentionSetting.longer_period does.
+  def kept_for_ever? = years.nil? || @settings.retention_years.nil?
+
+  def enabled_by
+    person = @settings.enabled_by
+    person.forgotten? ? "a former member" : person.name
+  end
 end
