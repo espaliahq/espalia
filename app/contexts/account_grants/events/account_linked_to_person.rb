@@ -5,6 +5,7 @@
 # @!attribute [r] data
 #   @return [Hash] event data
 #   @option data [String] :tenant_user_id the account
+#   @option data [String] :effective_on ISO 8601 date it took effect
 #   @option data [String] :person_id the person
 #   @option data [String, nil] :linked_by_id person_id of the actor, nil when none
 #   @option data [String, nil] :match how the person was found: "sign_in", "hris_email", "provisioned" or "admin"

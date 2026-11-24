@@ -39,7 +39,7 @@ class AccountGrants::Aggregate
     @roles.transform_values(&:first)
   end
 
-  # @return [Hash{String => String, nil}] each account with a role to its person's id
+  # @return [Hash{String => String, nil}] each account with a role to its person's id when the role was set
   def role_holders
     @roles.transform_values(&:last)
   end

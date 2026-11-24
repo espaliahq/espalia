@@ -7,6 +7,7 @@
 #   @option data [String] :tenant_user_id the account
 #   @option data [String, nil] :person_id the account's person
 #   @option data [String] :effective_on ISO 8601 date it took effect
+#   @option data [String, nil] :removed_by_id person_id of the actor, nil when none
 #
 class AccountGrants::Events::AccountRoleRemoved < RubyEventStore::Event
 end

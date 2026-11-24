@@ -23,19 +23,21 @@ class AccountGrants::LaterEventsTest < ActiveSupport::TestCase
         set_by_id: nil, already_held: true
       }),
       AccountGrants::Events::AccountRoleRemoved.new(data: {
-        tenant_user_id: @bo.id, person_id: @bo.person_id, effective_on: "2026-11-24"
+        tenant_user_id: @bo.id, person_id: @bo.person_id, effective_on: "2026-11-24", removed_by_id: nil
       }),
       AccountGrants::Events::AccountLinkedToPerson.new(data: {
-        tenant_user_id: @ada.id, person_id: @ada.person_id, linked_by_id: nil, match: nil, already_held: true
+        tenant_user_id: @ada.id, person_id: @ada.person_id, effective_on: "2026-11-24", linked_by_id: nil, match: nil, already_held: true
       }),
       AccountGrants::Events::AccountLinkedToPerson.new(data: {
-        tenant_user_id: @bo.id, person_id: @bo.person_id, linked_by_id: nil, match: nil, already_held: true
+        tenant_user_id: @bo.id, person_id: @bo.person_id, effective_on: "2026-11-24", linked_by_id: nil, match: nil, already_held: true
       }),
       AccountGrants::Events::AccountUnlinkedFromPerson.new(data: {
-        tenant_user_id: @bo.id, person_id: @bo.person_id, unlinked_by_id: nil, reason: "admin"
+        tenant_user_id: @bo.id, person_id: @bo.person_id, effective_on: "2026-11-24", unlinked_by_id: nil, reason: "admin"
       })
     ]
-    event_store.append(@later, stream_name: EventStreamNaming.tenant_account_grants_stream(tenant: @tenant))
+    event_store.with_metadata(tenant_id: @tenant.id) do
+      event_store.append(@later, stream_name: EventStreamNaming.tenant_account_grants_stream(tenant: @tenant))
+    end
   end
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
@@ -62,6 +64,14 @@ class AccountGrants::LaterEventsTest < ActiveSupport::TestCase
     assert_equal %w[AccountGrants::Events::PlannerAdded AccountGrants::Events::OrgGraphEditorAdded],
                  types(EventStreamNaming.account_grants_stream(tenant: @tenant))
     assert_equal 8, types(EventStreamNaming.tenant_account_grants_stream(tenant: @tenant)).size
+  end
+
+  should "leave roles and links out of the read without the lock, which reads the old stream" do
+    grants = as_tenant { AccountGrants::Repository.new.load_grants }
+
+    assert_empty grants.roles
+    assert_empty grants.links
+    assert grants.holds?(:team_planner, @bo.id)
   end
 
   should "rebuild the flags and reconcile the grants past them" do
