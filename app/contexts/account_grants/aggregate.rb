@@ -44,11 +44,14 @@ class AccountGrants::Aggregate
   # Raised when a command would leave the tenant with no admin.
   class LastAdmin < StandardError; end
 
+  # Raised when a link is refused, for either reason below.
+  class LinkRefused < StandardError; end
+
   # Raised when a link would break the one-account, one-person rule.
-  class LinkTaken < StandardError; end
+  class LinkTaken < LinkRefused; end
 
   # Raised when a link names a forgotten person.
-  class PersonForgotten < StandardError; end
+  class PersonForgotten < LinkRefused; end
 
   def initialize
     @holdings = GRANTS.index_with { {} }

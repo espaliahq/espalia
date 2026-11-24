@@ -143,12 +143,20 @@ class User < ApplicationRecord
       )
       ActsAsTenant.with_tenant(person.tenant) do
         account = TenantUser.create!(tenant: person.tenant, user: user, role: :member)
-        account.link_to!(person, match: :provisioned)
+        link_provisioned(account, person)
         AccountGrants::CommandHandler.new.record_new_account(account)
       end
       user
     end
   end
 
-  private_class_method :google_email_verified?, :provision_from_person!
+  # A refused link writes nothing, so the account is created unlinked and
+  # sign-in goes ahead; its person stays with whoever holds them.
+  def self.link_provisioned(account, person)
+    account.link_to!(person, match: :provisioned)
+  rescue AccountGrants::Aggregate::LinkRefused => e
+    Rails.logger.warn("provisioned TenantUser #{account.id} left unlinked: #{e.class}")
+  end
+
+  private_class_method :google_email_verified?, :provision_from_person!, :link_provisioned
 end
