@@ -16,19 +16,21 @@ class TenantRetentionSettingTest < ActiveSupport::TestCase
     end
   end
 
-  def scheduled? = TenantRetentionSetting.scheduled?(@tenant.reload) && TenantRetentionSetting.scheduled_tenants.include?(@tenant)
+  def scheduled
+    [ TenantRetentionSetting.scheduled?(@tenant.reload), TenantRetentionSetting.scheduled_tenants.include?(@tenant) ]
+  end
 
   context "a tenant is scheduled only when both places say so" do
     should "say no for either alone, and yes for both" do
       json(scheduled_forgetting: true)
-      assert_not scheduled?
+      assert_equal [ false, false ], scheduled
 
       json(scheduled_forgetting: false)
       stream(scheduled_forgetting: true)
-      assert_not scheduled?
+      assert_equal [ false, false ], scheduled
 
       json(scheduled_forgetting: true)
-      assert scheduled?
+      assert_equal [ true, true ], scheduled
     end
   end
 
