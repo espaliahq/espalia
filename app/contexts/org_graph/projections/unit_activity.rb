@@ -4,7 +4,7 @@
 # itself and to its memberships, from the structure and person streams. A
 # unit's own structure (#494), declared, edited or withdrawn, is an entry in
 # the declaring unit; the top structure belongs to no unit and has none.
-# Org Graph editor grants, from the AccountGrants stream, are entries of the
+# Org Graph editor grants, from the TenantAccountGrants stream, are entries of the
 # whole organisation: they belong to no unit.
 #
 # Writes `org_unit_activities`, and nothing else writes it. Rows are only ever

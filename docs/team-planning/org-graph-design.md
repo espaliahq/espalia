@@ -340,7 +340,7 @@ holds is open to:
 
 - **A tenant admin**, always.
 - **An Org Graph editor.** A tenant-level role for the people team. An admin gives it,
-  and each grant is an event in the tenant's `AccountGrants` stream that says who gave it
+  and each grant is an event in the tenant's `TenantAccountGrants` stream that says who gave it
   and when.
 - **A unit's owners.** A unit can have several, with none primary: a product manager and
   an engineering manager can both own a squad. An owner may edit the unit and the units

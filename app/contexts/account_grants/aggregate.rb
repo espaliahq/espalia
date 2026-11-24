@@ -2,7 +2,7 @@
 
 # Event-sourced aggregate for the grants an admin gives a member's account.
 #
-# One RES stream per tenant: tenant-{tenant_id}/AccountGrants. It holds who
+# One RES stream per tenant: tenant-{tenant_id}/TenantAccountGrants. It holds who
 # is an Org Graph editor and who is a planner. Holders are keyed by account
 # (tenant_user_id), not person: a destroyed account's person can come back
 # with a new account, which starts without the old one's grants.

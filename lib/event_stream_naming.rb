@@ -22,8 +22,8 @@
 #   EventStreamNaming.plan_stream("plan-uuid")
 #   # => "tenant-<tenant-uuid>/Plan-plan-uuid"
 #
-#   EventStreamNaming.account_grants_stream
-#   # => "tenant-<tenant-uuid>/AccountGrants"
+#   EventStreamNaming.tenant_account_grants_stream
+#   # => "tenant-<tenant-uuid>/TenantAccountGrants"
 #
 #   EventStreamNaming.tenant_settings_stream
 #   # => "tenant-<tenant-uuid>/TenantSettings"
@@ -102,8 +102,9 @@ module EventStreamNaming
     "#{tenant_prefix(tenant)}/Plan-#{plan_id}"
   end
 
-  # Returns the stream name for a tenant's account grants: one stream per
-  # tenant, holding who was made an Org Graph editor or a planner, and when.
+  # Returns the stream a tenant's account grants lived in before
+  # {tenant_account_grants_stream}. AccountGrants::Repository still takes its
+  # lock and links every grant into it, for a release that reads it.
   #
   # @param tenant [Tenant, nil] override tenant (defaults to ActsAsTenant.current_tenant)
   # @return [String] the tenant-namespaced stream name
@@ -112,9 +113,9 @@ module EventStreamNaming
     "#{tenant_prefix(tenant)}/AccountGrants"
   end
 
-  # Returns the stream name a tenant's account grants move to: who was made an
-  # Org Graph editor or a planner, and later each account's role. Until that
-  # move, AccountGrants::Repository reads and writes {account_grants_stream}.
+  # Returns the stream name for a tenant's account grants: one stream per
+  # tenant, holding who was made an Org Graph editor or a planner, and when,
+  # and later each account's role.
   #
   # @param tenant [Tenant, nil] override tenant (defaults to ActsAsTenant.current_tenant)
   # @return [String] the tenant-namespaced stream name

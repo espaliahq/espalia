@@ -18,7 +18,7 @@ class AccountGrants::AggregateTest < ActiveSupport::TestCase
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
 
   def stream_events
-    Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant: @tenant)).to_a
+    Rails.configuration.event_store.read.stream(EventStreamNaming.tenant_account_grants_stream(tenant: @tenant)).to_a
   end
 
   def remove(grant, account = @account, **options)
