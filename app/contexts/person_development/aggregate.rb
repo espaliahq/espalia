@@ -65,7 +65,7 @@ class PersonDevelopment::Aggregate
     @evidence = {}       # evidence_id => { links: { [capability_stable_id, level_ordinal] => valence, ... }, ever_linked: Set, status: }
     @evidence_requests = {} # request_id => { status:, requestee_person_id:, capability_stable_id:, level_ordinal: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, evidence_id:, parent_id:, author_id:, status: }
-    @suggestions = {}    # suggestion_id => { evidence_id:, cell: [capability_stable_id, level_ordinal], status: }
+    @suggestions = {}    # suggestion_id => { evidence_id:, cell: [capability_stable_id, level_ordinal], status:, generated_at: }
     @accepted_before_suggested = Set.new
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
     @assessed_framework_version = nil # framework version the CURRENT cycle is assessed against
@@ -297,9 +297,9 @@ class PersonDevelopment::Aggregate
   # ([#539](https://github.com/espaliahq/espalia/issues/539) c5 removes it).
   #
   # @param rows [Array<Hash>] suggestion rows, with the table's column names
-  # @return [void]
+  # @return [Integer] how many rows it recorded anything for
   def catch_up_suggestions(rows)
-    rows.each { |row| catch_up_suggestion(row.symbolize_keys) }
+    rows.count { |row| catch_up_suggestion(row.symbolize_keys) }
   end
 
   # ── Manager-rating delegation ──
@@ -1508,9 +1508,12 @@ class PersonDevelopment::Aggregate
     raise CommandError, "this suggestion was already #{status}"
   end
 
+  # The release before this one reopens a cell's superseded row in place, so
+  # a row held pending on both sides can still be a later run's.
   def catch_up_suggestion(row)
     held = suggestion_status(row[:id])
-    return if DECIDED_SUGGESTION_STATUSES.include?(held) || row[:status] == held
+    return false if DECIDED_SUGGESTION_STATUSES.include?(held)
+    return false if row[:status] == held && !(held == "pending" && regenerated?(row))
 
     case row[:status]
     when "superseded"
@@ -1530,6 +1533,13 @@ class PersonDevelopment::Aggregate
     else
       record_held_suggestion(row, status: row[:status])
     end
+    true
+  end
+
+  def regenerated?(row)
+    held_at = @suggestions.dig(row[:id].to_s, :generated_at)
+    held_at = Time.zone.parse(held_at) if held_at.is_a?(String)
+    held_at.nil? || held_at.floor(6) != row[:generated_at]&.floor(6)
   end
 
   def record_held_suggestion(row, status:)
@@ -2059,7 +2069,8 @@ class PersonDevelopment::Aggregate
     @suggestions[id] = {
       evidence_id: event.data[:evidence_id],
       cell: [ event.data[:capability_stable_id], event.data[:level_ordinal] ],
-      status: @accepted_before_suggested.delete?(id) ? "accepted" : recorded
+      status: @accepted_before_suggested.delete?(id) ? "accepted" : recorded,
+      generated_at: event.data[:generated_at]
     }
   end
 

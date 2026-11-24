@@ -14,7 +14,10 @@ module Projections::Reconcilers
   LIST = {
     "account_grants" => { reconciler: "AccountGrants::Reconciliation", adopts: %w[account_grants/account_flags] },
     "account_roles" => { reconciler: "AccountGrants::RoleReconciliation", adopts: %w[account_grants/account_flags] },
-    "tenant_settings" => { reconciler: "TenantSettings::Reconciliation", adopts: %w[tenant_settings/retention] }
+    "tenant_settings" => { reconciler: "TenantSettings::Reconciliation", adopts: %w[tenant_settings/retention] },
+    "evidence_suggestions" => {
+      reconciler: "PersonDevelopment::SuggestionReconciliation", adopts: %w[person_development/evidence_suggestions]
+    }
   }.freeze
 
   # @return [Array<String>] the reconciler names
@@ -23,7 +26,7 @@ module Projections::Reconcilers
   end
 
   # @param name [String] a listed reconciler
-  # @return [Class] its `TenantStreams::Reconciliation` subclass
+  # @return [Class] its reconciler: `new(tenant).call` returns a `TenantStreams::Reconciliation::Report`
   def self.fetch(name)
     LIST.fetch(name).fetch(:reconciler).constantize
   end
