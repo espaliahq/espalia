@@ -239,14 +239,16 @@ class OrgGraph::Forgetting
     false
   end
 
-  # The tenant row is read under a share lock, so its retention period and
-  # schedule can't change until this person is done.
+  # The settings' lock is held shared, then the tenant row under a share
+  # lock, so neither place's retention period or schedule can change until
+  # this person is done. A command takes them in the same order. The previous
+  # release, while it still serves, changes the row alone.
   def erase(person_id, on:, reason:, requested_by_id: nil, scheduled: false)
     within_tenant do
       Person.transaction do
         hold_off_syncs
-        config = Tenant.lock("FOR SHARE").find(@tenant.id).org_graph_config
-        raise ScheduleTurnedOff if scheduled && !config.scheduled_forgetting
+        config = lock_settings
+        raise ScheduleTurnedOff if scheduled && !TenantRetentionSetting.scheduled?(@tenant, config:)
         person = Person.lock.find(person_id)
         next false if person.forgotten?
         if reason == "retention" && !due?(person_id, config, on)
@@ -261,7 +263,8 @@ class OrgGraph::Forgetting
         scrub_reports_raw_data(person.external_id)
         AuditMetadata.wrap_event_store do
           OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
-            .forget_person(person_id, effective_on: on, reason:, retention_years: config.retention_years,
+            .forget_person(person_id, effective_on: on, reason:,
+                                      retention_years: TenantRetentionSetting.longer_period(@tenant, config:),
                                       requested_by_id:)
         end
         PlanKeyStore.new.destroy_person(person.id)
@@ -272,7 +275,7 @@ class OrgGraph::Forgetting
   end
 
   def due?(person_id, config, on)
-    cutoff = config.forget_left_on_or_before(on)
+    cutoff = TenantRetentionSetting.forget_left_on_or_before(@tenant, on, config:)
     cutoff.present? && OrgLeaver.where(tenant: @tenant, person_id:, left_on: ..cutoff).exists?
   end
 
@@ -283,6 +286,11 @@ class OrgGraph::Forgetting
     Person.connection.select_value(
       Person.sanitize_sql_array([ "SELECT 1 FROM pg_advisory_xact_lock(?)", OrgGraph::PeopleCutover.lock_key(@tenant) ])
     )
+  end
+
+  def lock_settings
+    TenantSettings::Repository.new.hold_shared
+    Tenant.lock("FOR SHARE").find(@tenant.id).org_graph_config
   end
 
   def erase_identifiers(person)
