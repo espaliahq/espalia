@@ -76,4 +76,53 @@ class PersonDevelopment::LaterSuggestionEventsTest < ActiveSupport::TestCase
 
     assert_equal %w[dismissed accepted], [ @dismissed, @held ].map { aggregate.suggestion_status(it) }
   end
+
+  def append(*events)
+    event_store.with_metadata(tenant_id: @tenant.id) { event_store.append(events, stream_name: stream) }
+  end
+
+  def revalenced(suggestion_id)
+    PersonDevelopment::Events::EvidenceLinkRevalenced.new(data: {
+      evidence_id: @item.id, capability_stable_id: @ownership.stable_id, level_ordinal: 3,
+      previous_valence: nil, valence: "growth_area", changed_by_id: @morgan.id, via_suggestion_id: suggestion_id
+    })
+  end
+
+  def dismissal(suggestion_id)
+    PersonDevelopment::Events::EvidencePlacementSuggestionDismissed.new(data: {
+      suggestion_id: suggestion_id, evidence_id: @item.id, dismissed_by_id: @morgan.id,
+      reason: nil, dismissed_at: "2026-11-21T10:00:00Z", already_held: false
+    })
+  end
+
+  should "accept a suggestion through a revalenced link" do
+    append(revalenced(@suggestion.id))
+
+    assert_equal "accepted", aggregate.suggestion_status(@suggestion.id)
+  end
+
+  should "hold an accept that comes before its suggestion is recorded" do
+    early = SecureRandom.uuid_v7
+    append(revalenced(early), suggested(early, 5, already_held: true, status: "pending"))
+
+    assert_equal "accepted", aggregate.suggestion_status(early)
+  end
+
+  should "keep a decision when the suggestion is recorded again" do
+    append(suggested(@dismissed, 4), suggested(@held, 1))
+
+    assert_equal %w[dismissed accepted], [ @dismissed, @held ].map { aggregate.suggestion_status(it) }
+  end
+
+  should "reopen a superseded suggestion when the model proposes its cell again" do
+    append(suggested(@replaced, 2))
+
+    assert_equal "pending", aggregate.suggestion_status(@replaced)
+  end
+
+  should "never flip a decision, whichever event comes after it" do
+    append(revalenced(@dismissed), dismissal(@held), dismissal(@replaced))
+
+    assert_equal %w[dismissed accepted superseded], [ @dismissed, @held, @replaced ].map { aggregate.suggestion_status(it) }
+  end
 end

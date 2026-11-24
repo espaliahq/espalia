@@ -26,6 +26,7 @@ class PersonDevelopment::Aggregate
   class CommandError < StandardError; end
 
   FREQUENCIES = %w[none some occasional consistent].freeze
+  DECIDED_SUGGESTION_STATUSES = %w[accepted dismissed].freeze
   EVIDENCE_SOURCES = EvidenceItem::SOURCES
   EVIDENCE_TYPES = EvidenceItem::EVIDENCE_TYPES
   EVIDENCE_DIRECTIONS_BY_SOURCE = {
@@ -65,6 +66,7 @@ class PersonDevelopment::Aggregate
     @evidence_requests = {} # request_id => { status:, requestee_person_id:, capability_stable_id:, level_ordinal: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, evidence_id:, parent_id:, author_id:, status: }
     @suggestions = {}    # suggestion_id => { evidence_id:, cell: [capability_stable_id, level_ordinal], status: }
+    @accepted_before_suggested = Set.new
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
     @assessed_framework_version = nil # framework version the CURRENT cycle is assessed against
     # Declared explorations (ADR-22) — intent facts that outlive cycles:
@@ -225,7 +227,7 @@ class PersonDevelopment::Aggregate
   attr_reader :current_cycle_id
 
   # No command writes suggestion events yet: a release loads them before any
-  # release writes them (#539).
+  # release writes them ([#539](https://github.com/espaliahq/espalia/issues/539)).
   #
   # @param suggestion_id [String]
   # @return [String, nil] "pending", "accepted", "dismissed" or "superseded"; nil when none is recorded
@@ -1910,30 +1912,43 @@ class PersonDevelopment::Aggregate
     state[:status] = "deleted"
   end
 
+  # A decision is final: once accepted or dismissed, no later event changes
+  # it. A link can name a suggestion before the suggestion is recorded, when
+  # the table's row reaches the stream after the accept, so an unknown id is
+  # held as accepted for when it arrives.
   on PersonDevelopment::Events::EvidencePlacementSuggested do |event|
-    @suggestions[event.data[:suggestion_id]] = {
+    id = event.data[:suggestion_id]
+    status = @suggestions.dig(id, :status)
+    next if DECIDED_SUGGESTION_STATUSES.include?(status)
+
+    recorded = event.data[:status] == "edited" ? "accepted" : event.data[:status] || "pending"
+    @suggestions[id] = {
       evidence_id: event.data[:evidence_id],
       cell: [ event.data[:capability_stable_id], event.data[:level_ordinal] ],
-      status: event.data[:status] == "edited" ? "accepted" : event.data[:status] || "pending"
+      status: @accepted_before_suggested.delete?(id) ? "accepted" : recorded
     }
   end
 
   on PersonDevelopment::Events::EvidencePlacementSuggestionsSuperseded do |event|
-    Array(event.data[:suggestion_ids]).each do |id|
-      state = @suggestions[id]
-      state[:status] = "superseded" if state&.dig(:status) == "pending"
-    end
+    Array(event.data[:suggestion_ids]).each { |id| decide_suggestion(id, "superseded") }
   end
 
   on PersonDevelopment::Events::EvidencePlacementSuggestionDismissed do |event|
-    state = @suggestions[event.data[:suggestion_id]]
-    state[:status] = "dismissed" if state
+    decide_suggestion(event.data[:suggestion_id], "dismissed")
   end
 
-  # A suggestion recorded before suggestions were events is unknown here, so
-  # accepting it changes nothing.
   def accept_suggestion(suggestion_id)
-    state = suggestion_id && @suggestions[suggestion_id]
-    state[:status] = "accepted" if state
+    return unless suggestion_id
+
+    if @suggestions.key?(suggestion_id)
+      decide_suggestion(suggestion_id, "accepted")
+    else
+      @accepted_before_suggested << suggestion_id
+    end
+  end
+
+  def decide_suggestion(suggestion_id, status)
+    state = @suggestions[suggestion_id]
+    state[:status] = status if state&.dig(:status) == "pending"
   end
 end
