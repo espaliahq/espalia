@@ -24,6 +24,12 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
   # @return [TenantPlanningInputs::Repository]
   def self.repository = TenantPlanningInputs::Repository.new
 
+  # Takes the band list's lock first, as a command does, so the previous
+  # release's band writes wait for the run rather than land under it.
+  #
+  # @return [TenantStreams::Reconciliation::Report]
+  def call = PayBand.with_list_lock(@tenant.id) { super }
+
   # Records what the table holds that the aggregate doesn't, under the lock
   # the caller holds.
   #
@@ -33,9 +39,11 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
 
   private
 
+  # Locks the rows it reads, so a change the previous release makes waits
+  # for the run and is recorded by the next, never written over by this one.
   def held_in_table
     Rows::TABLES.each_key.with_object({}) do |table, held|
-      Rows.model(table).where(tenant_id: @tenant.id).find_each { |record| held[[ table, record.id ]] = record }
+      Rows.model(table).where(tenant_id: @tenant.id).lock.find_each { |record| held[[ table, record.id ]] = record }
     end
   end
 

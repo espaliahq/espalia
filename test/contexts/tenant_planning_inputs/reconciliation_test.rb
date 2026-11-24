@@ -77,6 +77,19 @@ class TenantPlanningInputs::ReconciliationTest < ActiveSupport::TestCase
     end
   end
 
+  should "take the band list's lock before the stream's, as a command does, so the previous release's band writes wait" do
+    order = []
+    repository = TenantPlanningInputs::Repository.new
+    repository.define_singleton_method(:with_aggregate) { |&block| order << :stream; super(&block) }
+    taking = PayBand.method(:with_list_lock)
+
+    PayBand.stub(:with_list_lock, ->(tenant_id, &block) { order << [ :bands, tenant_id ]; taking.call(tenant_id, &block) }) do
+      TenantPlanningInputs::Reconciliation.new(@tenant, repository:).call
+    end
+
+    assert_equal [ [ :bands, @tenant.id ], :stream ], order
+  end
+
   should "leave another tenant's stream alone" do
     other = create(:tenant)
     ActsAsTenant.with_tenant(other) { ReferenceCurrency.create!(currency: "NZD") }
