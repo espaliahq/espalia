@@ -73,12 +73,56 @@ class AccountGrants::CommandHandler
     end
   end
 
+  # Links an account to its person. A link or unlink the previous release
+  # wrote straight to the column, on this account or on another tied to the
+  # person, is recorded first, as reconcile would.
+  #
+  # @param account [TenantUser]
+  # @param person [Person]
+  # @param match [String, Symbol] one of {AccountGrants::Aggregate::MATCHES}
+  # @param linked_by_id [String, nil] person_id of the actor
+  # @return [AccountGrants::Aggregate]
+  # @raise [AccountGrants::Aggregate::LinkTaken] when the account or the person is linked elsewhere
+  # @raise [AccountGrants::Aggregate::PersonForgotten] when the person was forgotten
+  def link_account(account, person, match:, linked_by_id: nil)
+    @repository.with_grants do |grants|
+      ([ account.id ] | TenantUser.where(person_id: person.id).pluck(:id) | grants.accounts_of(person.id))
+        .each { settle_link(grants, it) }
+      raise AccountGrants::Aggregate::PersonForgotten, "a forgotten person can't be linked" if forgotten?(person.id)
+
+      grants.link_account(tenant_user_id: account.id, person_id: person.id, effective_on: today,
+                          linked_by_id:, match: match.to_s)
+    end
+  end
+
+  # Unlinks every account linked to a person about to be forgotten, in the
+  # table or the stream. Takes the grants lock, so the caller must hold no
+  # tenant_users row yet.
+  #
+  # @param person_id [String]
+  # @return [Array<String>] the accounts the table linked to them, for the caller to erase
+  def unlink_forgotten(person_id)
+    linked = nil
+    @repository.with_grants do |grants|
+      linked = TenantUser.where(person_id:).order(:id).pluck(:id)
+      ids = (linked | grants.accounts_of(person_id)).sort
+      linked.each do |id|
+        next if grants.person_of(id) == person_id
+
+        grants.unlink_account(tenant_user_id: id, effective_on: today, reason: :cleared)
+        grants.link_account(tenant_user_id: id, person_id:, effective_on: today, already_held: true)
+      end
+      ids.each { grants.unlink_account(tenant_user_id: it, effective_on: today, reason: :forgotten) }
+    end
+    linked
+  end
+
   private
 
   # Lock order: the grants stream, then tenant_users rows. A forget takes the
-  # person's row, then its tenant_users rows, and never the grants lock; if it
-  # ever writes to this stream, it must take the grants lock before those rows.
-  # A forget that committed first is re-read here and drops out of the count.
+  # person's row, then the grants lock in {#unlink_forgotten}, and only then
+  # its tenant_users rows, so the two never wait on each other in a cycle. A
+  # forget that committed first is re-read here and drops out of the count.
   def hold_live_accounts
     TenantUser.where(tenant_id: ActsAsTenant.current_tenant.id).order(:id).lock("FOR SHARE").pluck(:id)
   end
@@ -98,6 +142,19 @@ class AccountGrants::CommandHandler
       grants.remove(grant, tenant_user_id:, person_id:, effective_on: date)
     end
   end
+
+  # The previous release links and unlinks by writing the column. Record what
+  # it says first, so a command acts on the link the account holds.
+  def settle_link(grants, tenant_user_id)
+    linked = TenantUser.where(id: tenant_user_id).pick(:person_id)
+    recorded = grants.person_of(tenant_user_id)
+    return if linked == recorded
+
+    grants.unlink_account(tenant_user_id:, effective_on: today, reason: :cleared) if recorded
+    grants.link_account(tenant_user_id:, person_id: linked, effective_on: today, already_held: true) if linked
+  end
+
+  def forgotten?(person_id) = Person.unscoped.where(id: person_id).where.not(forgotten_at: nil).exists?
 
   def today
     ActsAsTenant.current_tenant.today

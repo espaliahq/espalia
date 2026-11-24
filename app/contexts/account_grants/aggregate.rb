@@ -8,11 +8,13 @@
 # with a new account, which starts without the old one's grants.
 #
 # Adding a grant someone holds, or removing one they don't, writes nothing,
-# and so does setting a role an account already has. The tenant always keeps
-# an admin, so demoting the last one is refused.
+# and so does setting a role an account already has or a link it holds. The
+# tenant always keeps an admin, so demoting the last one is refused.
 #
-# It also reads the person each account is linked to, though no command here
-# writes a link yet: a release loads those events before any release writes them.
+# It also records the person each account is linked to. An account links to
+# one person, a person to one account, and nobody links to a forgotten
+# person. Links held before they were events are recorded as they stand,
+# even two accounts sharing a person, so an admin can decide.
 #
 class AccountGrants::Aggregate
   include Shreddable::AggregateRoot
@@ -32,13 +34,27 @@ class AccountGrants::Aggregate
   # An account's roles, named as TenantUser's.
   ROLES = TenantUser::ROLES.values.freeze
 
+  # Why an account was unlinked: its person was forgotten, an admin unlinked
+  # it, its row was destroyed, or reconcile found the link cleared.
+  UNLINK_REASONS = %w[forgotten admin account_removed cleared].freeze
+
+  # How a link's person was found.
+  MATCHES = %w[sign_in hris_email provisioned admin].freeze
+
   # Raised when a command would leave the tenant with no admin.
   class LastAdmin < StandardError; end
+
+  # Raised when a link would break the one-account, one-person rule.
+  class LinkTaken < StandardError; end
+
+  # Raised when a link names a forgotten person.
+  class PersonForgotten < StandardError; end
 
   def initialize
     @holdings = GRANTS.index_with { {} }
     @roles = {}
     @links = {}
+    @forgotten = Set.new
   end
 
   # @return [Hash{String => String}] each account's id to its role
@@ -60,6 +76,23 @@ class AccountGrants::Aggregate
   # @return [Hash{String => String}] each linked account's id to its person's id
   def links
     @links.dup
+  end
+
+  # @param tenant_user_id [String]
+  # @return [String, nil] the person the account is linked to
+  def person_of(tenant_user_id)
+    @links[tenant_user_id.to_s]
+  end
+
+  # @param person_id [String]
+  # @return [Array<String>] the accounts linked to the person; more than one only for links recorded as held
+  def accounts_of(person_id)
+    @links.filter_map { |id, linked| id if linked == person_id.to_s }
+  end
+
+  # @return [Hash{String => Array<String>}] each person linked to more than one account, to those accounts
+  def shared_people
+    @links.group_by(&:last).filter_map { |person, pairs| [ person, pairs.map(&:first) ] if pairs.size > 1 }.to_h
   end
 
   # @param grant [Symbol] one of {GRANTS}
@@ -153,6 +186,56 @@ class AccountGrants::Aggregate
     }))
   end
 
+  # Recording a link held before links were events skips the rules, since the
+  # table it comes from is the truth.
+  #
+  # @param tenant_user_id [String]
+  # @param person_id [String]
+  # @param effective_on [Date, String]
+  # @param linked_by_id [String, nil] person_id of the actor
+  # @param match [String, nil] one of {MATCHES}, nil when recorded as held
+  # @param already_held [Boolean] true when recording a link made before links were events
+  # @raise [ArgumentError] for an unknown match
+  # @raise [LinkTaken] when the account or the person is linked elsewhere
+  # @raise [PersonForgotten] when the person was forgotten
+  def link_account(tenant_user_id:, person_id:, effective_on:, linked_by_id: nil, match: nil, already_held: false)
+    raise ArgumentError, "unknown match: #{match}" unless match.nil? || MATCHES.include?(match.to_s)
+
+    id = tenant_user_id.to_s
+    person_id = person_id.to_s
+    return if person_of(id) == person_id
+
+    unless already_held
+      raise PersonForgotten, "a forgotten person can't be linked" if @forgotten.include?(person_id)
+      raise LinkTaken, "the account is linked to another person" if person_of(id)
+      raise LinkTaken, "the person is linked to another account" if accounts_of(person_id).any?
+    end
+
+    apply(AccountGrants::Events::AccountLinkedToPerson.new(data: {
+      tenant_user_id: id, person_id: person_id, effective_on: effective_on.to_date.iso8601,
+      linked_by_id: linked_by_id, match: match&.to_s, already_held: already_held
+    }))
+  end
+
+  # @param tenant_user_id [String]
+  # @param effective_on [Date, String]
+  # @param reason [String, Symbol] one of {UNLINK_REASONS}
+  # @param unlinked_by_id [String, nil] person_id of the actor, nil when none
+  # @raise [ArgumentError] for an unknown reason
+  def unlink_account(tenant_user_id:, effective_on:, reason:, unlinked_by_id: nil)
+    reason = reason.to_s
+    raise ArgumentError, "unknown reason: #{reason}" unless UNLINK_REASONS.include?(reason)
+
+    id = tenant_user_id.to_s
+    person_id = person_of(id)
+    return unless person_id
+
+    apply(AccountGrants::Events::AccountUnlinkedFromPerson.new(data: {
+      tenant_user_id: id, person_id: person_id, effective_on: effective_on.to_date.iso8601,
+      unlinked_by_id: unlinked_by_id, reason: reason
+    }))
+  end
+
   on(AccountGrants::Events::AccountRoleSet) do |event|
     @roles[event.data[:tenant_user_id]] = event.data.values_at(:role, :person_id)
   end
@@ -172,7 +255,10 @@ class AccountGrants::Aggregate
   on(AccountGrants::Events::AccountLinkedToPerson) do |event|
     @links[event.data[:tenant_user_id]] = event.data[:person_id]
   end
-  on(AccountGrants::Events::AccountUnlinkedFromPerson) { |event| @links.delete(event.data[:tenant_user_id]) }
+  on(AccountGrants::Events::AccountUnlinkedFromPerson) do |event|
+    @links.delete(event.data[:tenant_user_id])
+    @forgotten << event.data[:person_id] if event.data[:reason] == "forgotten"
+  end
 
   private
 

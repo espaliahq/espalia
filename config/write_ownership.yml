@@ -189,11 +189,12 @@ tenant_users:
   owner: account_grants/account_flags
   columns:
     - org_graph_editor
+    - person_id
     - role
     - team_planner
   reason: >-
     Links an account to a tenant, a person and a Slack user. Writers insert accounts with their first role, which the grants stream then
-    records; a role changes only through that stream.
+    records; a role and the link to a person change only through that stream.
   writers:
     - app/contexts/org_graph/forgetting.rb
     - app/integrations/hris/hibob/adapter.rb

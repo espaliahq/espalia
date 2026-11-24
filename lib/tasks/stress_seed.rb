@@ -259,8 +259,8 @@ class StressSeed
       TenantUser.transaction do
         tenant_user = TenantUser.find_or_initialize_by(tenant: @tenant, user: user)
         tenant_user.role = role if tenant_user.new_record?
-        tenant_user.person = person
         tenant_user.save! if tenant_user.changed?
+        tenant_user.link_to!(person, match: :provisioned) unless tenant_user.person_id == person.id
         handler = AccountGrants::CommandHandler.new
         tenant_user.previously_new_record? ? handler.record_new_account(tenant_user) : handler.set_role(tenant_user, role)
       end
