@@ -147,6 +147,8 @@ class UserTest < ActiveSupport::TestCase
       tenant_user = TenantUser.where(tenant: tenant).order(:created_at).last
       assert_equal person.id, tenant_user.person_id
       assert_equal "member", tenant_user.role
+      roles = ActsAsTenant.with_tenant(tenant) { AccountGrants::Repository.new.reading_locked(&:roles) }
+      assert_equal({ tenant_user.id => "member" }, roles)
     end
 
     should "refuse with :no_matching_account when no User and no Person matches" do

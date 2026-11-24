@@ -35,7 +35,7 @@ class AccountGrants::StreamMoveTest < ActiveSupport::TestCase
 
   def new_ids = ids(EventStreamNaming.tenant_account_grants_stream(tenant: @tenant))
 
-  def flags(account) = TenantUser.unscoped.find(account.id).slice(*PROJECTION::COLUMNS).values
+  def flags(account) = TenantUser.unscoped.find(account.id).slice(*AccountGrants::Aggregate::GRANTS.map(&:to_s)).values
 
   def remove(handler, grant, account) = handler.remove(grant, tenant_user_id: account.id, person_id: account.person_id)
 

@@ -110,12 +110,12 @@ Each section names the writers the run saw and recommends one of two things: **k
 |---|---|
 | `person_id` | `TenantUser#ensure_person!`; the HiBob adapter's `auto_link_tenant_users`; forgetting (`erase_identifiers`) |
 | `slack_user_id` | `Tenant#connect_slack!`, `#disconnect_slack!`; `Slack::Identity#resolve`; `SlackDeliveryMethod#resolve_slack_user_id`; forgetting |
-| `role` | `Tenant::UsersController#update`; `Person#ensure_user!` and `User.provision_from_person!` on insert |
+| `role` | `account_grants/account_flags` from `AccountRoleSet`; `Person#ensure_user!`, `User.provision_from_person!` and the seeds on insert, each recording the role at once |
 | rows | `Person#ensure_user!`, `User.provision_from_person!`, the example and stress seeds |
 
 `org_graph_editor` and `team_planner` belong to `account_grants/account_flags` and were only ever written there, which is what part 1 set out to do.
 
-**Recommendation.** `role` decides who administers a tenant, so it moves to events in [#540](https://github.com/espaliahq/espalia/issues/540). Keep `person_id` and `slack_user_id` as plain links: they join one identity to another and say nothing about what anyone may do.
+**Recommendation.** `role` decides who administers a tenant, so it moved to events in [#540](https://github.com/espaliahq/espalia/issues/540). Keep `person_id` and `slack_user_id` as plain links: they join one identity to another and say nothing about what anyone may do.
 
 ### `tenants`
 

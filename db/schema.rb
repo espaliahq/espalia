@@ -1280,6 +1280,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_122130) do
     t.index ["tenant_id", "plan_id"], name: "index_team_planning_scenarios_on_tenant_id_and_plan_id"
   end
 
+  create_table "tenant_retention_settings", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.integer "retention_years"
+    t.boolean "scheduled_forgetting", default: false, null: false
+    t.datetime "enabled_at"
+    t.uuid "enabled_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id"], name: "index_tenant_retention_settings_on_tenant_id", unique: true
+  end
+
   create_table "tenant_users", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "person_id"
@@ -1449,6 +1460,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_122130) do
   add_foreign_key "team_planning_plan_members", "tenants"
   add_foreign_key "team_planning_plans", "tenants"
   add_foreign_key "team_planning_scenarios", "tenants"
+  add_foreign_key "tenant_retention_settings", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"
   add_foreign_key "tenant_users", "users"

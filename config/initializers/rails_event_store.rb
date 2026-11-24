@@ -153,6 +153,11 @@ Rails.configuration.to_prepare do
     to: TenantPlanningInputs::Projections::Tables.handled_events
   )
 
+  event_store.subscribe(
+    TenantSettings::Projections::Retention.new,
+    to: TenantSettings::Projections::Retention.handled_events
+  )
+
   # ── Synchronous cross-stream sync handlers ──
   # NOTE: PersonEnrollmentSync dispatches PersonDevelopment commands,
   # so it MUST NOT be registered as a projection — running it twice

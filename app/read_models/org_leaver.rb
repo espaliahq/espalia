@@ -17,15 +17,15 @@ class OrgLeaver < ApplicationRecord
 
   # The ids of the leavers whose retention period has ended, longest gone
   # first. Ids only, so nothing that lists them can show who they are. Empty
-  # while the tenant keeps leavers for ever.
+  # while the tenant keeps leavers for ever, in either place it is held.
   #
   # @param tenant [Tenant]
   # @param on [Date]
+  # @param retention_years [Integer, nil] the period already read, when the caller reports it
   # @return [Array<String>] person ids
-  def self.due_to_be_forgotten(tenant, on: Date.current)
-    cutoff = tenant.org_graph_config.forget_left_on_or_before(on)
-    return [] unless cutoff
+  def self.due_to_be_forgotten(tenant, on: Date.current, retention_years: TenantRetentionSetting.longer_period(tenant))
+    return [] unless retention_years
 
-    where(tenant:, left_on: ..cutoff).order(:left_on, :person_id).pluck(:person_id)
+    where(tenant:, left_on: ..(on - retention_years.years)).order(:left_on, :person_id).pluck(:person_id)
   end
 end

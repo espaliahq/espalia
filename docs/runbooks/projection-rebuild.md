@@ -97,6 +97,12 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: `account_grants/account_flags` takes the role, with no bump ([#540](https://github.com/espaliahq/espalia/issues/540)), 2026-11-24
+
+No `CODE_VERSION` bump and no `REBUILD_ON_DEPLOY`. The projection now also writes `tenant_users.role` from `AccountRoleSet`, and its reset keeps a role the stream doesn't record. No role event exists before this deploy, and the `account_roles` reconciler records every account's role at step 2b and again at step 6. A rebuild at step 3 would gain nothing, and would undo a role the previous release changed between steps 2b and 3. Step 6 records that change instead.
+
+**Deploy this only onto a release that holds [PR #560](https://github.com/espaliahq/espalia/pull/560), and confirm that release is serving before you start.** Step 2b writes role events to `TenantAccountGrants` while the previous release still serves. A release without #560 has no class for them, so every grant command it runs fails until the deploy ends, and rolling back leaves it failing.
+
 #### Recorded: `account_grants/account_flags` v1 (grants as events, [#539](https://github.com/espaliahq/espalia/issues/539)), 2026-11-23
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection is new and now the only writer of `tenant_users.org_graph_editor` and `tenant_users.team_planner`.
@@ -108,6 +114,12 @@ Predeploy step 2b, `account_grants:reconcile` (since renamed `events:reconcile`)
 Forgetting the variable is safe. Step 4 finds events for a projection that was never stamped, so it resets nothing, `verify` fails and the previous release keeps serving. Set the variable and deploy again.
 
 **Since `events:reconcile`, a database that still lacks this stamp needs neither the variable nor the rule.** Step 2b records the flags and then adopts the projection, stamping it without a reset, so step 3 logs that it is already current and skips the rebuild. Step 6 records any change the previous release made in between.
+
+#### Recorded: `tenant_settings/retention` v1 (retention settings as events, [#539](https://github.com/espaliahq/espalia/issues/539)), 2026-11-24
+
+No variable. The projection is new and the only writer of `tenant_retention_settings`. Step 2b records whatever each tenant's `org_graph_config` holds for retention and scheduled forgetting as `already_held` events with no actor, then adopts the projection, so step 3 has nothing to rebuild. A tenant still at the defaults gets no events and no row, which is what a replay writes. Step 6 records any change the previous release made in between, and a command in the new release records it first too.
+
+Forgetting with the new release asks both places until c2 drops the JSON keys: a tenant is scheduled only when both say so, by the longer period. So a change that reaches only the JSON can stop forgetting, never start it. See [org-graph-forgetting.md → Where the settings live](org-graph-forgetting.md#where-the-settings-live).
 
 #### Recorded: `org_graph/structure` v3 (a copied type remembers its source, [#494](https://github.com/espaliahq/espalia/issues/494))
 

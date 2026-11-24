@@ -130,6 +130,9 @@ module ProjectionReplayHelpers
         # Each row keeps its event's id; of the tenant's row, only the bands' stamp.
         TenantPlanningInputs::Rows::TABLES.each_key.to_h { [ it, rows(TenantPlanningInputs::Rows.model(it), stable_id: true) ] }
           .merge(pay_bands_changed_at: Tenant.where(id: tenant.id).pick(:pay_bands_changed_at))
+      when "TenantSettings::Projections::Retention"
+        # The PK derives from the tenant — assert it survives reset! + replay.
+        { tenant_retention_settings: rows(TenantRetentionSetting, stable_id: true) }
       when "OrgGraph::Projections::FactAges"
         # The PK derives from the person and the fact — assert it survives reset! + replay.
         { fact_ages: rows(OrgFactAge, stable_id: true) }

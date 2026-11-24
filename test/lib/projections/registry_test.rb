@@ -30,6 +30,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           team_planning/history
           account_grants/account_flags
           tenant_planning_inputs/tables
+          tenant_settings/retention
         ].sort,
         Projections::Registry.names.sort
       )
