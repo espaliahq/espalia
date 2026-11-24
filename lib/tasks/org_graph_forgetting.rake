@@ -9,6 +9,7 @@ namespace :org_graph do
       OrgGraph::Forgetting.key!
       report = OrgGraph::Forgetting.new(tenant).dry_run
       puts "[#{tenant.id}] #{report.count} due: #{report.person_ids.join(", ")}"
+      puts "[#{tenant.id}] #{report.held_back} held back: they hold the only admin account" if report.held_back.positive?
     end
 
     desc "Forget one leaver at a tenant admin's request. BEFORE_DUE=1 forgets a leaver whose period hasn't ended."

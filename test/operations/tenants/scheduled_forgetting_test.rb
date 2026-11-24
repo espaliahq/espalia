@@ -30,8 +30,17 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
     should "count who is due, by id, and erase nobody" do
       result = call(Operations::Tenants::ForgettingDryRun)
 
-      assert_equal({ tenant_id: @tenant.id, retention_years: 7, count: 1, person_ids: [ @leaver.id ] }, result)
+      assert_equal({ tenant_id: @tenant.id, retention_years: 7, count: 1, held_back: 0, person_ids: [ @leaver.id ] }, result)
       assert_not @leaver.reload.forgotten?
+    end
+
+    should "count a leaver holding the only admin account as held back, without their id" do
+      account = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, person: @leaver, role: :admin) }
+      context = AuthorizationContext.new(user: account.user, tenant_user: account, person: @leaver)
+
+      result = call(Operations::Tenants::ForgettingDryRun, context:)
+
+      assert_equal({ count: 0, held_back: 1, person_ids: [] }, result.slice(:count, :held_back, :person_ids))
     end
 
     should "report the period that decides who is due, the longer of the two places" do
