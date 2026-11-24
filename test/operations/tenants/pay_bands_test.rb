@@ -67,6 +67,16 @@ class Operations::Tenants::PayBandsTest < ActiveSupport::TestCase
     assert_equal queries, count_queries { call(:PayBands) }
   end
 
+  should "name the person whose account changed a band in the previous release, in one query for every such band" do
+    bands = [ add, add(location: "Testonia") ].map { PayBand.unscoped.find(it[:pay_band_id]) }
+    bands.first.update_columns(updated_by_id: @member.user_id)
+    queries = count_queries { call(:PayBands) }
+    bands.last.update_columns(updated_by_id: @editor.user_id)
+
+    assert_equal queries, count_queries { call(:PayBands) }
+    assert_equal [ @member.person.name, @editor.person.name ].sort, call(:PayBands)[:pay_bands].pluck(:updated_by).sort
+  end
+
   should "keep a band whose level has left the framework, marked so" do
     added = add
     ActsAsTenant.with_tenant(@tenant) { @level.destroy! }
