@@ -1,35 +1,45 @@
 # frozen_string_literal: true
 
-# Synchronous projection of the grant columns of `tenant_users` from the
-# TenantAccountGrants stream: `org_graph_editor` and `team_planner`.
+# Synchronous projection of the grant and role columns of `tenant_users`
+# from the TenantAccountGrants stream: `org_graph_editor`, `team_planner`
+# and `role`.
 #
-# The only writer of those two columns, and of nothing else on the row. A
-# forgotten account sits outside TenantUser's default scope, so neither a
-# live event nor a rebuild touches its flags.
+# The only writer of those columns once a row exists, and of nothing else on
+# the row. A forgotten account sits outside TenantUser's default scope, so
+# neither a live event nor a rebuild touches its flags.
 #
 class AccountGrants::Projections::AccountFlags
   # Stable identifier used as the natural key in `projection_versions.name`.
   PROJECTION_NAME = "account_grants/account_flags"
 
   # Bump when `reset!` or any handler would write different state from the
-  # same event payload than before.
+  # same event payload than before. Taking over `role` needed none: a reset
+  # leaves a role the stream doesn't record as it is, and no role events
+  # existed before.
   CODE_VERSION = 1
 
-  COLUMNS = AccountGrants::Aggregate::GRANTS.map(&:to_s).freeze
+  COLUMNS = (AccountGrants::Aggregate::GRANTS.map(&:to_s) + %w[role]).freeze
 
   FLAGS = AccountGrants::Aggregate::EVENTS.flat_map do |grant, events|
     [ [ events.fetch(:added), [ grant, true ] ], [ events.fetch(:removed), [ grant, false ] ] ]
   end.to_h.freeze
   private_constant :FLAGS
 
+  RESET = <<~SQL.squish.freeze
+    org_graph_editor = COALESCE(id IN (:org_graph_editor), false),
+    team_planner = COALESCE(id IN (:team_planner), false),
+    role = CASE WHEN id IN (:admin) THEN 'admin' WHEN id IN (:member) THEN 'member' ELSE role END
+  SQL
+  private_constant :RESET
+
   # @return [Array<Class>]
   def self.handled_events
-    FLAGS.keys
+    FLAGS.keys + [ AccountGrants::Events::AccountRoleSet ]
   end
 
-  # Sets both grants on every live account of the tenant to what the stream
-  # holds, in one statement. A reset that clears them instead would leave a
-  # rebuild that stops before its replay with every flag clear, and the next
+  # Sets both grants and the role on every live account of the tenant to
+  # what the stream holds, in one statement. A reset that clears them would
+  # leave a rebuild that stops before its replay with every flag clear, and the next
   # deploy's reconcile would record each grant as removed. It holds the
   # stream's lock, so a grant a command writes meanwhile can't be overwritten.
   #
@@ -37,9 +47,10 @@ class AccountGrants::Projections::AccountFlags
   def self.reset!(tenant:)
     ActsAsTenant.with_tenant(tenant) do
       AccountGrants::Repository.new.reading_locked do |grants|
-        sets = COLUMNS.map { |column| "#{column} = COALESCE(id IN (:#{column}), false)" }.join(", ")
-        holders = AccountGrants::Aggregate::GRANTS.to_h { [ it, grants.holders(it).keys.presence || [ nil ] ] }
-        TenantUser.where(tenant_id: tenant.id).update_all([ sets, holders ])
+        holders = AccountGrants::Aggregate::GRANTS.to_h { [ it, grants.holders(it).keys ] }
+        holders.merge!(grants.roles.group_by(&:last).to_h { |role, pairs| [ role.to_sym, pairs.map(&:first) ] })
+        values = (AccountGrants::Aggregate::GRANTS + %i[admin member]).to_h { [ it, holders[it].presence || [ nil ] ] }
+        TenantUser.where(tenant_id: tenant.id).update_all([ RESET, values ])
       end
     end
   end
@@ -50,7 +61,7 @@ class AccountGrants::Projections::AccountFlags
     # again would pass through earlier states a stopped replay could leave.
     return if Projections::Replayer.replay_mode?
 
-    column, value = FLAGS.fetch(event.class)
+    column, value = event.is_a?(AccountGrants::Events::AccountRoleSet) ? [ :role, event.data[:role] ] : FLAGS.fetch(event.class)
     tenant = ActsAsTenant.current_tenant
     tenant = Tenant.find(event.metadata[:tenant_id]) unless tenant&.id == event.metadata[:tenant_id]
 

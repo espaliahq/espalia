@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Handles commands for a tenant's account grants.
+# Handles commands for a tenant's account grants and roles.
 #
-# Each command names the account and the grant; the date is today in the
-# tenant's time zone unless the caller gives one.
+# Each command names the account and the grant or role; the date is today in
+# the tenant's time zone unless the caller gives one.
 #
 class AccountGrants::CommandHandler
   # @param repository [AccountGrants::Repository]
@@ -37,6 +37,36 @@ class AccountGrants::CommandHandler
     @repository.with_grants do |grants|
       settle(grants, grant, tenant_user_id, person_id, effective_on)
       grants.remove(grant, tenant_user_id:, person_id:, effective_on: effective_on || today, removed_by_id:)
+    end
+  end
+
+  # Sets an account's role, after recording every role the table holds that
+  # the stream doesn't, so the last-admin check counts the admins there are.
+  #
+  # @param account [TenantUser]
+  # @param role [String, Symbol] one of {AccountGrants::Aggregate::ROLES}
+  # @param set_by_id [String, nil] person_id of the actor
+  # @param effective_on [Date, nil]
+  # @return [AccountGrants::Aggregate]
+  # @raise [AccountGrants::Aggregate::LastAdmin] when it would demote the last admin
+  def set_role(account, role, set_by_id: nil, effective_on: nil)
+    @repository.with_grants do |grants|
+      AccountGrants::RoleReconciliation.new(ActsAsTenant.current_tenant, repository: @repository).reconcile(grants)
+      grants.set_role(tenant_user_id: account.id, person_id: account.person_id, role:,
+                      effective_on: effective_on || today, set_by_id:)
+    end
+  end
+
+  # Records the role of an account just inserted, in the transaction that
+  # inserted it.
+  #
+  # @param account [TenantUser]
+  # @param set_by_id [String, nil] person_id of the actor
+  # @return [AccountGrants::Aggregate]
+  def record_new_account(account, set_by_id: nil)
+    @repository.with_grants do |grants|
+      grants.set_role(tenant_user_id: account.id, person_id: account.person_id, role: account.role,
+                      effective_on: today, set_by_id:)
     end
   end
 

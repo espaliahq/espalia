@@ -13,13 +13,22 @@
 # write. [#539](https://github.com/espaliahq/espalia/issues/539) Track B stops
 # the linking back and moves that read to the new stream in the same change.
 #
+# Only grant events are linked back. The previous release has no class for
+# a role event and would fail to load the old stream holding one, so roles
+# live in the new stream alone, and the unlocked read sees no roles.
+#
 # @example
 #   AccountGrants::Repository.new.with_grants { |grants| grants.add(:team_planner, ...) }
 class AccountGrants::Repository < TenantStreams::Repository
+  LEGACY_EVENTS = AccountGrants::Aggregate::EVENTS.values.flat_map(&:values).freeze
+  private_constant :LEGACY_EVENTS
+
   # @see TenantStreams::Repository#with_aggregate
   def with_aggregate(&block)
     ActiveRecord::Base.transaction do
-      super.tap { link_missing(from: stream_name(current_tenant!), to: legacy_stream_name(current_tenant!)) }
+      super.tap do
+        link_missing(from: stream_name(current_tenant!), to: legacy_stream_name(current_tenant!), only: LEGACY_EVENTS)
+      end
     end
   end
 
@@ -49,9 +58,11 @@ class AccountGrants::Repository < TenantStreams::Repository
     link_missing(from: legacy_stream_name(tenant), to: stream_name(tenant))
   end
 
-  def link_missing(from:, to:)
+  def link_missing(from:, to:, only: nil)
     linked = @event_store.read.stream(to).map(&:event_id).to_set
-    missing = @event_store.read.stream(from).map(&:event_id).reject { linked.include?(it) }
+    source = @event_store.read.stream(from)
+    source = source.of_type(only) if only
+    missing = source.map(&:event_id).reject { linked.include?(it) }
     @event_store.link(missing, stream_name: to) if missing.any?
   end
 end
