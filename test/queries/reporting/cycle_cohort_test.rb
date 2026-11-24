@@ -100,6 +100,25 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
       assert_equal 0, result.funnel.manager_done
     end
 
+    should "count both sides once every carried cell is agreed" do
+      person = create(:person, tenant: @tenant, name: "Agreed")
+      enroll(person)
+      ratings = @caps.map do |cap|
+        rate(person, cap,
+          self_rated_frequency: "consistent", self_rating_source: "seeded",
+          manager_rated_frequency: "consistent", manager_rating_source: "seeded",
+          aligned_frequency: "consistent")
+      end
+
+      assert_equal [ 1, 1 ], [ result.funnel.self_done, result.funnel.manager_done ]
+
+      ratings.first.update!(aligned_frequency: nil)
+      funnel = Reporting::CycleCohort.new(cycle: @cycle).call.funnel
+
+      assert_equal [ 0, 0 ], [ funnel.self_done, funnel.manager_done ],
+        "one carried cell nobody agreed keeps both sides to confirm"
+    end
+
     should "count a side once its carried values are confirmed" do
       person = create(:person, tenant: @tenant, name: "Confirmed")
       enroll(person)

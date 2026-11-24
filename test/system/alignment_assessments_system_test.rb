@@ -193,6 +193,53 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    should "count a report who never confirmed their carried ratings as self-assessed once a start agrees them" do
+      sam_assignment = nil
+      ActsAsTenant.with_tenant(@tenant) do
+        sam = FactoryBot.create(:person, tenant: @tenant, name: "Report Sam", manager: @manager)
+        handler = PersonDevelopment::CommandHandler.new
+        # Assigning into an open cycle enrols the person.
+        handler.assign_to_framework(sam.id, @framework_id, @role_id, @level2_id)
+        # The report's side is carried and untouched; the manager rated the
+        # same value this cycle.
+        handler.rate_self(sam.id, @framework_id, @cap_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id,
+          source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
+        handler.rate_as_manager(sam.id, @framework_id, @cap_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id, rated_by_id: @manager.id)
+        sam_assignment = PersonFrameworkAssignment.for_person(sam.id).first
+      end
+      cohort_path = cohort_assessment_cycle_path(
+        ActsAsTenant.with_tenant(@tenant) { AssessmentCycle.find_by!(cycle_id: @cycle_id) }
+      )
+
+      visit cohort_path
+      sam_row = -> { find("a", text: "Report Sam").ancestor("div.justify-between", match: :first) }
+      assert_text "Progress funnel"
+      within(sam_row.call) do
+        assert_text "Self —"
+        assert_text "Mgr ✓"
+      end
+
+      visit assessment_path(sam_assignment)
+      assert_selector "h1", text: "Report Sam"
+      auto_confirm do
+        page.execute_script(<<~JS)
+          const btn = Array.from(document.querySelectorAll("button"))
+            .find(b => b.textContent.trim() === "Start alignment");
+          btn?.closest("form")?.requestSubmit(btn);
+        JS
+      end
+      assert_text "Aligning"
+
+      visit cohort_path
+      assert_text "Progress funnel"
+      within(sam_row.call) do
+        assert_text "Self ✓"
+        assert_text "Mgr ✓"
+      end
+    end
+
     should "render the inline alignment pill once aligning" do
       seed_alignment_started!
       visit assessment_path(@report_assignment, capability: @cap_stable)

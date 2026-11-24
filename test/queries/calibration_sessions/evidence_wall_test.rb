@@ -188,4 +188,12 @@ class CalibrationSessions::EvidenceWallTest < ActiveSupport::TestCase
     omar = wall(level: 4)[:groups].first[:items].first
     assert_not omar[:frequency_carried]
   end
+
+  should "not mark a carried stamp whose cell is agreed" do
+    AssessmentLevelRating
+      .find_by(cycle_id: @cycle.cycle_id, person_id: @r1.id, level_ordinal: 3)
+      .update!(manager_rating_source: "seeded", aligned_frequency: "consistent")
+
+    assert_not wall(level: 3)[:groups].first[:items].first[:frequency_carried]
+  end
 end

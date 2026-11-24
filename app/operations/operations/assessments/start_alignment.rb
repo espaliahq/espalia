@@ -29,6 +29,10 @@ class Operations::Assessments::StartAlignment < Operations::Base
   # level, or the role's level nearest it.
   parameter :as_level_ordinal, Integer
 
+  # A start agrees many cells, and the projection counts the same role's
+  # coverage for each one at the assessed level.
+  def call = Assessments::RoleScope.reusing { super }
+
   def policy_check
     authorize assignment, :show?
     authorize_alignment!(:start_alignment?)

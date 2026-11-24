@@ -275,11 +275,12 @@ class CalibrationSessionsController < ApplicationController
   # Enrollment + manager-rating readiness for the population on the
   # session's cycle — the per-person flags behind the population list's
   # badges. The readiness card's coverage comes from OverviewStats.
-  # partially_rated_ids distinguishes "the manager has touched some cells"
-  # (In progress) from untouched — manager_completed_at only stamps at
-  # FULL current-level VETTED coverage (carried/seeded values don't
-  # count; see Assessments::LevelCoverage). carried_only_ids marks
-  # managers whose values exist but are entirely carried forward —
+  # partially_rated_ids distinguishes "some cells are vetted" (In
+  # progress) from untouched — manager_completed_at only stamps at
+  # FULL current-level VETTED coverage (a carried/seeded value doesn't
+  # count until its cell is agreed; see Assessments::LevelCoverage).
+  # carried_only_ids marks managers whose values exist but are entirely
+  # carried forward and unagreed —
   # rendered "To confirm", matching the /assessments list vocabulary. Only
   # the calibrant's assessed role's cells count toward either.
   def readiness_for(calibrant_ids)
@@ -293,10 +294,7 @@ class CalibrationSessionsController < ApplicationController
     human_touched = AssessmentLevelRating
       .for_cycle(@session.cycle_id)
       .within(scopes)
-      .where(
-        "manager_rating_source = 'human' " \
-        "OR (manager_rated_frequency IS NOT NULL AND manager_rating_source IS NULL)"
-      )
+      .where(AssessmentLevelRating::MANAGER_TOUCHED_SQL)
       .distinct.pluck(:person_id)
     any_rated = AssessmentLevelRating
       .for_cycle(@session.cycle_id)

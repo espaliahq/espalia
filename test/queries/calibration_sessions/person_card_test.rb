@@ -152,6 +152,10 @@ class CalibrationSessions::PersonCardTest < ActiveSupport::TestCase
     assert_equal card[:evidence_by_level][3], card[:evidence],
                  "the at-level list is the assessed level's slice"
     assert_not card[:self_withheld]
+
+    AssessmentLevelRating.find_by(person_id: @report.id, level_ordinal: 4).update!(aligned_frequency: "occasional")
+    agreed = CalibrationSessions::PersonCard.new(session: @session, stats: stats, capability_stable_id: @cap.stable_id)
+    assert_not agreed.for(@report.id)[:ratings_by_level][4][:manager_carried], "agreeing the cell confirmed it"
   end
 
   should "ignore ratings outside the assessed role" do
