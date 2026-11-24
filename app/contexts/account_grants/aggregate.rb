@@ -12,8 +12,9 @@
 # tenant always keeps an admin, so demoting the last one is refused.
 #
 # It also records the person each account is linked to. An account links to
-# one person, a person to one account, and nobody links to a forgotten
-# person. Links held before they were events are recorded as they stand,
+# one person, a person to one account, and nobody links to a person it
+# unlinked as forgotten. A person forgotten with no account left no event
+# here, so the command handler checks their row as well. Links held before they were events are recorded as they stand,
 # even two accounts sharing a person, so an admin can decide.
 #
 class AccountGrants::Aggregate
