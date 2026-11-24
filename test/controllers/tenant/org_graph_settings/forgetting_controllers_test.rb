@@ -59,6 +59,19 @@ class Tenant::OrgGraphSettings::ForgettingControllersTest < ActionDispatch::Inte
       assert_select "#org-graph-forgetting-off"
     end
 
+    should "say nobody is forgotten while the stream alone holds a period of never" do
+      settings.enable_scheduled_forgetting { 1 }
+      ActsAsTenant.with_tenant(@tenant) do
+        TenantSettings::Repository.new.with_settings { it.set_retention_period(nil) }
+      end
+
+      get tenant_org_graph_settings_path
+
+      assert_equal 7, config.retention_years
+      assert_select "#org-graph-forgetting", text: /nobody is forgotten while the period is never/
+      assert_select "#org-graph-forgetting", text: /Each leaver is forgotten/, count: 0
+    end
+
     should "say who turned the schedule on, and a former member once they are forgotten" do
       admin = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant, name: "Ida Admin")) }
       settings.enable_scheduled_forgetting(enabled_by: admin) { 1 }

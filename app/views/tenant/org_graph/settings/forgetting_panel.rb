@@ -73,7 +73,7 @@ class Views::Tenant::OrgGraph::Settings::ForgettingPanel < Views::Base
       plain "Scheduled forgetting is on"
       plain " since #{@settings.enabled_at.to_date.to_fs(:long)}" if @settings.enabled_at
       plain ", when #{enabled_by} turned it on" if @settings.enabled_by
-      plain(years.nil? ? ", but nobody is forgotten while the period is never." : ". Each leaver is forgotten once their date comes.")
+      plain(kept_for_ever? ? ", but nobody is forgotten while the period is never." : ". Each leaver is forgotten once their date comes.")
     end
     settings_form(tenant_org_graph_settings_forgetting_schedule_path, method: :delete) do
       render Components::Kit::Button.new(variant: :outline, tone: :danger, type: :submit, id: "org-graph-forgetting-off") do
@@ -83,6 +83,9 @@ class Views::Tenant::OrgGraph::Settings::ForgettingPanel < Views::Base
   end
 
   def years = @config.retention_years
+
+  # Either place set to never keeps everyone, as TenantRetentionSetting.longer_period does.
+  def kept_for_ever? = years.nil? || @settings.retention_years.nil?
 
   def enabled_by
     person = @settings.enabled_by
