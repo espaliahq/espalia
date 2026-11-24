@@ -56,11 +56,15 @@ class TenantStreams::Reconciliation
     cleared = stream.except(*table.keys)
     cleared = cleared.except(*forgotten(cleared.keys)) if cleared.any?
 
-    differing = table.slice(*stream.keys).select { |key, row| changed?(row, stream.fetch(key)) }
+    differing = table.slice(*stream.keys).filter_map { |key, row| [ key, row, stream[key] ] if changed?(row, stream[key]) }
+    if differing.any?
+      left_alone = forgotten(differing.map(&:first))
+      differing = differing.reject { |key, *| left_alone.include?(key) }
+    end
 
     missing.each { |key, row| record_held(aggregate, key, row) }
     cleared.each { |key, recorded| record_removed(aggregate, key, recorded) }
-    differing.each { |key, row| record_changed(aggregate, key, row, stream.fetch(key)) }
+    differing.each { |key, row, recorded| record_changed(aggregate, key, row, recorded) }
     Report.new(added: missing.size, removed: cleared.size, changed: differing.size)
   end
 
