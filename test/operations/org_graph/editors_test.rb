@@ -164,6 +164,17 @@ class Operations::OrgGraph::EditorsTest < ActiveSupport::TestCase
       assert_not @twin.reload.org_graph_editor?
     end
 
+    should "clear the one account that holds the right, and pass over the one that never had it" do
+      ActsAsTenant.with_tenant(@tenant) { @twin.update!(org_graph_editor: false) }
+
+      call(:RemoveEditor, person_id: @editor.person_id)
+
+      assert_not @editor.reload.org_graph_editor?
+      assert_not @twin.reload.org_graph_editor?
+      removed = grant_events.select { it.event_type.end_with?("Removed") }
+      assert_equal [ @editor.id ], removed.map { it.data[:tenant_user_id] }
+    end
+
     should "write nothing when neither account holds the right, as for a person with one" do
       single = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)) }
 

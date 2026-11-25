@@ -164,6 +164,17 @@ class Operations::TeamPlanning::PlannersTest < ActiveSupport::TestCase
       assert_not @twin.reload.team_planner?
     end
 
+    should "clear the one account that holds the right, and pass over the one that never had it" do
+      ActsAsTenant.with_tenant(@tenant) { @twin.update!(team_planner: false) }
+
+      call(:RemovePlanner, person_id: @planner.person_id)
+
+      assert_not @planner.reload.team_planner?
+      assert_not @twin.reload.team_planner?
+      removed = grant_events.select { it.event_type.end_with?("Removed") }
+      assert_equal [ @planner.id ], removed.map { it.data[:tenant_user_id] }
+    end
+
     should "write nothing when neither account holds the right, as for a person with one" do
       single = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)) }
 
