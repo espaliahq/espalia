@@ -63,12 +63,18 @@ class TenantPlanningInputs::History
   end
 
   # @return [Array<Change>] this page's changes, newest first
-  def changes = all.reverse.slice((page - 1) * PAGE_SIZE, PAGE_SIZE) || []
+  def changes = newest_first.slice((page - 1) * PAGE_SIZE, PAGE_SIZE) || []
 
   # @return [Boolean] whether an older page follows
   def next_page? = all.size > page * PAGE_SIZE
 
   private
+
+  # By `at`, not stream order: reconcile records a row at its own last change,
+  # which can be earlier than a change the stream already holds.
+  def newest_first
+    @newest_first ||= all.each_with_index.sort_by { |change, position| [ -change.at.to_r, -position ] }.map(&:first)
+  end
 
   def all
     @all ||= begin
