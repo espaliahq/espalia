@@ -52,6 +52,18 @@ class PersonDevelopment::SuggestionCommandsTest < ActiveSupport::TestCase
     end
   end
 
+  def table
+    ActsAsTenant.with_tenant(@tenant) do
+      EvidencePlacementSuggestion.order(:id).map { it.attributes.except("created_at", "updated_at") }
+    end
+  end
+
+  def rebuild
+    projection = PersonDevelopment::Projections::EvidenceSuggestions
+    projection.reset!(tenant: @tenant)
+    event_store.read.stream(stream).of_type(projection.handled_events).each { projection.new.call(it) }
+  end
+
   def suggestion_ids = events_of(PersonDevelopment::Events::EvidencePlacementSuggested).map { it.data[:suggestion_id] }
 
   context "suggest_placements" do
@@ -160,6 +172,19 @@ class PersonDevelopment::SuggestionCommandsTest < ActiveSupport::TestCase
       assert_equal "dismissed", aggregate.suggestion_status(collaboration_id)
       assert_nil aggregate.suggestion_status(ownership_id)
       assert_equal 0, suggest(proposal(@ownership, 3))
+    end
+
+    should "leave a table that a rebuild from the stream writes back the same after a collision" do
+      suggest(proposal(@ownership, 3), proposal(@collaboration, 3), proposal(@collaboration, 4))
+      _, collaboration_id, = suggestion_ids
+      with_aggregate { |agg| agg.dismiss_suggestion(collaboration_id, evidence_id: @item.id, dismissed_by_id: @morgan.id) }
+      migrate(@collaboration, @ownership)
+      before = table
+
+      rebuild
+
+      assert_equal 2, before.size
+      assert_equal before, table
     end
   end
 end
