@@ -123,9 +123,7 @@ Evidence and feedback:
       (ADR-18 payload attribution). Present only when the link decision came
       from a suggestion; absent on every other event, historical or not, so
       consumers tolerate nil and no projection needed a CODE_VERSION bump.
-      The suggestion itself is still plain state today (assessments/evidence.md →
-      Suggested placement and valence); it is moving onto this stream as the
-      three events below.
+      The suggestion is recorded by the three events below.
   EvidencePlacementSuggested { suggestion_id, evidence_id, capability_stable_id,
                                level_ordinal, valence, confidence, rationale?, provider,
                                model, prompt_version, generated_at, already_held,
@@ -133,14 +131,31 @@ Evidence and feedback:
   EvidencePlacementSuggestionsSuperseded { evidence_id, suggestion_ids }
   EvidencePlacementSuggestionDismissed { suggestion_id, evidence_id, dismissed_by_id?,
                                          reason?, dismissed_at, already_held }
-    ← LOADED, NOT YET WRITTEN. A release loads these before any release writes
-      them, so the release still serving during the deploy that starts writing
-      them can load the stream ([#539](https://github.com/espaliahq/espalia/issues/539)
-      c3). The aggregate tracks each suggestion's status: a link event's
-      via_suggestion_id marks it accepted, even when the link comes first, and
-      a decision is final, so no later event reopens or flips it. status, decided_by_id and
-      decided_at appear only with already_held, on a suggestion recorded from
-      the table.
+    ← Evidence::SuggestPlacementsJob writes the first two through
+      suggest_placements: it supersedes the pending set in one event, then
+      writes one Suggested per cell, reusing a superseded suggestion's id
+      when the model proposes its cell again. A cell someone decided on is
+      never proposed again, and a run that stores nothing writes nothing.
+    ← A dismissal is dismiss_suggestion. Accepting writes no suggestion
+      event: a link event's via_suggestion_id marks it accepted, even when
+      the link comes first, and a decision is final, so no later event
+      reopens or flips it. The aggregate refuses to decide one that is no
+      longer open ("this suggestion was already …").
+    ← A FrameworkVersionMigrated moves suggestions onto the survivor; where
+      the item already has one at the survivor's cell, SuggestionCollision
+      picks the one that stays, and a dismissal wins over an open one.
+    ← already_held marks a suggestion recorded from the table the release
+      before wrote directly ([#539](https://github.com/espaliahq/espalia/issues/539)
+      c3). status, decided_by_id (a person_id) and decided_at appear only
+      with it. Until c5 every suggestion command first catches the stream up
+      with the table, under that release's locks
+      (PersonDevelopment::SuggestionWrites), and events:reconcile does the
+      same for every stream (PersonDevelopment::SuggestionReconciliation).
+
+  Read model (EvidenceSuggestions): evidence_placement_suggestions, one row
+  per suggestion keyed by suggestion_id; accepted or edited is derived from
+  the link's valence against the suggested one.
+
   EvidenceUpdated { evidence_id, title?, content, evidence_type, custom_type_label?,
                     external_reference?, edited_by_id }
   EvidenceWithdrawn { evidence_id, reason, withdrawn_by_id }

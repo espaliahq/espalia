@@ -24,7 +24,8 @@
 #   @option data [Boolean] :already_held true when recorded from a suggestion made before suggestions were events
 #   @option data [String, nil] :status only with already_held: the row's status when recorded,
 #     one of EvidencePlacementSuggestion::STATUSES other than "dismissed"
-#   @option data [String, nil] :decided_by_id only with already_held: who accepted it, when no link names it
+#   @option data [String, nil] :decided_by_id only with already_held: the person_id of who accepted it, when no
+#     link names it
 #   @option data [String, nil] :decided_at only with already_held: ISO 8601 time it was accepted
 #
 class PersonDevelopment::Events::EvidencePlacementSuggested < RubyEventStore::Event

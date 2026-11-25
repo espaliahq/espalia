@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 # Turns down a placement suggestion, with an optional reason. A dismissed
-# cell is never suggested for that item again. Dismissals are not activity
-# entries: nothing about the person's evidence changed.
+# cell is never suggested for that item again. The dismissal shows in the
+# assessment's activity and the link's thread, to whom
+# {Assessments::SuggestionDismissalVisibility} allows.
 #
 # Write — :mcp_client approval; authorised by {EvidencePolicy#add_link?},
 # the same people who could have accepted it.
@@ -25,11 +26,17 @@ class Operations::Assessments::DismissEvidenceSuggestion < Operations::Base
 
   # @return [Hash] the dismissed suggestion
   def perform
-    EvidencePlacementSuggestion.transaction do
-      suggestion.lock!
-      ensure_pending!
-      suggestion.decide!(status: "dismissed", by: context.person, reason: params[:reason])
+    dismissed = PersonDevelopment::SuggestionWrites.with_caught_up(evidence_item.person_id, evidence_item.framework_id,
+                                                       evidence_ids: [ evidence_item.id ]) do |aggregate|
+      next unless suggestion.reload.pending?
+
+      aggregate.dismiss_suggestion(suggestion.id, evidence_id: evidence_item.id, dismissed_by_id: context.person.id,
+                                   reason: params[:reason].presence)
+      true
     end
-    suggestion_payload(suggestion, capability_names([ suggestion ]))
+    ensure_pending! unless dismissed
+    suggestion_payload(suggestion.reload, capability_names([ suggestion ]))
+  rescue PersonDevelopment::Aggregate::CommandError => e
+    raise Operations::Base::ParameterError, e.message
   end
 end

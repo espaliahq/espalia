@@ -1,15 +1,16 @@
 # frozen_string_literal: true
 
 # A cell (capability × level) and valence the model proposes for a piece of
-# feedback, until a person decides. Written directly today; the development
-# stream already loads the suggestion events a later release will write
-# instead ([#539](https://github.com/espaliahq/espalia/issues/539) c3). An
-# accepted suggestion becomes an EvidenceLinkAdded or EvidenceLinkRevalenced
+# feedback, until a person decides. The
+# `person_development/evidence_suggestions` projection writes it from the
+# development stream ([#539](https://github.com/espaliahq/espalia/issues/539)
+# c3). An accepted suggestion is an EvidenceLinkAdded or EvidenceLinkRevalenced
 # carrying `via_suggestion_id`.
 #
-# One row per evidence × cell. Regenerating supersedes the pending set and
-# reuses a superseded row when the model proposes the same cell again; a cell
-# someone dismissed is never proposed again.
+# One row per evidence × cell, keyed by the suggestion's id. Regenerating
+# supersedes the pending set and reuses a superseded suggestion when the model
+# proposes the same cell again; a cell someone decided on is never proposed
+# again.
 class EvidencePlacementSuggestion < ApplicationRecord
   STATUSES = %w[pending accepted edited dismissed superseded].freeze
   DECIDED_STATUSES = %w[accepted edited dismissed].freeze
@@ -42,18 +43,6 @@ class EvidencePlacementSuggestion < ApplicationRecord
 
   # @return [Array(String, Integer)] the cell as the evidence diff keys it
   def cell = [ capability_stable_id, level_ordinal ]
-
-  # Records a person's decision. Callers authorise first.
-  #
-  # @param status [String] one of DECIDED_STATUSES
-  # @param by [Person]
-  # @param reason [String, nil] why it was dismissed
-  # @return [void]
-  def decide!(status:, by:, reason: nil)
-    raise ArgumentError, "not a decision: #{status}" unless DECIDED_STATUSES.include?(status)
-
-    update!(status: status, decided_by_id: by.id, decided_at: Time.current, dismiss_reason: reason.presence)
-  end
 
   # @param evidence_ids [Array<String>]
   # @return [Hash{String => Array<EvidencePlacementSuggestion>}] pending rows

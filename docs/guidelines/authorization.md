@@ -248,10 +248,8 @@ the tenant's `TenantAccountGrants` stream (`tenant-{id}/TenantAccountGrants`):
 `PlannerRemoved`. Each names the account, its person, the date it took effect
 and who gave or took back the grant. Holders are keyed by account, so a person
 who comes back with a new account starts without the old one's grants.
-Every grant is also linked into the old `AccountGrants` stream. Both releases
-read that stream without the lock while a deploy is under way, as it is the one
-complete stream. [#539](https://github.com/espaliahq/espalia/issues/539) stops
-the linking and moves those reads to the new stream together.
+The stream used to be `AccountGrants`. Its events are linked into the new
+stream under the lock, and nothing is linked back.
 
 The `account_grants/account_flags` projection writes
 `TenantUser#org_graph_editor` and `TenantUser#team_planner` from those events,
@@ -287,8 +285,6 @@ The aggregate refuses to demote the last admin, counting only live accounts.
 Before each change it records any role the table holds and the stream
 doesn't, so an account a factory or the previous release wrote is counted
 too. `events:reconcile` does the same for every account at deploy.
-Role events stay out of the old `AccountGrants` stream, since the previous
-release has no class to load them.
 
 An account's link to its person lives there too. `AccountLinkedToPerson`
 names the account, the person, how they were matched (`sign_in`,
@@ -299,8 +295,18 @@ from them. Link through `TenantUser#link_to!`, never by writing the column.
 The aggregate refuses an account already linked, a person another account
 holds and a forgotten person. Forgetting unlinks the person's accounts
 through `AccountGrants::CommandHandler#unlink_forgotten` before it erases
-them. The `account_links` reconciler records links the table holds and the
-stream doesn't, as it does for roles, and logs any person two accounts share.
+them, recording first any link only the table holds. The `account_links`
+reconciler records links the table holds and the stream doesn't, as it does
+for roles, and logs any person two accounts share.
+
+Such a person can lose a right but not gain one ([#562](https://github.com/espaliahq/espalia/issues/562)).
+The add tools for planners and editors refuse them, as `SetAccountRole` does.
+The remove tools take the right from every linked account, an admin's too, so
+a later demotion can't bring it back. `AccountGrants::CommandHandler#remove_from_person`
+reads the accounts under the grants lock and clears them in one transaction.
+They refuse only a person whose accounts are all admins and carry no grant.
+`Operations::PersonAccounts` finds the accounts for these four and for
+`SetAccountRole`.
 
 `org_graph_editors`, `team_planning_planners` and their add and remove tools
 give each holder `since`, `added_by` and `already_held` from the stream. Editor

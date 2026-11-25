@@ -35,6 +35,8 @@ evidence_items:
     - lib/tasks/evidence_suggestions_eval.rb
 evidence_links:
   owner: person_development/evidence_collection
+evidence_placement_suggestions:
+  owner: person_development/evidence_suggestions
 evidence_requests:
   owner: person_development/evidence_requests
 person_development_comments:
@@ -226,8 +228,8 @@ tenants:
     - pay_bands_changed_at
   reason: >-
     The tenant's configuration and operational stamps. The pay band stamp is written from the
-    TenantPlanningInputs stream. Retention and scheduled forgetting are also written here, beside
-    tenant_retention_settings, until Track C of https://github.com/espaliahq/espalia/issues/539 drops the old keys.
+    TenantPlanningInputs stream. The tenant settings commands remove the retention keys the stream
+    replaced, which the previous release writes back while a deploy is in flight.
   writers:
     - app/contexts/org_graph/people_cutover.rb
     - app/contexts/org_graph/person_development_cutover.rb
@@ -304,13 +306,6 @@ hris_unit_parent_proposals:
   reason: Each sync rebuilds them from what the HRIS reports; a to-do list, not a record.
   writers:
     - app/integrations/hris/level_mirror.rb
-evidence_placement_suggestions:
-  owner: plain
-  reason: AI output until someone accepts one, and accepting writes evidence through events.
-  writers:
-    - app/controllers/concerns/evidence_diff_submit.rb
-    - app/jobs/evidence/suggest_placements_job.rb
-    - app/models/evidence_placement_suggestion.rb
 feedback_drafts:
   owner: plain
   reason: A draft lives until the Slack modal submits it.

@@ -24,7 +24,7 @@ class PayBand < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
-  belongs_to :updated_by, class_name: "User", optional: true
+  self.ignored_columns += %w[updated_by_id]
 
   normalizes :location, with: ->(location) { known_spelling(location.to_s.squish) }, apply_to_nil: true
   normalizes :currency, with: Currency::NORMALIZE
@@ -66,20 +66,6 @@ class PayBand < ApplicationRecord
 
   # @return [ActiveRecord::Relation<OrgFactPeriod>] each person's site in effect today, not one scheduled
   def self.current_sites = OrgFactPeriod.current.in_effect_on(Date.current).where(subject_type: "person", fact: "site")
-
-  # Runs the block in a transaction that holds the tenant's band list. The
-  # previous release takes it before writing any band, and every planning
-  # input command takes it before the stream's lock, so the two releases
-  # never write the list at once while a deploy is under way.
-  #
-  # @param tenant_id [String]
-  # @return [Object] the block's value
-  def self.with_list_lock(tenant_id)
-    transaction do
-      connection.execute(sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "pay_bands:#{tenant_id}" ]))
-      yield if block_given?
-    end
-  end
 
   # Takes the level and copies its names, so the band still reads once the
   # level leaves the framework.

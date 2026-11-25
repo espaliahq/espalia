@@ -150,6 +150,23 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       assert_includes html, "Growth area (was Demonstrates) · from a suggestion"
     end
 
+    should "say a suggestion was accepted when it kept the link's valence" do
+      html = render_entry(kind: "evidence_suggestion_accepted",
+        payload: { actor_name: "Ada", valence: "demonstrated", previous_valence: "demonstrated",
+                   via_suggestion_id: SecureRandom.uuid_v7, evidence_title: "Launch" })
+      assert_includes html, "Ada accepted the suggested placement of “Launch” on"
+      assert_includes html, "Demonstrates"
+      refute_includes html, "was"
+    end
+
+    should "say a suggestion was dismissed, with the reason as plain words" do
+      html = render_entry(kind: "evidence_suggestion_dismissed",
+        payload: { actor_name: "Ada", evidence_title: "Launch", reason: "See [the doc](https://example.com)" })
+      assert_includes html, "Ada dismissed the suggested placement of “Launch” on"
+      assert_includes html, "See the doc"
+      refute_includes html, "[the doc]"
+    end
+
     should "say nothing when the person chose the cell themselves" do
       html = render_entry(kind: "evidence_linked", payload: { actor_name: "Ada", valence: "demonstrated" })
       refute_includes html, "from a suggestion"

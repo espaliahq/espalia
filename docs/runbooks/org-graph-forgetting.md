@@ -39,9 +39,9 @@ The schedule ships off for every tenant. `OrgGraph::ForgetDueLeaversJob` runs da
    bin/rails "org_graph:forgetting:dry_run[<tenant id>]"
    ```
 
-   A tenant admin can run it through the `tenants_forgetting_dry_run` MCP tool too. It prints the count and the person ids due today. Look up a few ids in a console if the number surprises you.
+   A tenant admin can run it through the `tenants_forgetting_dry_run` MCP tool too. It prints the count and the person ids due today, and how many are held back as the only admin (below). Look up a few ids in a console if the number surprises you.
 3. Turn it on with that count. A tenant admin calls `tenants_enable_scheduled_forgetting` with `confirm_count` set to the dry run's number. If the number has moved since, the call is refused: run the dry run again. The tenant records when it was turned on and by whom.
-4. The next run logs `[OrgGraph::Forgetting] scheduled tenant=<id> reason=retention count=<n> person_ids=…`.
+4. The next run logs `[OrgGraph::Forgetting] scheduled tenant=<id> reason=retention count=<n> held_back=<n> person_ids=…`.
 
 `tenants_disable_scheduled_forgetting` turns it off. A run already going stops before the next person, and anyone already forgotten stays forgotten. A run also reads the retention period afresh for each person, so lengthening it spares anyone it no longer covers. Shortening it, or moving it from never to a number of years, turns the schedule off, since the count it was turned on with no longer holds. Run the dry run again and turn it back on.
 
@@ -49,13 +49,13 @@ The schedule ships off for every tenant. `OrgGraph::ForgetDueLeaversJob` runs da
 
 The period and the schedule are events on the tenant's `TenantSettings` stream, projected to `tenant_retention_settings`, and that row is all a run reads. A tenant with no row reads as seven years, off. The panel shows who turned the schedule on and when, and "a former member" once that admin is forgotten too.
 
-Each change still writes the old keys of `tenants.org_graph_config` as well, though nothing in this release reads them. The release before it, which runs during a deploy, reads that JSON and records what it holds before each of its own commands. A JSON left behind the stream would be written back over it, and could turn back on a schedule an admin had just turned off. Each deploy's `events:reconcile` still records anything a release from before the stream wrote to the JSON alone.
+The old keys of `tenants.org_graph_config` are gone. A migration deletes them, and each settings change removes them again in the same transaction. The release before, which still serves during a deploy, writes them back from the stream with each of its own commands. So any keys left always match the stream: the first change in this release removes them.
 
-[#539](https://github.com/espaliahq/espalia/issues/539) Track C moves off the JSON in two deploys, each gated on the one before:
+[#539](https://github.com/espaliahq/espalia/issues/539) Track C moved off the JSON in two deploys, each gated on the one before:
 
-- **c2** stops reading the JSON and keeps writing it. Deploy it only once c1, which put the settings on the stream, serves on every web and worker instance.
-- **c2b** stops writing the JSON, removes the reconciler and deletes the keys. Deploy it only once c2 serves everywhere.
-- **Once c2b is deployed, don't roll back to c1.** c1's commands would record the missing keys as the defaults: seven years, off, with any "never" lost. Roll back to c2 instead. Its reconciler records nothing from a JSON holding none of the keys, and its commands write them all back.
+- **c2** stopped reading the JSON and kept writing it, once c1, which put the settings on the stream, served on every web and worker instance.
+- **c2b** stopped writing the JSON, removed the reconciler and deleted the keys, once c2 served everywhere.
+- **Once c2b is deployed, NO rollback to c1.** c1 reads the JSON alone, and would read the missing keys as the defaults: seven years, off, with any "never" lost. Roll back to c2 instead. Every c2b settings command removes the keys in the same transaction as its events. So a tenant that still has keys has run no c2b command since c2 wrote them, and they equal the stream. Its reconciler then records nothing new: not from a JSON holding none of the keys, and not from keys that match.
 
 A run holds the stream's lock shared, then the tenant row, for each person. A change from either release waits for that person to finish, or the run sees it before the next one.
 
@@ -71,6 +71,17 @@ bin/rails "org_graph:forgetting:forget[<tenant id>,<person id>,<admin's tenant u
 - A leaver whose retention period has not ended is refused unless you add `BEFORE_DUE=1`. The event then records `reason: request` and the admin's tenant user id.
 - A leaver the HRIS still shows as active, such as a rehire who hasn't started yet, is refused.
 - Running it twice is safe: the second run prints `was already forgotten`.
+- A leaver who holds the only admin account is refused (below).
+
+## Held back: the only admin
+
+Forgetting erases a person's accounts, so it refuses anyone whose accounts hold every admin the tenant has. Otherwise nobody would be left to run the organisation. A tenant with no admin at all forgets as before.
+
+- **A scheduled run** carries on past them and counts them as `held_back`. It reports a warning with the tenant id and that count, never an id. They stay due, so the warning comes back every day until it's fixed.
+- **The dry run** counts them the same way, taking leavers in the run's order. Two due admins and no other admin give a count of one and one held back. The confirm count leaves them out. The dry run assumes everyone before them is forgotten, so if the first admin's erase fails that day, the run forgets the second instead of holding them back.
+- **A manual forget** refuses with "This person holds the organisation's only admin account. Make someone else an admin, then forget them."
+
+The refusal rolls back the whole erase, so the person is untouched. To clear it, ask a tenant admin to make someone else an admin. The next run forgets them.
 
 ## If a run fails
 
@@ -78,6 +89,7 @@ Each person is one transaction: the row, the membership, the notifications, thei
 
 - **The HRIS can't be reached**: nobody in that tenant is forgotten that day. The error is reported and the other tenants carry on.
 - **The key is missing**: the job fails before touching any tenant.
+- **A leaver holds the only admin account**: they're held back and the rest carry on. See *Held back: the only admin*.
 
 ## Restoring from a backup
 

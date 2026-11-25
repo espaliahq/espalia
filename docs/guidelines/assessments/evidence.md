@@ -553,14 +553,24 @@ Rules, all deliberate:
   later. Effort "Don't send" is for models that reject the parameter (Claude
   Haiku 4.5, say). Writes are web-only; the MCP surface is the read-only
   `integrations_ai_model_status`.
-- **Suggestions are state, decisions are events.** `EvidencePlacementSuggestion`
-  is a plain tenant table, one row per item × cell, recording provider, model,
-  prompt version and confidence. Accepting goes through
+- **Suggestions and decisions are events.** Each suggestion lives on the
+  person's development stream, recording provider, model, prompt version and
+  confidence; the `person_development/evidence_suggestions` projection writes
+  `EvidencePlacementSuggestion`, one row per item × cell, keyed by the
+  suggestion's id. Dismissing writes `EvidencePlacementSuggestionDismissed`
+  with an optional reason. The dismissal is an Evidence entry in the
+  activity feed, on the suggestion's cell with the reason as its secondary
+  line, and a row in that cell's link thread when the item is linked there.
+  The viewers who see the whole assessment and the person who dismissed it
+  see both; no other peer sees either. `Assessments::SuggestionDismissalVisibility`
+  holds that rule, and both queries call it. Accepting goes through
   `Operations::Assessments::AcceptEvidenceSuggestion`, which publishes
   `EvidenceLinkAdded` — or `EvidenceLinkRevalenced` when someone linked the
-  cell meanwhile — carrying `via_suggestion_id`. The feed's secondary line
-  then says "from a suggestion". Dismissals keep an optional reason and are
-  not feed entries.
+  cell meanwhile, even to the same valence — carrying `via_suggestion_id`.
+  The feed's secondary line then says "from a suggestion"; a revalence that
+  kept the valence reads "Accepted the suggested placement of …". The events and their
+  rules are in
+  [person-development-aggregate.md](../../architecture/person-development-aggregate.md).
 - **Who decides: `EvidencePolicy#add_link?`** — the recipient, their manager
   chain, a rating delegate and the author. For self feedback the author is
   the recipient, so the person decides on their own words. Plan decision D5 may narrow it to
@@ -582,16 +592,22 @@ Rules, all deliberate:
   `role="status"` line beside it; nothing reloads. "Adjust in the editor"
   opens the evidence modal with every pending suggestion staged as an
   "Applies to" row (`suggestions=pending`, valence preselected, "Suggested —
-  rationale" note); on save a kept row is accepted and recorded as
-  **edited**, and a removed one dismissed ("Removed while adjusting"). The
+  rationale" note); on save a kept row is accepted, and a removed one
+  dismissed ("Removed while adjusting"). The
   staged cells are checked against the role before any write, so a cell the
-  framework dropped refuses the whole save rather than half of it. Accept
-  outside the editor records **accepted**, or **edited** when the person
-  chose a different valence. "Suggest again" enqueues at most one run per
+  framework dropped refuses the whole save rather than half of it. Either way
+  an accept reads **accepted**, or **edited** when the person chose a
+  different valence. "Suggest again" enqueues at most one run per
   item a minute: every run is a paid model call.
-- **One run per item at a time.** The job takes a Postgres advisory lock on
-  the item before superseding and storing, and stores nothing if the
-  feedback was edited while the model answered; the edit's own run follows.
+- **One run per item at a time.** Every suggestion command, the job's
+  included, runs in `PersonDevelopment::SuggestionWrites`: a Postgres
+  advisory lock on the item, then the person's suggestion rows, then the
+  command, retried in a savepoint if another command for the person stored
+  first. The job stores nothing if the feedback was edited while the model
+  answered; the edit's own run follows. Until
+  [#539](https://github.com/espaliahq/espalia/issues/539) c5 these are also
+  the locks the release before took, and the command first records on the
+  stream what that release wrote to the table.
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; a placement notifier would hook in
   there.

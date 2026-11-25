@@ -72,7 +72,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
           e.message
         end
       end
-      assert_waiting_for_list(pids, second)
+      assert_waits_for_a_lock(pids, second)
     end
 
     assert_match "has changed since you read it", second.value
@@ -90,14 +90,59 @@ class PayBandLockingTest < ActiveSupport::TestCase
           any_band("Lemuria")
         end
       end
-      assert_waiting_for_list(pids, added)
+      assert_waits_for_a_lock(pids, added)
     end
 
     added.join
     assert_equal [ 1, 2, 3, 4 ], PayBand.order(:position).pluck(:position)
   end
 
+  # The release a4 replaces takes the list lock and then the stream lock; a4
+  # takes the stream lock alone, so the two can serve side by side.
+  context "a command beside the previous release" do
+    should "not wait for a holder of the list lock alone" do
+      holding(-> { take_lock(list_lock_key) }) do
+        added = Thread.new do
+          on_another_connection do |connection|
+            connection.execute("SET LOCAL lock_timeout = '2s'")
+            any_band("Lemuria")
+          end
+        rescue ActiveRecord::LockWaitTimeout
+          :blocked
+        end
+
+        assert_kind_of PayBand, added.value
+      end
+    end
+
+    should "wait for a holder of both locks and finish once it commits" do
+      added = nil
+
+      holding(-> { take_lock(list_lock_key) && take_lock(stream_lock_key) }) do
+        pids = Queue.new
+        added = Thread.new do
+          on_another_connection do |connection|
+            pids << connection.select_value("SELECT pg_backend_pid()")
+            any_band("Lemuria")
+          end
+        end
+        assert_waits_for_a_lock(pids, added)
+      end
+
+      assert_kind_of PayBand, added.value
+      assert_equal 4, PayBand.count
+    end
+  end
+
   private
+
+  def list_lock_key = "pay_bands:#{@tenant.id}"
+
+  def stream_lock_key = TenantPlanningInputs::Repository.new.send(:lock_key, @tenant)
+
+  def take_lock(key)
+    PayBand.connection.execute(PayBand.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key ]))
+  end
 
   def any_band(location)
     save_planning_input!(:pay_bands, PayBand.new(location:, currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2).tap { it.match_on })
@@ -134,14 +179,14 @@ class PayBandLockingTest < ActiveSupport::TestCase
 
   # Polls until the worker's backend waits on an advisory lock, so the test
   # proves contention rather than a worker that simply hadn't started.
-  def assert_waiting_for_list(pids, worker, within: 5)
+  def assert_waits_for_a_lock(pids, worker, within: 5)
     pid = pids.pop(timeout: within) or flunk "the worker never reported its connection"
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + within
     waiting = PayBand.sanitize_sql_array([ "SELECT 1 FROM pg_locks WHERE pid = ? AND locktype = 'advisory' AND NOT granted", pid ])
     # Uncached, or the query cache answers every poll with the first one's miss.
     until PayBand.uncached { PayBand.connection.select_value(waiting) }
-      flunk "the worker finished while the list was held" unless worker.alive?
-      flunk "the worker never waited for the list: #{activity(pid)}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      flunk "the worker finished while the lock was held" unless worker.alive?
+      flunk "the worker never waited for the lock: #{activity(pid)}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
       sleep 0.02
     end
   end

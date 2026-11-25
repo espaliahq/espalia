@@ -71,15 +71,39 @@ class Operations::Assessments::EvidenceSuggestionOperationsTest < ActiveSupport:
       assert_equal [ "demonstrated", @suggestion.id ], [ event.data[:valence], event.data[:via_suggestion_id] ]
     end
 
-    should "leave no link behind when the decision cannot be recorded" do
-      broken = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find(@suggestion.id) }
-      broken.define_singleton_method(:decide!) { |**| raise ActiveRecord::RecordInvalid }
-      EvidencePlacementSuggestion.stub(:find, ->(_) { broken }) do
-        assert_raises(ActiveRecord::RecordInvalid) do
-          run_op(Operations::Assessments::AcceptEvidenceSuggestion, as: @morgan, suggestion_id: @suggestion.id)
+    should "store once after losing a race for the stream" do
+      store = Rails.configuration.event_store
+      publish = store.method(:publish)
+      lost = 0
+      race = ->(*args, **kwargs) {
+        if kwargs[:expected_version] && lost.zero?
+          lost += 1
+          raise RubyEventStore::WrongExpectedEventVersion
         end
+        publish.call(*args, **kwargs)
+      }
+      store.stub(:publish, race) do
+        run_op(Operations::Assessments::AcceptEvidenceSuggestion, as: @morgan, suggestion_id: @suggestion.id)
       end
-      ActsAsTenant.with_tenant(@tenant) { assert_empty EvidenceLink.active.where(evidence_id: @item.id) }
+
+      assert_equal 1, lost
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal 1, EvidenceLink.active.where(evidence_id: @item.id).count
+        assert_equal "accepted", @suggestion.reload.status
+      end
+    end
+
+    should "record what the release before wrote, then refuse it" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @suggestion.update!(status: "dismissed", decided_by_id: @alex.id, decided_at: Time.current, dismiss_reason: "Not this")
+      end
+      assert_raises(Operations::Base::ParameterError) do
+        run_op(Operations::Assessments::AcceptEvidenceSuggestion, as: @morgan, suggestion_id: @suggestion.id)
+      end
+      dismissal = Rails.configuration.event_store.read
+        .stream(EventStreamNaming.person_development_stream(@alex.id, @framework_id, tenant: @tenant))
+        .of_type([ PersonDevelopment::Events::EvidencePlacementSuggestionDismissed ]).to_a.sole
+      assert_equal [ @suggestion.id, true ], dismissal.data.values_at(:suggestion_id, :already_held)
     end
 
     should "refuse someone who may not place this feedback" do
@@ -90,7 +114,7 @@ class Operations::Assessments::EvidenceSuggestionOperationsTest < ActiveSupport:
     end
 
     should "refuse a suggestion already decided" do
-      ActsAsTenant.with_tenant(@tenant) { @suggestion.decide!(status: "dismissed", by: @alex) }
+      ActsAsTenant.with_tenant(@tenant) { @suggestion.update!(status: "dismissed", decided_by_id: @alex.id, decided_at: Time.current) }
       err = assert_raises(Operations::Base::ParameterError) do
         run_op(Operations::Assessments::AcceptEvidenceSuggestion, as: @alex, suggestion_id: @suggestion.id)
       end

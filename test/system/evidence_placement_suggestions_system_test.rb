@@ -76,6 +76,22 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
   end
 
   { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
+    should "show a dismissal and its reason in the assessment's activity, on #{name}" do
+      page.driver.browser.manage.window.resize_to(*size)
+      open_hub
+      accept_and_dismiss
+
+      visit "#{assessment_path(@assignment)}?activity=open"
+      within("#assessment-activity-pane") do
+        assert_text "Alex Chen dismissed the suggested placement of feedback on Collaboration"
+        assert_text "This is about the incident, not teamwork"
+      end
+      assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"),
+        "the activity entry must fit the viewport"
+    end
+  end
+
+  { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
     should "show a decision model's suggestion as its confidence alone, on #{name}" do
       page.driver.browser.manage.window.resize_to(*size)
       ActsAsTenant.with_tenant(@tenant) do
@@ -164,7 +180,7 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
     click_selector_with_js_fallback("form[action='/evidence_items/#{@item.id}'] button[type='submit']",
                                     expect_text: "Feedback updated.")
     ActsAsTenant.with_tenant(@tenant) do
-      assert_equal "edited", @ownership_suggestion.reload.status
+      assert_equal "accepted", @ownership_suggestion.reload.status
       assert_equal "dismissed", @collaboration_suggestion.reload.status
     end
   end
