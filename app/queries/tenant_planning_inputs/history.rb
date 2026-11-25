@@ -25,7 +25,8 @@ class TenantPlanningInputs::History
   }.freeze
 
   # The table each event writes, and what it does to its row. nil means
-  # added when the row is new and changed when it isn't.
+  # added when the row is new and changed when it isn't. The history skips an
+  # event missing here rather than fail; history_test keeps the two in step.
   WRITES = {
     Events::PayBandAdded => [ :pay_bands, :added ],
     Events::PayBandChanged => [ :pay_bands, :changed ],
@@ -73,7 +74,9 @@ class TenantPlanningInputs::History
     @all ||= begin
       rows = {}
       events.filter_map do |event|
-        table, change = WRITES.fetch(event.class)
+        next unless WRITES.key?(event.class)
+
+        table, change = WRITES[event.class]
         change = fold(rows, table, change, event)
         change if @tables.include?(change.table)
       end
