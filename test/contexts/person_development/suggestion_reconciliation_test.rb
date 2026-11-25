@@ -91,6 +91,22 @@ class PersonDevelopment::SuggestionReconciliationTest < ActiveSupport::TestCase
     assert_equal before, table
   end
 
+  should "keep the status a row carries when its link reached the stream first" do
+    [ @edited, @superseded ].each do |row|
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.add_evidence_link(@alex.id, @framework_id, row.evidence_id,
+          capability_stable_id: @collaboration.stable_id, level_ordinal: 4, linked_by_id: @morgan.id,
+          valence: "demonstrated", via_suggestion_id: row.id)
+      end
+    end
+    reconcile
+    before = table
+
+    assert_equal %w[accepted superseded], [ @edited, @superseded ].map { aggregate.suggestion_status(it.id) }
+    rebuild
+    assert_equal before, table
+  end
+
   should "catch up a row the stream lacks before a migration collides with it" do
     retiring = ActsAsTenant.with_tenant(@tenant) { written(@other_item, @collaboration, 4, "pending") }
     reconcile
