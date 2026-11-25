@@ -73,9 +73,9 @@ class AccountGrants::CommandHandler
     end
   end
 
-  # Links an account to its person. A link or unlink the previous release
-  # wrote straight to the column, on this account or on another tied to the
-  # person, is recorded first, as reconcile would.
+  # Links an account to its person. Links the stream records to a destroyed
+  # person, or held by a destroyed account, are unlinked first: destroying
+  # either writes no event.
   #
   # @param account [TenantUser]
   # @param person [Person]
@@ -88,8 +88,7 @@ class AccountGrants::CommandHandler
     ActiveRecord::Base.transaction do
       hold_person(person.id)
       @repository.with_grants do |grants|
-        ([ account.id ] | TenantUser.where(person_id: person.id).pluck(:id) | grants.accounts_of(person.id))
-          .each { settle_link(grants, it) }
+        release_destroyed_links(grants, account.id, person.id)
         raise AccountGrants::Aggregate::PersonForgotten, "a forgotten person can't be linked" if forgotten?(person.id)
 
         grants.link_account(tenant_user_id: account.id, person_id: person.id, effective_on: today,
@@ -99,9 +98,11 @@ class AccountGrants::CommandHandler
   end
 
   # Unlinks every account linked to a person about to be forgotten, in the
-  # table or the stream. Takes the grants lock, so the caller must hold no
-  # tenant_users row yet. The accounts the table links to them are about to
-  # be erased, so it refuses when they hold every admin the tenant has,
+  # table or the stream. A link only the table holds is recorded first, so
+  # its unlink clears the column: erasure leaves no account naming them,
+  # whatever wrote the link. Takes the grants lock, so the caller must hold
+  # no tenant_users row yet. The accounts the table links to them are about
+  # to be erased, so it refuses when they hold every admin the tenant has,
   # counted as {#set_role} counts them.
   #
   # @param person_id [String]
@@ -162,15 +163,14 @@ class AccountGrants::CommandHandler
     end
   end
 
-  # The previous release links and unlinks by writing the column. Record what
-  # it says first, so a command acts on the link the account holds.
-  def settle_link(grants, tenant_user_id)
-    linked = TenantUser.where(id: tenant_user_id).pick(:person_id)
+  def release_destroyed_links(grants, tenant_user_id, person_id)
     recorded = grants.person_of(tenant_user_id)
-    return if linked == recorded
+    if recorded && !Person.unscoped.exists?(recorded)
+      grants.unlink_account(tenant_user_id:, effective_on: today, reason: :cleared)
+    end
 
-    grants.unlink_account(tenant_user_id:, effective_on: today, reason: :cleared) if recorded
-    grants.link_account(tenant_user_id:, person_id: linked, effective_on: today, already_held: true) if linked
+    holders = grants.accounts_of(person_id)
+    (holders - TenantUser.unscoped.where(id: holders).pluck(:id)).each { grants.unlink_account(tenant_user_id: it, effective_on: today, reason: :account_removed) }
   end
 
   def forgotten?(person_id) = Person.unscoped.where(id: person_id).where.not(forgotten_at: nil).exists?
