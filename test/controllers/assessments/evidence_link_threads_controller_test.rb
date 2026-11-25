@@ -147,6 +147,21 @@ class Assessments::EvidenceLinkThreadsControllerTest < ActionDispatch::Integrati
       assert_match "was “Demonstrates”", response.body
     end
 
+    should "show an accepted suggestion that kept the valence, not a valence change" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.set_evidence_link_valence(
+          @assessee.id, @assignment.framework_id, @evidence_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          valence: "demonstrated", changed_by_id: @manager.id, via_suggestion_id: SecureRandom.uuid_v7
+        )
+      end
+
+      sign_in @manager_user
+      get thread_path
+      assert_match "accepted a suggestion to keep this as “Demonstrates”", response.body
+      assert_no_match "changed the valence", response.body
+    end
+
     should "deny a peer (no assessment view) with a redirect" do
       sign_in @peer_user
       get thread_path

@@ -11,8 +11,6 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
 
   setup do
     @tenant = create(:tenant)
-    @tenant.org_graph_config.retention_years = 7
-    @tenant.save!
     ActsAsTenant.current_tenant = @tenant
     OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       .claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")
@@ -188,12 +186,12 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_not @leaver.reload.forgotten?
     end
 
-    should "stop a scheduled run that the previous release turned off" do
+    should "stop a scheduled run that an admin turned off" do
       second = leaver("hb-4", left_on: "2026-09-01")
       settings.enable_scheduled_forgetting { 2 }
       run = forgetting
       due = run.dry_run(on: TODAY).person_ids
-      Tenant.find(@tenant.id).tap { it.org_graph_config.scheduled_forgetting = false }.save!
+      TenantSettings::CommandHandler.new(Tenant.find(@tenant.id)).disable_scheduled_forgetting
 
       report = run.stub(:candidates, due) { run.forget_due(on: TODAY, scheduled: true) }
 
@@ -202,8 +200,8 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_not @leaver.reload.forgotten?
     end
 
-    should "forget nobody on a schedule only the previous release turned on" do
-      Tenant.find(@tenant.id).tap { it.org_graph_config.scheduled_forgetting = true }.save!
+    should "forget nobody on a schedule only a retired JSON key says is on" do
+      Tenant.where(id: @tenant.id).update_all(%(org_graph_config = '{"scheduled_forgetting": true}'))
 
       assert_equal 0, forgetting.forget_due(on: TODAY, scheduled: true).count
       assert_not @leaver.reload.forgotten?

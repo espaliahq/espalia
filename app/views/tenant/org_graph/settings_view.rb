@@ -50,7 +50,7 @@ class Views::Tenant::OrgGraph::SettingsView < Views::Base
           render Views::Tenant::OrgGraph::Settings::EditorsPanel.new(editors: @editors, candidates: @editor_candidates)
           render Views::Tenant::OrgGraph::Settings::FreshnessPanel.new(freshness: @sources[:freshness])
           render Views::Tenant::OrgGraph::Settings::ForgettingPanel.new(
-            config: @current_tenant.org_graph_config, settings: TenantRetentionSetting.for(@current_tenant),
+            settings: TenantRetentionSetting.for(@current_tenant),
             key_set: @forgetting_key_set
           )
         end

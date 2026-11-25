@@ -24,6 +24,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_linked"          => "bg-activity-discussion",
     "evidence_unlinked"        => "bg-activity-cleared",
     "evidence_revalenced"      => "bg-activity-discussion",
+    "evidence_suggestion_accepted" => "bg-activity-discussion",
+    "evidence_suggestion_dismissed" => "bg-activity-cleared",
     "evidence_withdrawn"       => "bg-activity-cleared",
     "alignment_started"        => "bg-activity-attention",
     "alignment_completed"      => "bg-activity-complete",
@@ -56,6 +58,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     "evidence_linked"         => "evidence",
     "evidence_unlinked"       => "evidence",
     "evidence_revalenced"     => "evidence",
+    "evidence_suggestion_accepted" => "evidence",
+    "evidence_suggestion_dismissed" => "evidence",
     "evidence_withdrawn"      => "evidence",
     "alignment_started"       => "alignment",
     "alignment_completed"     => "alignment",
@@ -205,6 +209,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_linked"       then evidence_link_summary("Linked")
     when "evidence_unlinked"     then evidence_link_summary("Unlinked", preposition: "from")
     when "evidence_revalenced"   then evidence_link_summary("Reclassified", preposition: "on")
+    when "evidence_suggestion_accepted" then evidence_link_summary("Accepted the suggested placement of", preposition: "on")
+    when "evidence_suggestion_dismissed" then evidence_link_summary("Dismissed the suggested placement of", preposition: "on")
     when "evidence_withdrawn"    then evidence_withdrawn_summary
     when "alignment_started"     then "Manager started alignment#{role_suffix}"
     when "alignment_completed"   then "Marked alignment#{role_suffix} complete"
@@ -474,10 +480,12 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_relinked", "evidence_linked"
       [ valence_label_or_nil, Prose.to_plain(payload_value(:rationale)).presence, from_suggestion_note ].compact
         .join(" · ").presence
-    when "evidence_unlinked"
+    when "evidence_unlinked", "evidence_suggestion_dismissed"
       Prose.to_plain(payload_value(:reason)).presence
     when "evidence_revalenced"
       [ revalence_secondary, from_suggestion_note ].compact.join(" · ").presence
+    when "evidence_suggestion_accepted"
+      valence_label_or_nil
     when "evidence_withdrawn"
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
       Prose.to_plain(reason).presence

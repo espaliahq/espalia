@@ -139,4 +139,94 @@ class Operations::TeamPlanning::PlannersTest < ActiveSupport::TestCase
 
     assert_equal [ "Pat Planner" ], names(call(:Planners)[:planners])
   end
+
+  context "a person with two accounts, as a link made before links were events can leave" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @twin = create(:tenant_user, tenant: @tenant, role: :member, team_planner: true, person: @planner.person)
+        @lone = create(:tenant_user, tenant: @tenant, role: :member, person: @member.person)
+      end
+    end
+
+    should "refuse the grant and write no event" do
+      error = assert_raises(Operations::Base::ParameterError) { call(:AddPlanner, person_id: @member.person_id) }
+
+      assert_match "more than one account", error.message
+      assert_not @member.reload.team_planner?
+      assert_not @lone.reload.team_planner?
+      assert_empty grant_events
+    end
+
+    should "take the right from both accounts" do
+      call(:RemovePlanner, person_id: @planner.person_id)
+
+      assert_not @planner.reload.team_planner?
+      assert_not @twin.reload.team_planner?
+    end
+
+    should "clear the one account that holds the right, and pass over the one that never had it" do
+      ActsAsTenant.with_tenant(@tenant) { @twin.update!(team_planner: false) }
+
+      call(:RemovePlanner, person_id: @planner.person_id)
+
+      assert_not @planner.reload.team_planner?
+      assert_not @twin.reload.team_planner?
+      removed = grant_events.select { it.event_type.end_with?("Removed") }
+      assert_equal [ @planner.id ], removed.map { it.data[:tenant_user_id] }
+    end
+
+    should "write nothing when neither account holds the right, as for a person with one" do
+      single = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)) }
+
+      assert_equal call(:RemovePlanner, person_id: single.person_id), call(:RemovePlanner, person_id: @member.person_id)
+      assert_empty grant_events
+    end
+
+    should "take the right from an admin account too, so a demotion can't bring it back" do
+      ActsAsTenant.with_tenant(@tenant) { @planner.update!(role: :admin) }
+
+      call(:RemovePlanner, person_id: @planner.person_id)
+
+      assert_not @planner.reload.team_planner?
+      assert_not @twin.reload.team_planner?
+    end
+
+    should "take the right from accounts that are all admins when one still carries it" do
+      ActsAsTenant.with_tenant(@tenant) { [ @planner, @twin ].each { it.update!(role: :admin) } }
+
+      call(:RemovePlanner, person_id: @planner.person_id)
+
+      assert_not @planner.reload.team_planner?
+      assert_not @twin.reload.team_planner?
+    end
+
+    should "refuse when every account is an admin" do
+      ActsAsTenant.with_tenant(@tenant) { [ @member, @lone ].each { it.update!(role: :admin) } }
+
+      assert_raises(Operations::Base::ParameterError) { call(:RemovePlanner, person_id: @member.person_id) }
+      assert_empty grant_events
+    end
+
+    should "clear neither account when removing from the second fails" do
+      build = AccountGrants::Aggregate.method(:new)
+      failing = lambda do
+        build.call.tap do |grants|
+          removals = 0
+          grants.define_singleton_method(:remove) do |*args, **kwargs|
+            raise "second removal failed" if (removals += 1) == 2
+
+            super(*args, **kwargs)
+          end
+        end
+      end
+
+      AccountGrants::Aggregate.stub(:new, failing) do
+        assert_raises(RuntimeError) { call(:RemovePlanner, person_id: @planner.person_id) }
+      end
+
+      assert @planner.reload.team_planner?
+      assert @twin.reload.team_planner?
+      assert_empty grant_events
+    end
+  end
 end

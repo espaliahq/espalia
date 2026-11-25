@@ -22,7 +22,7 @@ class TeamPlanning::PricingInputs
   MODELS = { pay_bands: PayBand, exchange_rates: ExchangeRate, budget_lines: BudgetLine,
              reference_currencies: ReferenceCurrency, planning_rule_defaults: PlanningRuleDefault }.freeze
   # What no copy keeps of a row: whose it is and who last edited it.
-  LEFT_OUT = %w[tenant_id updated_by_id updated_by_person_id].freeze
+  LEFT_OUT = %w[tenant_id updated_by_person_id].freeze
 
   # @param tenant [Tenant]
   # @return [Hash{String => Object}] every row of each model, without who

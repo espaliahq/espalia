@@ -107,7 +107,7 @@ class TeamPlanningFrozenPricesTest < ActiveSupport::TestCase
       "the cost-centre entries" => -> { rule("cost_centre", { entries: [ { cost_centre: "Elsewhere" } ] }) },
       "the open step horizon rule" => -> { rule("open_step_horizon", { months: "6" }) },
       "the budget strictness rule" => -> { rule("budget_strictness", TeamPlanning::RuleKinds::BudgetStrictness::PRESETS.fetch("envelope")) },
-      "a removed band" => -> { PayBand.find_by(level_id: @e6.level_id).destroy! },
+      "a removed band" => -> { remove_planning_inputs!(PayBand.find_by(level_id: @e6.level_id)) },
       "the band order" => -> { reorder_pay_bands!(PayBand.order(:position).pluck(:id).reverse) } }
   end
 

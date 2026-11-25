@@ -21,7 +21,6 @@ class TenantTodayGuardTest < ActiveSupport::TestCase
     app/contexts/org_graph/person_aggregate.rb
     app/controllers/tenant/org_people_controller.rb
     app/integrations/hris/hibob/adapter.rb
-    app/models/org_graph_config.rb
     app/models/pay_band.rb
     app/models/tenant.rb
     app/operations/operations/org_graph/confirm_fact.rb

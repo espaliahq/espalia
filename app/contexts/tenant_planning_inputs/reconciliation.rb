@@ -11,9 +11,6 @@
 # an actor; each names who last changed the row, as `last_changed_by_id`.
 # The rows name no person, so none is ever left alone as forgotten.
 #
-# A command runs it first, through {#catch_up}, so a row the previous
-# release wrote during a deploy is in the stream before the command decides.
-#
 # @example
 #   TenantPlanningInputs::Reconciliation.new(tenant).call
 #   # => #<data Report added=3, removed=0, changed=0>
@@ -24,23 +21,10 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
   # @return [TenantPlanningInputs::Repository]
   def self.repository = TenantPlanningInputs::Repository.new
 
-  # Takes the band list's lock first, as a command does, so the previous
-  # release's band writes wait for the run rather than land under it.
-  #
-  # @return [TenantStreams::Reconciliation::Report]
-  def call = PayBand.with_list_lock(@tenant.id) { super }
-
-  # Records what the table holds that the aggregate doesn't, under the lock
-  # the caller holds.
-  #
-  # @param aggregate [TenantPlanningInputs::Aggregate]
-  # @return [TenantStreams::Reconciliation::Report]
-  def catch_up(aggregate) = reconcile(aggregate)
-
   private
 
-  # Locks the rows it reads, so a change the previous release makes waits
-  # for the run and is recorded by the next, never written over by this one.
+  # Locks the rows it reads, so the projection cannot change one between this
+  # read and the events the run records.
   def held_in_table
     Rows::TABLES.each_key.with_object({}) do |table, held|
       Rows.model(table).where(tenant_id: @tenant.id).lock.find_each { |record| held[[ table, record.id ]] = record }
@@ -78,15 +62,7 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
   end
 
   def as_it_stands(table, record)
-    { updated_at: Rows.time(record.updated_at), last_changed_by_id: editor(record), **band_stamp(table) }
-  end
-
-  # Only the previous release writes `updated_by_id`, and the projection
-  # clears it, so a row that holds one was last changed through it.
-  def editor(record)
-    return record.updated_by_person_id unless record.updated_by_id
-
-    TenantUser.where(tenant_id: @tenant.id, user_id: record.updated_by_id, forgotten_at: nil).pick(:person_id)
+    { updated_at: Rows.time(record.updated_at), last_changed_by_id: record.updated_by_person_id, **band_stamp(table) }
   end
 
   def band_stamp(table)

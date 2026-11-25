@@ -97,11 +97,39 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: planning inputs stop the catch-up, then drop `updated_by_id` ([#539](https://github.com/espaliahq/espalia/issues/539) a4 and a4b), 2026-11-25
+
+No rebuild and no `CODE_VERSION` bump. a4 changes what commands do, not what the projection writes from an event.
+
+**a4** removes the catch-up a command ran before it decided, and the `pay_bands:<tenant>` lock. The models ignore `updated_by_id`. Deploy it only onto a release that holds a1, which went live at 03:27Z on 2026-11-25. While the previous release still serves, it takes the list lock and then the stream lock; a4 takes the stream lock alone, so neither waits on the other in a cycle. The reconciler still runs at steps 2b and 6. A row that still names an account in `updated_by_id` is recorded under that account's person, and the reconciler then clears the column. An account that has been forgotten, or has no membership in the tenant, has no person to record, so the row reads "Changed on" with a date and no name, as the screens show any change no one is named on. We accept that: the account is gone, and naming no one beats naming the wrong person. Only `events:reconcile` names the column, so a4 keeps serving once a4b drops it.
+
+**Before a4b**, once a4 is live, you can check that no row still names an account. This prints one count per table and nothing else:
+
+```bash
+bin/rails runner 'TenantPlanningInputs::Rows::TABLES.each_key { |t| puts "#{t}: #{TenantPlanningInputs::Rows.model(t).where.not(updated_by_id: nil).count}" }'
+```
+
+Every count should be 0. If one isn't, run `bin/rails events:reconcile`: it records each such row under its account's person and clears the column. The count is optional, since a4b's migration counts the same rows and refuses to drop anything while one remains. A refused predeploy leaves a4 serving with the column intact; run `events:reconcile` on a4 and deploy again.
+
+**a4b** drops `updated_by_id`, its foreign keys and its indexes from the five tables. Deploy it only once a4 is live. It also removes the reconciler's read and clearing of the column, the one thing a4 keeps for legacy rows.
+
+**After a4b deploys, never roll back to a4 or a release before it.** Releases before a4 name `updated_by_id` while they serve, and the column is gone. a4 itself serves without it, but its predeploy `events:reconcile` reads the column, so a redeploy of a4 stops at predeploy with a4b still serving. To undo a4b, roll forward with a fix.
+
+#### Recorded: no linking back to `AccountGrants` ([#539](https://github.com/espaliahq/espalia/issues/539) b3), with no bump
+
+No `CODE_VERSION` bump and no `REBUILD_ON_DEPLOY`. `AccountGrants::Repository` stops linking grants back into the old stream and reads `TenantAccountGrants` without the lock. Linking an account no longer records what the column says first.
+
+**Deploy this only onto a release that holds [PR #566](https://github.com/espaliahq/espalia/pull/566), and confirm that release is serving before you start.** An older release reads the old stream without the lock and writes links only to the column, which this one would no longer record before linking.
+
+While the previous release still serves, its editor and planner lists read the old stream, so they miss a grant this release gives or takes back until that release next writes one. Nothing authorizes from those lists. A rollback heals at the previous release's next grant command, which links the missing grants back.
+
 #### Recorded: `account_grants/account_flags` v2 takes the link to a person ([#539](https://github.com/espaliahq/espalia/issues/539) b2), 2026-11-24
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection now also writes `tenant_users.person_id` from `AccountLinkedToPerson` and `AccountUnlinkedFromPerson`. Its reset sets a link the stream records and keeps one it doesn't. A link to a person since destroyed stays as the table has it, which is clear.
 
 The order matters. Step 2b runs the new `account_links` reconciler, which records every live link as `already_held`. Step 3 then rebuilds, and its reset leaves every link where the table has it. The previous release changes a link in only three ways, and a reset between steps 2b and 3 keeps each as the table has it. It links an account with no person, which the stream doesn't record, so the reset keeps it. It erases an account, which marks the account forgotten, and the reset touches only live accounts. And it destroys a person, which clears the column, and the reset finds no person to restore. Step 6 then records each: an erased link as an unlink with reason `forgotten`. No quiet window is needed. One race remains: the previous release's `Person#ensure_user!` saves a link without rereading the account, so if step 2b records another link to that account in between, the reset puts the recorded link back. That release loses one of the two links in this race anyway, and the table and the stream still agree afterwards.
+
+**After any direct fix to `tenant_users.person_id`, run `events:reconcile` before anything links that person.** A link checks the stream, not the column. Until the reconciler records the fix, a link to that person still finds the account the stream names and refuses with `LinkTaken`.
 
 **Deploy this only onto a release that holds [PR #561](https://github.com/espaliahq/espalia/pull/561).** That release loads both link events and ignores them in `AccountFlags`, so it keeps serving while step 2b writes them.
 
@@ -149,9 +177,9 @@ Forgetting the variable is safe. Step 4 finds events for a projection that was n
 
 #### Recorded: `tenant_settings/retention` v1 (retention settings as events, [#539](https://github.com/espaliahq/espalia/issues/539)), 2026-11-24
 
-No variable. The projection is new and the only writer of `tenant_retention_settings`. Step 2b records whatever each tenant's `org_graph_config` holds for retention and scheduled forgetting as `already_held` events with no actor, then adopts the projection, so step 3 has nothing to rebuild. A tenant still at the defaults gets no events and no row, which is what a replay writes. Step 6 records any change the previous release made in between, and a command in the new release records it first too.
+No variable. The projection is new and the only writer of `tenant_retention_settings`. Step 2b records whatever each tenant's `org_graph_config` holds for retention and scheduled forgetting as `already_held` events with no actor, then adopts the projection, so step 3 has nothing to rebuild. A tenant still at the defaults gets no events and no row, which is what a replay writes. Step 6 records any change the previous release made in between, and a command in the new release records it first too. Track C's c2b removed that reconciler and the keys it read, so a deploy from c2b on records nothing at step 2b.
 
-Forgetting with the new release asks both places until c2 drops the JSON keys: a tenant is scheduled only when both say so, by the longer period. So a change that reaches only the JSON can stop forgetting, never start it. See [org-graph-forgetting.md → Where the settings live](org-graph-forgetting.md#where-the-settings-live).
+Forgetting with the new release asks both places until c2 stops reading the JSON: a tenant is scheduled only when both say so, by the longer period. So a change that reaches only the JSON can stop forgetting, never start it. See [org-graph-forgetting.md → Where the settings live](org-graph-forgetting.md#where-the-settings-live).
 
 #### Recorded: `org_graph/structure` v3 (a copied type remembers its source, [#494](https://github.com/espaliahq/espalia/issues/494))
 

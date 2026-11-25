@@ -22,7 +22,7 @@ class Tenant::ExchangeRatesControllerTest < ActionDispatch::IntegrationTest
 
   def stored_rate
     ActsAsTenant.with_tenant(@tenant) do
-      ExchangeRate.create!(from_currency: "NZD", to_currency: "AUD", rate: BigDecimal("0.9"), applies_from: Date.new(2026, 7, 1))
+      add_planning_input!(:exchange_rates, from_currency: "NZD", to_currency: "AUD", rate: BigDecimal("0.9"), applies_from: Date.new(2026, 7, 1))
     end
   end
 
