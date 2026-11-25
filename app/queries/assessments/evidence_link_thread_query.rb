@@ -25,8 +25,9 @@ class Assessments::EvidenceLinkThreadQuery
     PersonDevelopment::Events::EvidenceWithdrawn
   ].freeze
 
-  # One lifecycle row. `kind` is :linked | :revalenced | :removed |
-  # :withdrawn; `valence`/`previous_valence`/`reason` are kind-specific
+  # One lifecycle row. `kind` is :linked | :revalenced | :suggestion_kept |
+  # :removed | :withdrawn (:suggestion_kept is a suggestion accepted with the
+  # valence the link already had); `valence`/`previous_valence`/`reason` are kind-specific
   # and nil otherwise. `actor_name` is resolved from the Person read
   # model and nil when the person no longer resolves.
   Entry = Data.define(:kind, :actor_name, :valence, :previous_valence, :reason, :at)
@@ -114,7 +115,8 @@ class Assessments::EvidenceLinkThreadQuery
     when PersonDevelopment::Events::EvidenceLinkRevalenced
       return nil unless on_cell?(data[:capability_stable_id], data[:level_ordinal])
 
-      [ Entry.new(kind: :revalenced, actor_name: nil, valence: data[:valence],
+      kept = data[:via_suggestion_id].present? && data[:valence] == data[:previous_valence]
+      [ Entry.new(kind: kept ? :suggestion_kept : :revalenced, actor_name: nil, valence: data[:valence],
                   previous_valence: data[:previous_valence], reason: nil, at: at), data[:changed_by_id] ]
     when PersonDevelopment::Events::EvidenceRelinked
       # Historical event (no longer emitted): a relink is remove + add.

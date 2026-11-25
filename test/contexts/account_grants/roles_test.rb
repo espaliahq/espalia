@@ -127,12 +127,10 @@ class AccountGrants::RolesTest < ActiveSupport::TestCase
     end
   end
 
-  should "keep role events out of the old stream the previous release loads" do
+  should "write nothing to the old stream" do
     as_tenant { handler.set_role(@cy, :admin) }
     as_tenant { handler.add(:team_planner, @cy) }
 
-    assert_empty role_events(EventStreamNaming.account_grants_stream(tenant: @tenant))
-    legacy = Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant: @tenant)).to_a
-    assert_equal [ AccountGrants::Events::PlannerAdded ], legacy.map(&:class)
+    assert_empty Rails.configuration.event_store.read.stream(EventStreamNaming.account_grants_stream(tenant: @tenant)).to_a
   end
 end

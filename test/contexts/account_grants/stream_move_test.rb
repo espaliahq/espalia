@@ -2,13 +2,55 @@
 
 require "test_helper"
 
-# Grants move from the AccountGrants stream to TenantAccountGrants while the
-# previous release, which knows only the old stream, may still be serving.
+# Grants moved from the AccountGrants stream to TenantAccountGrants. The
+# previous release still links grant events back into the old stream and
+# reads it without the lock; this one links nothing back.
 class AccountGrants::StreamMoveTest < ActiveSupport::TestCase
   PROJECTION = AccountGrants::Projections::AccountFlags
 
-  # The repository as the previous release had it.
+  # The repository as the previous release has it.
   class PreviousRepository < TenantStreams::Repository
+    LEGACY_EVENTS = [
+      AccountGrants::Events::OrgGraphEditorAdded, AccountGrants::Events::OrgGraphEditorRemoved,
+      AccountGrants::Events::PlannerAdded, AccountGrants::Events::PlannerRemoved
+    ].freeze
+
+    def with_aggregate(&block)
+      ActiveRecord::Base.transaction do
+        super.tap { link_missing(from: stream_name(current_tenant!), to: legacy_stream_name(current_tenant!), only: LEGACY_EVENTS) }
+      end
+    end
+
+    def load_aggregate = @repository.load(new_aggregate, legacy_stream_name(current_tenant!))
+
+    alias with_grants with_aggregate
+
+    private
+
+    def new_aggregate = AccountGrants::Aggregate.new
+
+    def stream_name(tenant) = EventStreamNaming.tenant_account_grants_stream(tenant:)
+
+    def legacy_stream_name(tenant) = EventStreamNaming.account_grants_stream(tenant:)
+
+    def lock_key(tenant) = legacy_stream_name(tenant)
+
+    def lock_stream(tenant)
+      super
+      link_missing(from: legacy_stream_name(tenant), to: stream_name(tenant))
+    end
+
+    def link_missing(from:, to:, only: nil)
+      linked = @event_store.read.stream(to).map(&:event_id).to_set
+      source = @event_store.read.stream(from)
+      source = source.of_type(only) if only
+      missing = source.map(&:event_id).reject { linked.include?(it) }
+      @event_store.link(missing, stream_name: to) if missing.any?
+    end
+  end
+
+  # The repository before the move, which knows only the old stream.
+  class OldStreamRepository < TenantStreams::Repository
     alias with_grants with_aggregate
 
     private
@@ -21,6 +63,7 @@ class AccountGrants::StreamMoveTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
     @previous = AccountGrants::CommandHandler.new(repository: PreviousRepository.new)
+    @old_stream = AccountGrants::CommandHandler.new(repository: OldStreamRepository.new)
     @current = AccountGrants::CommandHandler.new
     as_tenant do
       @ada, @bo, @cy = Array.new(3) { create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant)) }
@@ -39,11 +82,11 @@ class AccountGrants::StreamMoveTest < ActiveSupport::TestCase
 
   def remove(handler, grant, account) = handler.remove(grant, tenant_user_id: account.id, person_id: account.person_id)
 
-  should "link every grant the previous release wrote into the new stream when reconcile runs, in the same order" do
+  should "link every grant written to the old stream into the new stream when reconcile runs, in the same order" do
     as_tenant do
-      @previous.add(:org_graph_editor, @ada)
-      @previous.add(:team_planner, @bo)
-      remove(@previous, :org_graph_editor, @ada)
+      @old_stream.add(:org_graph_editor, @ada)
+      @old_stream.add(:team_planner, @bo)
+      remove(@old_stream, :org_graph_editor, @ada)
     end
     written = old_ids
 
@@ -55,7 +98,7 @@ class AccountGrants::StreamMoveTest < ActiveSupport::TestCase
     assert_equal written, new_ids
   end
 
-  should "keep both streams equal as the two releases take turns, each seeing every grant" do
+  should "see every grant under the lock as the two releases take turns, the old stream growing only as the previous release writes" do
     steps = [
       -> { @previous.add(:org_graph_editor, @ada) },
       -> { @current.add(:team_planner, @bo) },
@@ -64,30 +107,30 @@ class AccountGrants::StreamMoveTest < ActiveSupport::TestCase
       -> { remove(@current, :org_graph_editor, @ada) },
       -> { @previous.add(:team_planner, @ada) }
     ]
+    by_previous = [ 0, 2, 5 ]
 
     steps.each_with_index do |step, index|
       as_tenant { step.call }
 
       as_tenant do
-        AccountGrants::Repository.new.reading_locked do |grants|
-          assert_equal old_ids, new_ids, "the streams differ after step #{index + 1}"
-          assert_equal index + 1, new_ids.size
-          held = AccountGrants::Aggregate::GRANTS.to_h { [ it, grants.holders(it).keys.sort ] }
-          assert_equal held, AccountGrants::Aggregate::GRANTS.to_h { [ it, PreviousRepository.new.load_aggregate.holders(it).keys.sort ] }
-        end
+        held = AccountGrants::Repository.new.reading_locked { |grants| AccountGrants::Aggregate::GRANTS.to_h { [ it, grants.holders(it).keys.sort ] } }
+        previous = PreviousRepository.new.reading_locked { |grants| AccountGrants::Aggregate::GRANTS.to_h { [ it, grants.holders(it).keys.sort ] } }
+        assert_equal previous, held, "the releases differ after step #{index + 1}"
       end
+      assert_equal index + 1, new_ids.size
+      assert_equal new_ids.first(by_previous.select { it <= index }.max.to_i + 1), old_ids, "after step #{index + 1}"
     end
     assert_equal [ [ false, true ], [ false, false ], [ true, false ] ], [ @ada, @bo, @cy ].map { flags(it) }
   end
 
-  should "see a grant the previous release just wrote, before anything links it" do
+  should "read the new stream without the lock, which the previous release's read misses" do
     as_tenant do
       @current.add(:team_planner, @bo)
-      @previous.add(:org_graph_editor, @ada)
 
-      assert AccountGrants::Repository.new.load_grants.holds?(:org_graph_editor, @ada.id)
+      assert AccountGrants::Repository.new.load_grants.holds?(:team_planner, @bo.id)
+      assert_not PreviousRepository.new.load_aggregate.holds?(:team_planner, @bo.id)
     end
-    assert_equal 1, new_ids.size
+    assert_empty old_ids
   end
 
   should "rebuild every flag from the linked stream" do
