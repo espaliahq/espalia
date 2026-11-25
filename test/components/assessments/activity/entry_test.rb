@@ -159,6 +159,14 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       refute_includes html, "was"
     end
 
+    should "say a suggestion was dismissed, with the reason as plain words" do
+      html = render_entry(kind: "evidence_suggestion_dismissed",
+        payload: { actor_name: "Ada", evidence_title: "Launch", reason: "See [the doc](https://example.com)" })
+      assert_includes html, "Ada dismissed the suggested placement of “Launch” on"
+      assert_includes html, "See the doc"
+      refute_includes html, "[the doc]"
+    end
+
     should "say nothing when the person chose the cell themselves" do
       html = render_entry(kind: "evidence_linked", payload: { actor_name: "Ada", valence: "demonstrated" })
       refute_includes html, "from a suggestion"
