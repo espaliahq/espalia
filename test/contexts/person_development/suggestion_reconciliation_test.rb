@@ -63,13 +63,37 @@ class PersonDevelopment::SuggestionReconciliationTest < ActiveSupport::TestCase
     assert_equal 0, reconcile.added
   end
 
+  def rebuild
+    PROJECTION.reset!(tenant: @tenant)
+    event_store.read.stream(stream).of_type(PROJECTION.handled_events).each { PROJECTION.new.call(it) }
+  end
+
   should "leave a table that a rebuild from the stream writes back the same" do
     reconcile
     before = table
 
-    PROJECTION.reset!(tenant: @tenant)
-    event_store.read.stream(stream).of_type(PROJECTION.handled_events).each { PROJECTION.new.call(it) }
+    rebuild
 
+    assert_equal before, table
+  end
+
+  should "catch up a row the stream lacks before a migration collides with it" do
+    retiring = ActsAsTenant.with_tenant(@tenant) { written(@other_item, @collaboration, 4, "pending") }
+    reconcile
+    survivor = ActsAsTenant.with_tenant(@tenant) do
+      written(@other_item, @ownership, 4, "dismissed", decided_by_id: @morgan.id, decided_at: 1.hour.ago)
+    end
+
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.migrate_framework_version(@alex.id, @framework_id, 1, 2, [
+        { from_stable_id: @collaboration.stable_id, to_stable_id: @ownership.stable_id, mapping_type: "evolved" }
+      ])
+    end
+
+    assert_nil aggregate.suggestion_status(retiring.id)
+    assert_equal "dismissed", aggregate.suggestion_status(survivor.id)
+    before = table
+    rebuild
     assert_equal before, table
   end
 end
