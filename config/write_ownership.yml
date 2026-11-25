@@ -277,39 +277,19 @@ mcp_pending_approvals:
 
 pay_bands:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 exchange_rates:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 reference_currencies:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 budget_lines:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 planning_rule_defaults:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 
 # Working data
 

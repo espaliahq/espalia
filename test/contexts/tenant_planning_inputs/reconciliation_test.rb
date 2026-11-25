@@ -55,54 +55,14 @@ class TenantPlanningInputs::ReconciliationTest < ActiveSupport::TestCase
       assert_equal before, everything
     end
 
-    should "record a row an earlier release changed in place, naming the person whose account changed it" do
+    should "record a row an earlier release changed in place, naming the person who changed it" do
       editor = create(:person, tenant: @tenant)
-      user = create(:tenant_user, tenant: @tenant, person: editor).user
-      PayBand.where(id: @first.id).update_all(midpoint: 2.5, updated_at: 1.minute.from_now, updated_by_id: user.id)
+      PayBand.where(id: @first.id).update_all(midpoint: 2.5, updated_at: 1.minute.from_now, updated_by_person_id: editor.id)
 
       assert_equal [ 0, 0, 1 ], reconcile.to_h.values_at(:added, :removed, :changed)
       change = events.last
       assert_instance_of TenantPlanningInputs::Events::PayBandChanged, change
       assert_equal [ @first.id, nil, editor.id ], change.data.values_at(:id, :changed_by_id, :last_changed_by_id)
-      assert_equal editor.id, @first.reload.updated_by_person_id
-      assert_nil PayBand.where(id: @first.id).pick(:updated_by_id)
-    end
-
-    should "record a row that names an account but matches the stream, so none is left to count" do
-      editor = create(:person, tenant: @tenant)
-      user = create(:tenant_user, tenant: @tenant, person: editor).user
-      PayBand.where(id: @first.id).update_all(updated_by_id: user.id)
-
-      assert_equal 1, reconcile.to_h[:changed]
-      assert_equal editor.id, events.last.data[:last_changed_by_id]
-      assert_nil PayBand.where(id: @first.id).pick(:updated_by_id)
-      assert_equal 0, reconcile.to_h[:changed]
-    end
-
-    should "record the editor of an account set by raw SQL and clear the account itself" do
-      editor = create(:person, tenant: @tenant)
-      user = create(:tenant_user, tenant: @tenant, person: editor).user
-      PayBand.connection.execute(PayBand.sanitize_sql_array([ "UPDATE pay_bands SET updated_by_id = ? WHERE id = ?", user.id, @first.id ]))
-
-      reconcile
-
-      assert_equal editor.id, events.last.data[:last_changed_by_id]
-      assert_nil PayBand.connection.select_value(PayBand.sanitize_sql_array([ "SELECT updated_by_id FROM pay_bands WHERE id = ?", @first.id ]))
-    end
-
-    should "leave the account in place when a command changes the row, since only reconcile names the column" do
-      user = create(:tenant_user, tenant: @tenant).user
-      PayBand.where(id: @first.id).update_all(updated_by_id: user.id)
-      statements = []
-      band = PayBand.find(@first.id).tap { it.midpoint = 2.25 }
-
-      ActiveSupport::Notifications.subscribed(->(*, payload) { statements << payload[:sql] }, "sql.active_record") do
-        save_planning_input!(:pay_bands, band)
-      end
-
-      assert_equal 2.25, PayBand.find(@first.id).midpoint
-      assert_empty statements.grep(/updated_by_id/)
-      assert_equal user.id, PayBand.where(id: @first.id).pick(:updated_by_id)
     end
 
     should "record a row the table no longer holds as removed" do
