@@ -248,10 +248,8 @@ the tenant's `TenantAccountGrants` stream (`tenant-{id}/TenantAccountGrants`):
 `PlannerRemoved`. Each names the account, its person, the date it took effect
 and who gave or took back the grant. Holders are keyed by account, so a person
 who comes back with a new account starts without the old one's grants.
-Every grant is also linked into the old `AccountGrants` stream. Both releases
-read that stream without the lock while a deploy is under way, as it is the one
-complete stream. [#539](https://github.com/espaliahq/espalia/issues/539) stops
-the linking and moves those reads to the new stream together.
+The stream used to be `AccountGrants`. Its events are linked into the new
+stream under the lock, and nothing is linked back.
 
 The `account_grants/account_flags` projection writes
 `TenantUser#org_graph_editor` and `TenantUser#team_planner` from those events,
@@ -287,8 +285,6 @@ The aggregate refuses to demote the last admin, counting only live accounts.
 Before each change it records any role the table holds and the stream
 doesn't, so an account a factory or the previous release wrote is counted
 too. `events:reconcile` does the same for every account at deploy.
-Role events stay out of the old `AccountGrants` stream, since the previous
-release has no class to load them.
 
 An account's link to its person lives there too. `AccountLinkedToPerson`
 names the account, the person, how they were matched (`sign_in`,
