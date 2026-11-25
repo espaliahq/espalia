@@ -128,6 +128,19 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "LevelOrdinalChanged" do
+    should "renumber the level" do
+      lid = SecureRandom.uuid_v7
+      emit(Frameworks::Events::LevelAdded,
+        framework_id: @framework_id, level_id: lid, role_id: SecureRandom.uuid_v7,
+        ordinal: 3, title: "Senior Engineer", code: "E3", is_entry: false)
+      emit(Frameworks::Events::LevelOrdinalChanged,
+        framework_id: @framework_id, level_id: lid, new_ordinal: 4, previous_ordinal: 3, reason: "Make room for a new level")
+
+      within_tenant { assert_equal 4, FrameworkState::Level.find_by!(level_id: lid).ordinal }
+    end
+  end
+
   context "CapabilityCategoryAdded" do
     should "create a CapabilityCategory read model" do
       cid = SecureRandom.uuid_v7
