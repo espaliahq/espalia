@@ -219,13 +219,19 @@ class PersonDevelopment::CommandHandler
   # @param mappings [Array<Hash>] migration mappings; see
   #   {PersonDevelopment::Events::FrameworkVersionMigrated} for shape
   def migrate_framework_version(person_id, framework_id, old_version, new_version, mappings)
-    migrate = ->(aggregate) { aggregate.migrate_framework_version(framework_id, old_version, new_version, mappings) }
-    evidence_ids = EvidencePlacementSuggestion.where(person_id:, framework_id:).distinct.pluck(:evidence_id)
-    return @repository.with_person_development(person_id, framework_id, &migrate) if evidence_ids.empty?
-
-    # The projection re-keys every row the table holds, so the stream must
-    # hold them too, or the two resolve a collision differently.
-    PersonDevelopment::SuggestionWrites.with_caught_up(person_id, framework_id, evidence_ids:) { |aggregate| migrate.call(aggregate) }
+    attempts = 0
+    begin
+      attempts += 1
+      # A placement job or a decision can store to the stream mid-publish. Losing that race must not roll the publish back.
+      ActiveRecord::Base.transaction(requires_new: true) do
+        @repository.with_person_development(person_id, framework_id) do |aggregate|
+          aggregate.migrate_framework_version(framework_id, old_version, new_version, mappings)
+        end
+      end
+    rescue RubyEventStore::WrongExpectedEventVersion
+      retry if attempts < PersonDevelopment::SuggestionWrites::ATTEMPTS
+      raise
+    end
   end
 
   # Removes the person from their current assessment cycle (person-scoped

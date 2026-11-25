@@ -147,10 +147,11 @@ Evidence and feedback:
     ← already_held marks a suggestion recorded from the table the release
       before wrote directly ([#539](https://github.com/espaliahq/espalia/issues/539)
       c3). status, decided_by_id (a person_id) and decided_at appear only
-      with it. Until c5 every suggestion command first catches the stream up
-      with the table, under that release's locks
-      (PersonDevelopment::SuggestionWrites), and events:reconcile does the
-      same for every stream (PersonDevelopment::SuggestionReconciliation).
+      with it. Since c5 nothing writes the table directly, so no new event
+      carries it; replay still reads it on history.
+    ← Every suggestion command runs in PersonDevelopment::SuggestionWrites:
+      the person's row key-share, an advisory lock per item, then the
+      command, retried if another command for the person stored first.
 
   Read model (EvidenceSuggestions): evidence_placement_suggestions, one row
   per suggestion keyed by suggestion_id; accepted or edited is derived from

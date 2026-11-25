@@ -5,8 +5,7 @@ require_relative "../support/placement_suggestion_fixture"
 
 # Placement suggestions on the hub, at both viewports: the person the feedback
 # is about accepts one and dismisses another without the page reloading, and
-# adjusts the set in the evidence modal. The model is never called — the rows
-# are written directly, as the job would.
+# adjusts the set in the evidence modal. The job runs against a stubbed model.
 class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
   include PlacementSuggestionFixture
 
@@ -17,12 +16,16 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     build_placement_fixture
     @item = record_peer_feedback
+    proposals = [
+      proposal(@ownership, confidence: 0.82),
+      proposal(@collaboration, level_ordinal: 4, valence: "growth_area", confidence: 0.4,
+               rationale: "“kept everyone informed” speaks to collaboration.")
+    ]
+    with_fake_suggestion_model(proposals:) { Evidence::SuggestPlacementsJob.perform_now(@item.id) }
     ActsAsTenant.with_tenant(@tenant) do
-      @ownership_suggestion = create(:evidence_placement_suggestion, tenant: @tenant, item: @item,
-        capability_stable_id: @ownership.stable_id, level_ordinal: 3, valence: "demonstrated", confidence: 0.82)
-      @collaboration_suggestion = create(:evidence_placement_suggestion, tenant: @tenant, item: @item,
-        capability_stable_id: @collaboration.stable_id, level_ordinal: 4, valence: "growth_area", confidence: 0.4,
-        rationale: "“kept everyone informed” speaks to collaboration.")
+      suggestions = EvidencePlacementSuggestion.where(evidence_id: @item.id)
+      @ownership_suggestion = suggestions.find_by!(capability_stable_id: @ownership.stable_id)
+      @collaboration_suggestion = suggestions.find_by!(capability_stable_id: @collaboration.stable_id)
     end
   end
 

@@ -1,22 +1,17 @@
 # frozen_string_literal: true
 
-# Runs a suggestion command on a person's development stream once the stream
-# has caught up with the suggestions table.
+# Runs a suggestion command on a person's development stream.
 #
-# Until [#539](https://github.com/espaliahq/espalia/issues/539) c5 the release
-# before this one may still write that table during a deploy, so a command
-# takes that release's locks first: the advisory lock its placement job takes
-# per evidence item, then the stream's rows, as its accept and dismiss do.
-# Under them the table can't move, so what the catch-up records and what the
-# command then decides agree.
+# It holds the person's row FOR KEY SHARE to the commit. An erase takes that
+# row FOR UPDATE before it writes `forgotten_at`, so it either commits first
+# and the command's own forgotten check sees it, or waits until this
+# command's events are stored. Key share doesn't block an ordinary update of
+# the row, so a sync carries on. The row comes first so a command waiting
+# behind an erase holds nothing the job wants. It is taken outside the
+# savepoint, whose rollback would release it.
 #
-# Before those, it holds the person's row FOR KEY SHARE to the commit. An
-# erase takes that row FOR UPDATE before it writes `forgotten_at`, so it
-# either commits first and the forgotten check sees it, or waits until this
-# command's events are stored. Key share doesn't block an ordinary update
-# of the row, so a sync carries on. The row comes first so a command
-# waiting behind an erase holds nothing the job wants. It is taken outside
-# the savepoint, whose rollback would release it.
+# Then an advisory lock per evidence item, so runs and decisions for one
+# item never overlap: an edit and its original, or a double "Suggest again".
 #
 # Two commands for one person write one stream, so the later one to store
 # can lose the race even on another evidence item. It retries inside a
@@ -26,11 +21,10 @@ module PersonDevelopment::SuggestionWrites
 
   # @param person_id [String]
   # @param framework_id [String]
-  # @param evidence_ids [Array<String>] the items whose job lock to take
-  # @yieldparam aggregate [PersonDevelopment::Aggregate] caught up; its events are stored after the block
-  # @yieldparam caught_up [Integer] how many rows the catch-up recorded
+  # @param evidence_ids [Array<String>] the items to lock
+  # @yieldparam aggregate [PersonDevelopment::Aggregate] its events are stored after the block
   # @return [Object] the block's value
-  def self.with_caught_up(person_id, framework_id, evidence_ids:)
+  def self.with_aggregate(person_id, framework_id, evidence_ids:)
     attempts = 0
     EvidencePlacementSuggestion.transaction do
       Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:id)
@@ -38,13 +32,9 @@ module PersonDevelopment::SuggestionWrites
       begin
         attempts += 1
         EvidencePlacementSuggestion.transaction(requires_new: true) do
-          rows = EvidencePlacementSuggestion.where(person_id:, framework_id:).order(:id).lock.to_a
-          # A rationale quotes the feedback, which a forgotten person's stream must never hold.
-          rows = [] if Person.forgotten.exists?(id: person_id)
           result = nil
           PersonDevelopment::Repository.new.with_person_development(person_id, framework_id) do |aggregate|
-            caught_up = aggregate.catch_up_suggestions(rows.map(&:attributes))
-            result = yield aggregate, caught_up
+            result = yield aggregate
           end
           result
         end
@@ -55,8 +45,6 @@ module PersonDevelopment::SuggestionWrites
     end
   end
 
-  # The key `Evidence::SuggestPlacementsJob` takes; it must not change while
-  # that job can still run directly.
   def self.lock_item(evidence_id)
     sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
                                                   "placement-suggestions:#{evidence_id}" ])
