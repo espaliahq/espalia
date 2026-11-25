@@ -8,20 +8,20 @@ class Operations::OrgGraph::RemoveEditor < Operations::Base
   include Operations::OrgGraph::EditorSupport
 
   description "Stop a person being an Org Graph editor. They keep their rights over units they own and " \
-              "their reports' memberships. It reaches every account linked to them. An admin's rights can't " \
-              "be removed this way. Returns the list as org_graph_editors reads it."
+              "their reports' memberships. It reaches every account linked to them, an admin's too, " \
+              "so a later demotion can't bring it back. " \
+              "Refused when every account is an admin's and none carries the right. " \
+              "Returns the list as org_graph_editors reads it."
   category :write
   approval :in_app
 
   parameter :person_id, String, required: true, allow_blank: false
 
   # @return [Hash] editors and admins
-  # @raise [ParameterError] for a person with no account, or only admin ones
+  # @raise [ParameterError] for a person with no account, or only admin ones without the right
   def perform
-    members = accounts!.reject(&:admin?)
-    raise ParameterError, "person_id: an admin may always edit the Org Graph" if members.empty?
-
-    grant_handler.remove_from_each(:org_graph_editor, members, removed_by_id: context.person&.id)
+    ensure_removable!(:org_graph_editor, "an admin may always edit the Org Graph")
+    grant_handler.remove_from_person(:org_graph_editor, params[:person_id].to_s.downcase, removed_by_id: context.person&.id)
     editors_payload
   end
 end

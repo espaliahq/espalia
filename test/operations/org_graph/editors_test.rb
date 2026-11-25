@@ -171,11 +171,21 @@ class Operations::OrgGraph::EditorsTest < ActiveSupport::TestCase
       assert_empty grant_events
     end
 
-    should "skip an admin account and take the right from the other" do
+    should "take the right from an admin account too, so a demotion can't bring it back" do
       ActsAsTenant.with_tenant(@tenant) { @editor.update!(role: :admin) }
 
       call(:RemoveEditor, person_id: @editor.person_id)
 
+      assert_not @editor.reload.org_graph_editor?
+      assert_not @twin.reload.org_graph_editor?
+    end
+
+    should "take the right from accounts that are all admins when one still carries it" do
+      ActsAsTenant.with_tenant(@tenant) { [ @editor, @twin ].each { it.update!(role: :admin) } }
+
+      call(:RemoveEditor, person_id: @editor.person_id)
+
+      assert_not @editor.reload.org_graph_editor?
       assert_not @twin.reload.org_graph_editor?
     end
 

@@ -301,9 +301,12 @@ for roles, and logs any person two accounts share.
 
 Such a person can lose a right but not gain one ([#562](https://github.com/espaliahq/espalia/issues/562)).
 The add tools for planners and editors refuse them, as `SetAccountRole` does.
-The remove tools take the right from every linked account that isn't an admin,
-in one transaction through `AccountGrants::CommandHandler#remove_from_each`.
-`Operations::PersonAccounts` finds the accounts for all four.
+The remove tools take the right from every linked account, an admin's too, so
+a later demotion can't bring it back. `AccountGrants::CommandHandler#remove_from_person`
+reads the accounts under the grants lock and clears them in one transaction.
+They refuse only a person whose accounts are all admins and carry no grant.
+`Operations::PersonAccounts` finds the accounts for these four and for
+`SetAccountRole`.
 
 `org_graph_editors`, `team_planning_planners` and their add and remove tools
 give each holder `since`, `added_by` and `already_held` from the stream. Editor

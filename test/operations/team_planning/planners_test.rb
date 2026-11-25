@@ -171,11 +171,21 @@ class Operations::TeamPlanning::PlannersTest < ActiveSupport::TestCase
       assert_empty grant_events
     end
 
-    should "skip an admin account and take the right from the other" do
+    should "take the right from an admin account too, so a demotion can't bring it back" do
       ActsAsTenant.with_tenant(@tenant) { @planner.update!(role: :admin) }
 
       call(:RemovePlanner, person_id: @planner.person_id)
 
+      assert_not @planner.reload.team_planner?
+      assert_not @twin.reload.team_planner?
+    end
+
+    should "take the right from accounts that are all admins when one still carries it" do
+      ActsAsTenant.with_tenant(@tenant) { [ @planner, @twin ].each { it.update!(role: :admin) } }
+
+      call(:RemovePlanner, person_id: @planner.person_id)
+
+      assert_not @planner.reload.team_planner?
       assert_not @twin.reload.team_planner?
     end
 
