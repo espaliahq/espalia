@@ -308,7 +308,7 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_not HrisUnitParentProposal.exists?
     end
 
-    should "drop a retiring unit's proposed parent" do
+    should "leave no proposed parent behind a retiring unit" do
       @catalogue[0] = division_field(%w[d1 Product], %w[d2 Platform], %w[d3 Data])
       mirror(@staff[0] => { division: "d1", team: "t1" })
       mirror(@staff[0] => { division: "d2", team: "t1" })

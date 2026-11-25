@@ -64,7 +64,7 @@ It is off unless `WRITE_CATALOGUE=1`. CI's test job turns it on, which cost abou
 | Files with a persistence call | 80 |
 | Of those, files the run wrote through nowhere | 1 (`lib/tasks/bench.rake`) |
 | Persistence calls found by text search | 368 |
-| Of those, with no recorded write beneath them | 3 |
+| Of those, with no recorded write beneath them | 4 |
 
 The unreached file is a benchmark. 1,075 files ran no write at all; most are views, components, policies and queries, which have nothing to write.
 
@@ -156,7 +156,7 @@ Each section names the writers the run saw and recommends one of two things: **k
 | Table | Writers |
 |---|---|
 | `hris_sync_issues` | `HrisSyncIssue.replace_in_structure`; `Hris::LevelHandover#hand_back!` |
-| `hris_unit_parent_proposals` | `Hris::LevelMirror#reparent`, `#forget_unread_parents`, `#forget_parent_readings`, `#forget_every_parent_reading`, `#retire_units` |
+| `hris_unit_parent_proposals` | `Hris::LevelMirror#reparent`, `#forget_unread_parents`, `#forget_parent_readings`, `#forget_every_parent_reading`; one `destroy!` with no recorded write (*unreached*, line 327) |
 
 **Keep.** Each sync rebuilds them from what the HRIS reports; they are a to-do list, not a record. What an admin does about an issue already goes through Org Graph commands.
 
@@ -203,3 +203,4 @@ The text search found these lines with no recorded write beneath them:
 | `app/contexts/frameworks/command_handler.rb:42` | An aggregate's `create`, which publishes an event. Not a database write. |
 | `app/contexts/team_planning/command_handler.rb:36` | The same. |
 | `lib/tasks/bench.rake:119` | The same, in a benchmark. |
+| `app/integrations/hris/level_mirror.rb:327` | `Hris::LevelMirror#retire_units` dropping a retiring unit's proposed parent. A retiring unit is never read in that sync, so `#forget_unread_parents` has already dropped it. |
