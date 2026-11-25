@@ -114,6 +114,33 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     assert_empty suggestions_for(item)
   end
 
+  should "ask nothing and write nothing about a forgotten person's feedback, even one forgotten mid-run" do
+    item = record_peer_feedback
+    stream = EventStreamNaming.person_development_stream(@alex.id, @framework_id, tenant: @tenant)
+    suggested = -> { Rails.configuration.event_store.read.stream(stream).of_type(PersonDevelopment::Events::EvidencePlacementSuggested).count }
+    forget = -> { ActsAsTenant.with_tenant(@tenant) { @alex.update_columns(forgotten_at: Time.current, name: "Former member", email: nil) } }
+    forgetting_model = Object.new
+    forgetting_model.define_singleton_method(:model) { "test-model" }
+    forgetting_model.define_singleton_method(:provider) { "anthropic" }
+    forgetting_model.define_singleton_method(:prompt_version) { "test" }
+    forgetting_model.define_singleton_method(:suggest) do |prompt|
+      forget.call
+      [ Evidence::SuggestionModel::Proposal.new(capability_stable_id: prompt.cells.values.first[:capability_stable_id],
+          level_ordinal: 3, valence: "demonstrated", confidence: 0.9, rationale: "Owned the outage follow-up.") ]
+    end
+
+    assert_no_difference(suggested) do
+      Evidence::SuggestionModel.stub(:configured?, true) do
+        Evidence::SuggestionModel.stub(:new, ->(**) { forgetting_model }) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+      end
+    end
+    assert_empty suggestions_for(item)
+
+    fake = with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+    assert_empty fake.prompts
+    assert_empty suggestions_for(item)
+  end
+
   should "do nothing when the tenant has suggestions off or without a key" do
     item = record_peer_feedback
     switch_suggestions(@tenant, false)

@@ -92,7 +92,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   # place, however the run was asked for.
   def suggestable?(item)
     item.tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured?(item.tenant) &&
-      item.link_status == "active" &&
+      item.link_status == "active" && !Person.forgotten.exists?(id: item.person_id) &&
       !PersonDevelopment::AsyncHandlers::PlacementSuggester::NON_HUMAN_SURFACES.include?(item.recorded_via.to_s)
   end
 
@@ -114,6 +114,8 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
       AuditMetadata.wrap_event_store do
         PersonDevelopment::SuggestionWrites.with_caught_up(item.person_id, item.framework_id, evidence_ids: [ item.id ]) do |aggregate|
           next false if EvidenceItem.where(id: item.id).pick(:content) != asked_about
+          # A rationale quotes the feedback, and the person may have been forgotten while the model answered.
+          next false if Person.forgotten.exists?(id: item.person_id)
 
           aggregate.suggest_placements(item.id, proposals: proposals.map { proposal_data(it) }, provider: model.provider,
                                        model: model.model, prompt_version: model.prompt_version,
