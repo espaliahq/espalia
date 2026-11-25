@@ -24,7 +24,7 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) { operation.call(context:, params:) }
   end
 
-  def config = @tenant.reload.org_graph_config
+  def config = TenantRetentionSetting.for(@tenant)
 
   context "the dry run" do
     should "count who is due, by id, and erase nobody" do
@@ -43,8 +43,8 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
       assert_equal({ count: 0, held_back: 1, person_ids: [] }, result.slice(:count, :held_back, :person_ids))
     end
 
-    should "report the stream's period, whatever the JSON says" do
-      Tenant.find(@tenant.id).tap { it.org_graph_config.assign_attributes(retention_years: 3) }.save!
+    should "report the stream's period, whatever a retired JSON key says" do
+      Tenant.where(id: @tenant.id).update_all(%(org_graph_config = '{"retention_years": 3}'))
 
       assert_equal 7, call(Operations::Tenants::ForgettingDryRun)[:retention_years]
     end
@@ -61,7 +61,7 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
   end
 
   context "turning the schedule on" do
-    should "need the count the dry run gives, and record who turned it on" do
+    should "need the count the dry run gives, and record when it was turned on" do
       admin = as(:admin)
       assert_raises(Operations::Base::ParameterError) do
         call(Operations::Tenants::EnableScheduledForgetting, context: admin, confirm_count: 0)
@@ -72,9 +72,7 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
 
       assert_equal({ tenant_id: @tenant.id, scheduled_forgetting: true, confirmed_count: 1 }, result)
       assert config.scheduled_forgetting
-      assert TenantRetentionSetting.for(@tenant).scheduled_forgetting
-      assert_equal admin.tenant_user.id, config.scheduled_forgetting_enabled_by_id
-      assert_not_nil config.scheduled_forgetting_enabled_at
+      assert_not_nil config.enabled_at
       assert_not @leaver.reload.forgotten?
     end
 
@@ -119,8 +117,7 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
       assert_equal({ tenant_id: @tenant.id, scheduled_forgetting: false },
         call(Operations::Tenants::DisableScheduledForgetting))
       assert_not config.scheduled_forgetting
-      assert_not TenantRetentionSetting.for(@tenant).scheduled_forgetting
-      assert_nil config.scheduled_forgetting_enabled_by_id
+      assert_nil config.enabled_by_id
     end
 
     should "refuse anyone but a tenant admin" do

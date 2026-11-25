@@ -30,8 +30,9 @@ class Operations::Tenants::UpdateRetentionPeriod < Operations::Base
     years = params[:never] ? nil : params[:retention_years]
     raise ParameterError, "give retention_years, or never: true" if years.nil? && !params[:never]
 
-    config = OrgGraphConfig.new(retention_years: years)
-    raise ParameterError, config.errors.full_messages.to_sentence unless config.valid?
+    if years && !(1..TenantSettings::Aggregate::MAX_RETENTION_YEARS).cover?(years)
+      raise ParameterError, "retention_years must be from 1 to #{TenantSettings::Aggregate::MAX_RETENTION_YEARS}"
+    end
 
     tenant = ActsAsTenant.current_tenant
     result = TenantSettings::CommandHandler.new(tenant).set_retention_period(years, set_by: context.tenant_user)
