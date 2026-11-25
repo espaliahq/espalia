@@ -72,7 +72,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
           e.message
         end
       end
-      assert_waiting_for_list(pids, second)
+      assert_waits_for_a_lock(pids, second)
     end
 
     assert_match "has changed since you read it", second.value
@@ -90,7 +90,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
           any_band("Lemuria")
         end
       end
-      assert_waiting_for_list(pids, added)
+      assert_waits_for_a_lock(pids, added)
     end
 
     added.join
@@ -126,7 +126,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
             any_band("Lemuria")
           end
         end
-        assert_waiting_for_list(pids, added)
+        assert_waits_for_a_lock(pids, added)
       end
 
       assert_kind_of PayBand, added.value
@@ -179,14 +179,14 @@ class PayBandLockingTest < ActiveSupport::TestCase
 
   # Polls until the worker's backend waits on an advisory lock, so the test
   # proves contention rather than a worker that simply hadn't started.
-  def assert_waiting_for_list(pids, worker, within: 5)
+  def assert_waits_for_a_lock(pids, worker, within: 5)
     pid = pids.pop(timeout: within) or flunk "the worker never reported its connection"
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + within
     waiting = PayBand.sanitize_sql_array([ "SELECT 1 FROM pg_locks WHERE pid = ? AND locktype = 'advisory' AND NOT granted", pid ])
     # Uncached, or the query cache answers every poll with the first one's miss.
     until PayBand.uncached { PayBand.connection.select_value(waiting) }
-      flunk "the worker finished while the list was held" unless worker.alive?
-      flunk "the worker never waited for the list: #{activity(pid)}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      flunk "the worker finished while the lock was held" unless worker.alive?
+      flunk "the worker never waited for the lock: #{activity(pid)}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
       sleep 0.02
     end
   end
