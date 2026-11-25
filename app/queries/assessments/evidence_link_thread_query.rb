@@ -144,8 +144,10 @@ class Assessments::EvidenceLinkThreadQuery
         dismissed_by_id: data[:dismissed_by_id], viewer_person_id: @viewer_person_id, viewer_sees_all: @viewer_sees_all
       )
 
+      # One recorded from a table row carries when it was first made.
+      dismissed_at = data[:dismissed_at].present? ? Time.zone.parse(data[:dismissed_at].to_s) : at
       [ Entry.new(kind: :suggestion_dismissed, actor_name: nil, valence: nil,
-                  previous_valence: nil, reason: data[:reason], at: at), data[:dismissed_by_id] ]
+                  previous_valence: nil, reason: data[:reason], at: dismissed_at), data[:dismissed_by_id] ]
     end
   end
 

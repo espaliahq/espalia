@@ -114,7 +114,53 @@ class SuggestionDismissalVisibilityTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "a dismissal recorded from a table row" do
+    setup do
+      @first_made = Time.zone.parse("2026-09-03T09:15:00Z")
+      record_held_dismissal_on(@ownership, at: @first_made, reason: "See [the incident doc](https://example.com/doc)")
+    end
+
+    should "date it from when it was first made, in the feed and the thread alike" do
+      ActsAsTenant.with_tenant(@tenant) do
+        feed = Assessments::ActivityFeedQuery.new(assignment: @assignment, viewer_person_id: @alex.id, viewer_sees_all: true).call
+        thread = Assessments::EvidenceLinkThreadQuery.new(item: @item, capability_stable_id: @ownership.stable_id, level_ordinal: 3,
+                                                          viewer_person_id: @alex.id, viewer_sees_all: true).lifecycle_entries
+
+        held = feed.find { it.kind == Assessments::ActivityFeedQuery::SUGGESTION_DISMISSED_KIND && it.capability_stable_id == @ownership.stable_id }
+        assert_equal @first_made, held.occurred_at
+        assert_equal [ @first_made ], thread.select { it.kind == :suggestion_dismissed }.map(&:at)
+      end
+    end
+
+    should "show a reason written in Markdown as plain words in the thread" do
+      sign_in(@alex_user)
+      get thread_path(@ownership)
+
+      assert_includes response.body, "dismissed a suggestion to place this feedback here — See the incident doc"
+      refute_includes response.body, "[the incident doc]"
+    end
+  end
+
   private
+
+  def record_held_dismissal_on(capability, at:, reason:)
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::Repository.new.with_person_development(@alex.id, @framework_id) do |aggregate|
+        aggregate.suggest_placements(@item.id, proposals: [
+          { capability_stable_id: capability.stable_id, level_ordinal: 3, valence: "demonstrated", confidence: "0.7",
+            rationale: "Took the follow-up." }
+        ], provider: "anthropic", model: "test-model", prompt_version: "v1", generated_at: "2026-09-01T10:00:00Z")
+      end
+      suggestion_id = EvidencePlacementSuggestion.pending.for_evidence(@item.id).sole.id
+      store = Rails.configuration.event_store
+      store.with_metadata(tenant_id: @tenant.id, person_id: @alex.id, framework_id: @framework_id) do
+        store.publish(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed.new(data: {
+          suggestion_id: suggestion_id, evidence_id: @item.id, dismissed_by_id: @morgan.id, reason: reason,
+          dismissed_at: at.iso8601(6), already_held: true
+        }), stream_name: EventStreamNaming.person_development_stream(@alex.id, @framework_id, tenant: @tenant))
+      end
+    end
+  end
 
   def feed_reasons(viewer)
     ActsAsTenant.with_tenant(@tenant) do
