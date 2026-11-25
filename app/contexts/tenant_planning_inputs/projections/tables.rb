@@ -118,8 +118,8 @@ class TenantPlanningInputs::Projections::Tables
   end
 
   # A release before a4 named its editor's account in `updated_by_id`, which
-  # the models ignore until a4b drops it. Reconcile has mapped it to a person
-  # by the time a row is written here, so clearing it leaves nothing to count.
+  # the models ignore until a4b drops it. Every write here names its editor by
+  # person, so the account is no longer needed.
   def clear_legacy_editor(model, id) = model.where(id:).where.not(updated_by_id: nil).update_all(updated_by_id: nil)
 
   def reorder(tenant, order)

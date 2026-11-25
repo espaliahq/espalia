@@ -23,8 +23,8 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
 
   private
 
-  # Locks the rows it reads, so a change the previous release makes waits
-  # for the run and is recorded by the next, never written over by this one.
+  # Locks the rows it reads, so the projection cannot change one between this
+  # read and the events the run records.
   def held_in_table
     @legacy_editors = {}
     Rows::TABLES.each_key.with_object({}) do |table, held|

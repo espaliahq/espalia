@@ -7,8 +7,6 @@ class PlanningRuleDefault < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
-  # The previous releases named an account here; a4b drops it once no
-  # deployed release writes it.
   self.ignored_columns += %w[updated_by_id]
 
   validates :rule, presence: true
