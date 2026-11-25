@@ -55,7 +55,7 @@ The old keys of `tenants.org_graph_config` are gone. A migration deletes them, a
 
 - **c2** stopped reading the JSON and kept writing it, once c1, which put the settings on the stream, served on every web and worker instance.
 - **c2b** stopped writing the JSON, removed the reconciler and deleted the keys, once c2 served everywhere.
-- **Once c2b is deployed, NO rollback to c1.** c1 reads the JSON alone, and would read the missing keys as the defaults: seven years, off, with any "never" lost. Roll back to c2 instead. Its reconciler records nothing from a JSON holding none of the keys, and any keys left match the stream.
+- **Once c2b is deployed, NO rollback to c1.** c1 reads the JSON alone, and would read the missing keys as the defaults: seven years, off, with any "never" lost. Roll back to c2 instead. Every c2b settings command removes the keys in the same transaction as its events. So a tenant that still has keys has run no c2b command since c2 wrote them, and they equal the stream. Its reconciler then records nothing new: not from a JSON holding none of the keys, and not from keys that match.
 
 A run holds the stream's lock shared, then the tenant row, for each person. A change from either release waits for that person to finish, or the run sees it before the next one.
 
