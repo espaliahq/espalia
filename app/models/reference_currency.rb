@@ -6,7 +6,6 @@ class ReferenceCurrency < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
-  self.ignored_columns += %w[updated_by_id]
 
   normalizes :currency, with: Currency::NORMALIZE
 
