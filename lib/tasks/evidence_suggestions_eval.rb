@@ -78,6 +78,7 @@ class EvidenceSuggestionsEval
   # @return [Hash] the report: counts and match rates, plus one row per item
   def run
     results = []
+    # Never commits: the rollback below, or any error an item raises, undoes every row.
     ActiveRecord::Base.transaction(requires_new: true) do
       tenant = Tenant.create!(name: "Suggestion eval", slug: "suggestion-eval-#{SecureRandom.hex(4)}")
       ActsAsTenant.with_tenant(tenant) do
