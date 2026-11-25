@@ -132,10 +132,9 @@ class AccountGrants::CommandHandler
   # rows. A forget takes the person's row, then the grants lock in
   # {#unlink_forgotten}, and only then its tenant_users rows, so the two never
   # wait on each other in a cycle. A forget that committed first is re-read
-  # here and drops out of the count. One cycle remains: the previous release
-  # linking an account to the very person being forgotten holds that account
-  # and waits on the person's row. Postgres aborts one of the two, and either
-  # outcome leaves the table and the stream agreeing.
+  # here and drops out of the count. A link takes the person's row before
+  # anything else, so it can't close a cycle with a forget. Only a release
+  # older than b2 could: it held the account before waiting on the person.
   def hold_live_accounts
     TenantUser.where(tenant_id: ActsAsTenant.current_tenant.id).order(:id).lock("FOR SHARE").pluck(:id)
   end
