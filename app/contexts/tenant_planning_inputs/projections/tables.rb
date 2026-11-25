@@ -70,12 +70,10 @@ class TenantPlanningInputs::Projections::Tables
   # @param table [Symbol] one of {TenantPlanningInputs::Rows::TABLES}
   # @param id [String]
   # @param entry [TenantPlanningInputs::Aggregate::Entry]
-  # @return [Hash{String => Object}] the row as the table holds it. `updated_by_id` is the previous
-  #   release's: clearing it tells reconcile which release last changed the row.
+  # @return [Hash{String => Object}] the row as the table holds it
   def self.row_for(tenant, table, id, entry)
     TenantPlanningInputs::Rows.complete(table, entry.row).merge("id" => id, "tenant_id" => tenant.id, "created_at" => entry.created_at,
-                    "updated_at" => entry.updated_at, "updated_by_person_id" => entry.updated_by_person_id,
-                    "updated_by_id" => nil)
+                    "updated_at" => entry.updated_at, "updated_by_person_id" => entry.updated_by_person_id)
   end
 
   # @param event [RubyEventStore::Event]

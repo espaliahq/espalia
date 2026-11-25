@@ -15,7 +15,7 @@ class ExchangeRate < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
-  belongs_to :updated_by, class_name: "User", optional: true
+  self.ignored_columns += %w[updated_by_id]
 
   normalizes :from_currency, :to_currency, with: Currency::NORMALIZE
 

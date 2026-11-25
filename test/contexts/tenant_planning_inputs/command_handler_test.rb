@@ -38,7 +38,7 @@ class TenantPlanningInputs::CommandHandlerTest < ActiveSupport::TestCase
     should "refuse a change to a row removed after it was loaded" do
       saved = save_planning_input!(:pay_bands, band)
       stale = PayBand.find(saved.id)
-      PayBand.where(id: saved.id).delete_all
+      remove_planning_inputs!(saved)
 
       error = assert_raises(TenantPlanningInputs::Refused) { save_planning_input!(:pay_bands, stale.tap { it.midpoint = 2.5 }) }
 
@@ -76,20 +76,6 @@ class TenantPlanningInputs::CommandHandlerTest < ActiveSupport::TestCase
       add_planning_input!(:planning_rule_defaults, rule: "test_headcount_cap", value: { cap: 4 })
 
       assert_raises(ArgumentError) { add_planning_input!(:planning_rule_defaults, rule: "test_headcount_cap", value: { cap: 5 }) }
-    end
-  end
-
-  context "a write the previous release made to the table" do
-    should "be in the stream before the next command decides" do
-      held = PayBand.create!(location: "Fixtureland", position: 1, currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3,
-                             role_name: "Every role", level_name: "Every level")
-
-      assert_match "There is already a band",
-                   assert_raises(TenantPlanningInputs::Refused) { save_planning_input!(:pay_bands, band(location: "Fixtureland")) }.message
-
-      added = save_planning_input!(:pay_bands, band(location: "Elsewhere"))
-
-      assert_equal [ [ held.id, true ], [ added.id, false ] ], events.map { it.data.values_at(:id, :already_held) }
     end
   end
 end
