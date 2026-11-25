@@ -149,7 +149,7 @@ Each section names the writers the run saw and recommends one of two things: **k
 
 ### Pay and cost inputs
 
-**Moved to events** in Track A of [#539](https://github.com/espaliahq/espalia/issues/539). `pay_bands`, `exchange_rates`, `reference_currencies`, `budget_lines` and `planning_rule_defaults` are now written only by `tenant_planning_inputs/tables`, from the tenant's TenantPlanningInputs stream. Each change names its actor (`changed_by_id`) and keeps the figures, so a band's past values and who changed them can be read back. [app/contexts/tenant_planning_inputs/AGENTS.md](../../app/contexts/tenant_planning_inputs/AGENTS.md) holds the rules the move keeps.
+**Moved to events** in Track A of [#539](https://github.com/espaliahq/espalia/issues/539). `pay_bands`, `exchange_rates`, `reference_currencies`, `budget_lines` and `planning_rule_defaults` are now written only by `tenant_planning_inputs/tables`, from the tenant's TenantPlanningInputs stream. Each change names its actor (`changed_by_id`) and keeps the figures, so a band's past values and who changed them can be read back: the history pages beside each table and the `tenants_planning_inputs_history` tool show them, to tenant admins only. [app/contexts/tenant_planning_inputs/AGENTS.md](../../app/contexts/tenant_planning_inputs/AGENTS.md) holds the rules the move keeps.
 
 ### HRIS sync working data
 

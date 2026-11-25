@@ -44,7 +44,9 @@ class Views::Tenant::PayBands::IndexView < Views::Base
       render Components::Kit::SectionHeading.new(
         "Pay bands", tag: :h1,
         subtitle: "What a seat pays, by role, level and country. Plans price positions from these. Only tenant admins see this page."
-      )
+      ) do |heading|
+        heading.action { history_link("pay_bands", "Band history") }
+      end
       div(class: "grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start") do
         div(class: "min-w-0 space-y-6") { bands_column }
         rates_panel
@@ -53,6 +55,11 @@ class Views::Tenant::PayBands::IndexView < Views::Base
   end
 
   private
+
+  def history_link(inputs, label)
+    render Components::Kit::Button.new(variant: :outline, tone: :neutral, size: :sm,
+                                       href: tenant_planning_inputs_history_path(inputs)) { label }
+  end
 
   def bands_column
     if @bands.empty?

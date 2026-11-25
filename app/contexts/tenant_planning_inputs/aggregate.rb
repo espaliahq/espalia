@@ -132,6 +132,7 @@ class TenantPlanningInputs::Aggregate
     data = { id:, at:, changed_by_id: nil }
     data.merge!(order: nil, bands_changed_at:) if table == :pay_bands
     data[:rule] = entries(table).fetch(id).row["rule"] if table == :planning_rule_defaults
+    # Nothing deletes a reference currency short of deleting its tenant, so reconcile never comes here for one.
     remove = WRITES.fetch(table).fetch(:remove) or raise ArgumentError, "#{table} rows are never removed"
     apply(remove.new(data:))
   end

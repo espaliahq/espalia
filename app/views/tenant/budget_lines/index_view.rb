@@ -32,7 +32,12 @@ class Views::Tenant::BudgetLines::IndexView < Views::Base
         "Budget", tag: :h1,
         subtitle: "The approved headcount budget. Every plan starts from it and may change or cut a line for itself. " \
                   "Only tenant admins see this page."
-      )
+      ) do |heading|
+        heading.action do
+          render Components::Kit::Button.new(variant: :outline, tone: :neutral, size: :sm,
+                                             href: tenant_planning_inputs_history_path("budget_lines")) { "History" }
+        end
+      end
       div(class: "space-y-6") do
         lines_card
         add_card
