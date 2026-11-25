@@ -66,6 +66,27 @@ class Tenant::PlanningInputsHistoriesControllerTest < ActionDispatch::Integratio
       end
     end
 
+    should "show the reference currency before and after it changes, and only the headline when first set" do
+      ActsAsTenant.with_tenant(@tenant) do
+        currency = add_planning_input!(:reference_currencies, currency: "AUD")
+        currency.currency = "USD"
+        save_planning_input!(:reference_currencies, currency)
+      end
+
+      get tenant_planning_inputs_history_path("exchange_rates")
+
+      assert_select "#planning-inputs-history li", count: 2
+      assert_select "#planning-inputs-history li[data-history-change='changed']:first-child" do
+        assert_select "p", text: "Set the reference currency to USD"
+        assert_select "p", text: "Before: AUD"
+        assert_select "p", text: "After: USD"
+      end
+      assert_select "#planning-inputs-history li[data-history-change='added']:last-child" do
+        assert_select "p", text: "Set the reference currency to AUD"
+        assert_select "p", text: /\AAUD\z/, count: 0
+      end
+    end
+
     should "say so when an input has no changes yet" do
       get tenant_planning_inputs_history_path("budget_lines")
 
