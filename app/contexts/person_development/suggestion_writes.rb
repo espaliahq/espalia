@@ -22,6 +22,7 @@ module PersonDevelopment::SuggestionWrites
 
   # The person was forgotten, so nothing more is written about them.
   class Forgotten < PersonDevelopment::Aggregate::CommandError
+    # @param msg [String] what the hub and the MCP tools say; it names no one
     def initialize(msg = "this person has been forgotten") = super
   end
 
