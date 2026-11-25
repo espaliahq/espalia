@@ -390,6 +390,41 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "suggestion dismissal" do
+    setup do
+      @suggested_cap = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::Repository.new.with_person_development(@assessee.id, @framework_id) do |aggregate|
+          aggregate.suggest_placements(@evidence_id, proposals: [
+            { capability_stable_id: @suggested_cap, level_ordinal: 3, valence: "demonstrated", confidence: "0.8", rationale: nil }
+          ], provider: "anthropic", model: "test-model", prompt_version: "v1", generated_at: "2026-11-24T10:00:00Z")
+        end
+        suggestion_id = EvidencePlacementSuggestion.pending.for_evidence(@evidence_id).sole.id
+        PersonDevelopment::Repository.new.with_person_development(@assessee.id, @framework_id) do |aggregate|
+          aggregate.dismiss_suggestion(suggestion_id, evidence_id: @evidence_id, dismissed_by_id: @manager.id, reason: "Not this one")
+        end
+      end
+    end
+
+    should "emit an entry on the suggestion's cell, grouped under evidence, with the reason" do
+      entry = run_query(viewer: @assessee, sees_all: true, context: :self, alignment_started: false)
+        .find { |e| e.kind == Assessments::ActivityFeedQuery::SUGGESTION_DISMISSED_KIND }
+
+      assert_equal [ @suggested_cap, 3 ], [ entry.capability_stable_id, entry.level_ordinal ]
+      assert_equal "Not this one", entry.payload[:reason]
+      assert_equal "Dana Lee", entry.payload[:actor_name]
+      assert_equal "Launch", entry.payload[:evidence_title]
+      assert_equal "evidence", Views::Assessments::Activity::Entry::KIND_GROUP[entry.kind]
+    end
+
+    should "show it to whoever dismissed it, and to no other viewer who doesn't see the whole assessment" do
+      kind = Assessments::ActivityFeedQuery::SUGGESTION_DISMISSED_KIND
+
+      assert_includes run_query(viewer: @manager, sees_all: false, context: :manager, alignment_started: false).map(&:kind), kind
+      refute_includes run_query(viewer: @peer, sees_all: false, context: :self, alignment_started: false).map(&:kind), kind
+    end
+  end
+
   context "framework version migration" do
     setup do
       # Inject a FrameworkVersionMigrated event on the assessee's PD stream

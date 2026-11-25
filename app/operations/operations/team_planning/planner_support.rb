@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# What the planner operations share: finding a person's account in the
+# What the planner operations share: finding a person's accounts in the
 # tenant, and the list as it reads after a change.
 #
 # The grant is recorded in the TenantAccountGrants stream and read from
@@ -8,6 +8,7 @@
 # tools' shape.
 module Operations::TeamPlanning::PlannerSupport
   include Operations::GrantHoldersPayload
+  include Operations::PersonAccounts
 
   private
 
@@ -18,11 +19,6 @@ module Operations::TeamPlanning::PlannerSupport
 
   def grant_handler
     AccountGrants::CommandHandler.new
-  end
-
-  def account!
-    TenantUser.find_by(person_id: params[:person_id].to_s.downcase) or
-      raise Operations::Base::ParameterError, "person_id: that person has no account in this organisation"
   end
 
   # Admins may always create a plan, so they are listed apart from the planners an admin chose.

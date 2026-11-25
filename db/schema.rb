@@ -177,12 +177,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
     t.string "cost_centre", default: "", null: false
     t.string "origin", null: false
     t.date "approved_on"
-    t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.uuid "updated_by_person_id"
     t.index ["tenant_id"], name: "index_budget_lines_on_tenant_id"
-    t.index ["updated_by_id"], name: "index_budget_lines_on_updated_by_id"
     t.index ["updated_by_person_id"], name: "index_budget_lines_on_updated_by_person_id"
     t.check_constraint "amount IS NOT NULL OR head_count IS NOT NULL", name: "budget_lines_amount_or_head_count"
     t.check_constraint "amount IS NULL OR amount >= 0::numeric AND currency IS NOT NULL AND period IS NOT NULL", name: "budget_lines_amount_has_currency"
@@ -374,12 +372,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
     t.string "to_currency", null: false
     t.decimal "rate", precision: 24, scale: 12, null: false
     t.date "applies_from", null: false
-    t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.uuid "updated_by_person_id"
     t.index "tenant_id, LEAST(from_currency, to_currency), GREATEST(from_currency, to_currency), applies_from", name: "index_exchange_rates_on_pair_and_date", unique: true
-    t.index ["updated_by_id"], name: "index_exchange_rates_on_updated_by_id"
     t.index ["updated_by_person_id"], name: "index_exchange_rates_on_updated_by_person_id"
     t.check_constraint "from_currency::text <> to_currency::text", name: "exchange_rates_two_currencies"
     t.check_constraint "rate > 0::numeric", name: "exchange_rates_positive"
@@ -1018,7 +1014,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
     t.decimal "minimum", precision: 14, scale: 2, null: false
     t.decimal "midpoint", precision: 14, scale: 2, null: false
     t.decimal "maximum", precision: 14, scale: 2, null: false
-    t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.uuid "role_family_id"
@@ -1028,7 +1023,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
     t.uuid "updated_by_person_id"
     t.index ["tenant_id", "position"], name: "index_pay_bands_on_tenant_id_and_position"
     t.index ["tenant_id", "role_family_id", "role_id", "level_ordinal", "level_id", "location_key"], name: "index_pay_bands_one_per_matcher", unique: true, nulls_not_distinct: true
-    t.index ["updated_by_id"], name: "index_pay_bands_on_updated_by_id"
     t.index ["updated_by_person_id"], name: "index_pay_bands_on_updated_by_person_id"
     t.check_constraint "level_ordinal > 0", name: "pay_bands_level_number_positive"
     t.check_constraint "minimum <= midpoint AND midpoint <= maximum", name: "pay_bands_ordered"
@@ -1125,12 +1119,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
     t.uuid "tenant_id", null: false
     t.string "rule", null: false
     t.jsonb "value", default: {}, null: false
-    t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.uuid "updated_by_person_id"
     t.index ["tenant_id", "rule"], name: "index_planning_rule_defaults_on_tenant_id_and_rule", unique: true
-    t.index ["updated_by_id"], name: "index_planning_rule_defaults_on_updated_by_id"
     t.index ["updated_by_person_id"], name: "index_planning_rule_defaults_on_updated_by_person_id"
   end
 
@@ -1154,12 +1146,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
   create_table "reference_currencies", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.string "currency", null: false
-    t.uuid "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.uuid "updated_by_person_id"
     t.index ["tenant_id"], name: "index_reference_currencies_on_tenant_id", unique: true
-    t.index ["updated_by_id"], name: "index_reference_currencies_on_updated_by_id"
     t.index ["updated_by_person_id"], name: "index_reference_currencies_on_updated_by_person_id"
   end
 
@@ -1375,7 +1365,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
   add_foreign_key "assessment_explorations", "tenants"
   add_foreign_key "assessment_level_ratings", "tenants"
   add_foreign_key "budget_lines", "tenants"
-  add_foreign_key "budget_lines", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "calibration_session_members", "tenants"
   add_foreign_key "calibration_sessions", "tenants"
   add_foreign_key "event_store_events_in_streams", "event_store_events", column: "event_id", primary_key: "event_id"
@@ -1392,7 +1381,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
   add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "tenants"
   add_foreign_key "exchange_rates", "tenants"
-  add_foreign_key "exchange_rates", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "feedback_drafts", "tenants"
   add_foreign_key "feedback_exchange_acks", "tenants"
   add_foreign_key "feedback_exchange_imports", "tenants"
@@ -1443,7 +1431,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
   add_foreign_key "org_unit_successions", "tenants"
   add_foreign_key "org_units", "tenants"
   add_foreign_key "pay_bands", "tenants"
-  add_foreign_key "pay_bands", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
   add_foreign_key "person_development_comments", "people", column: "author_id", on_delete: :restrict
@@ -1454,10 +1441,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
   add_foreign_key "person_framework_assignments", "tenants"
   add_foreign_key "plan_encryption_keys", "tenants"
   add_foreign_key "planning_rule_defaults", "tenants"
-  add_foreign_key "planning_rule_defaults", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "recorded_reporting_managers", "tenants"
   add_foreign_key "reference_currencies", "tenants"
-  add_foreign_key "reference_currencies", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "team_planning_plan_members", "tenants"
   add_foreign_key "team_planning_plans", "tenants"
   add_foreign_key "team_planning_scenarios", "tenants"

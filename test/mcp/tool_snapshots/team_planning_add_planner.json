@@ -1,6 +1,6 @@
 {
   "name": "team_planning_add_planner",
-  "description": "Make an active person with an account in this organisation a planner, so they may create Team Planning plans. It opens no plan they aren't a member of. Admins already may create plans. Returns the list as team_planning_planners reads it.",
+  "description": "Make an active person with an account in this organisation a planner, so they may create Team Planning plans. It opens no plan they aren't a member of. Admins already may create plans. A person with more than one account is refused until the duplicate is settled. Returns the list as team_planning_planners reads it.",
   "inputSchema": {
     "type": "object",
     "properties": {

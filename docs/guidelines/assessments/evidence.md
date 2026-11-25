@@ -558,7 +558,12 @@ Rules, all deliberate:
   confidence; the `person_development/evidence_suggestions` projection writes
   `EvidencePlacementSuggestion`, one row per item × cell, keyed by the
   suggestion's id. Dismissing writes `EvidencePlacementSuggestionDismissed`
-  with an optional reason, and is not a feed entry. Accepting goes through
+  with an optional reason. The dismissal is an Evidence entry in the
+  activity feed, on the suggestion's cell with the reason as its secondary
+  line, and a row in that cell's link thread when the item is linked there.
+  The viewers who see the whole assessment and the person who dismissed it
+  see both; no other peer sees either. `Assessments::SuggestionDismissalVisibility`
+  holds that rule, and both queries call it. Accepting goes through
   `Operations::Assessments::AcceptEvidenceSuggestion`, which publishes
   `EvidenceLinkAdded` — or `EvidenceLinkRevalenced` when someone linked the
   cell meanwhile, even to the same valence — carrying `via_suggestion_id`.
