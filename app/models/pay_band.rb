@@ -30,16 +30,6 @@ class PayBand < ApplicationRecord
   normalizes :currency, with: Currency::NORMALIZE
 
   before_validation { self.location_key = self.class.location_key(location) }
-  before_create :take_place_after_wider_bands, unless: :position
-  # Positions shift under a loaded band as others land, so the gap is read from the row.
-  before_destroy do
-    self.class.with_list_lock(tenant_id)
-    self.position = PayBand.where(id:).pick(:position) || position
-  end
-  after_destroy { PayBand.where(tenant_id:).where("position > ?", position).update_all("position = position - 1") }
-  # A removed band leaves no row, so the tenant keeps when the bands last
-  # changed: every plan reprices live, and a cost says as of when.
-  after_commit { tenant.update_column(:pay_bands_changed_at, Time.current) }
 
   validates :level_ordinal, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
   validate :role_or_family
@@ -48,7 +38,6 @@ class PayBand < ApplicationRecord
   validates :period, inclusion: { in: PERIODS, message: "must be year, month or hour" }
   validates(*FIGURES, presence: true, numericality: { greater_than_or_equal_to: 0, less_than: 10**12 })
   validate :figures_in_order
-  validate :one_band_per_matcher
 
   # The one matching rule for a band's location against the Org Graph's
   # country: case-insensitive, with spaces squeezed and the ends trimmed.
@@ -78,30 +67,10 @@ class PayBand < ApplicationRecord
   # @return [ActiveRecord::Relation<OrgFactPeriod>] each person's site in effect today, not one scheduled
   def self.current_sites = OrgFactPeriod.current.in_effect_on(Date.current).where(subject_type: "person", fact: "site")
 
-  # Puts the bands in this order, the first at position 1.
-  #
-  # @param ids [Array<String>] every band's id, once each
-  # @param from [Array<String>, nil] the order the caller read, refused once another write has moved it
-  # @return [true, false, :stale] false when ids aren't exactly the tenant's bands, :stale when from no longer stands
-  def self.reorder!(ids, from: nil)
-    tenant = ActsAsTenant.current_tenant
-    with_list_lock(tenant&.id) do
-      bands = lock.order(:position).to_a
-      next false unless ids.sort == bands.map(&:id).sort
-      next :stale if from && from != bands.map(&:id)
-
-      ids.each_with_index { |id, index| where(id:).update_all(position: index + 1) }
-      # The only sign the order changed, so it commits with the order or not at all.
-      tenant&.update_column(:pay_bands_changed_at, Time.current)
-      true
-    end
-  end
-
-  # Runs the block in a transaction that holds the tenant's band list.
-  # Adding, changing, removing and reordering a band all take it before any
-  # band row, so their position writes never interleave. A key rather than a
-  # lock on the tenant row, which would hold up every insert that references
-  # the tenant.
+  # Runs the block in a transaction that holds the tenant's band list. The
+  # previous release takes it before writing any band, and every planning
+  # input command takes it before the stream's lock, so the two releases
+  # never write the list at once while a deploy is under way.
   #
   # @param tenant_id [String]
   # @return [Object] the block's value
@@ -176,9 +145,13 @@ class PayBand < ApplicationRecord
   # its family, a level number and a country one each.
   #
   # @return [Integer]
-  def specificity
+  def specificity = self.class.specificity(role_family_id:, role_id:, level_ordinal:, level_id:, location_key:)
+
+  # @param (see #matcher)
+  # @return [Integer] as {#specificity}, from a band's matcher fields
+  def self.specificity(role_family_id:, role_id:, level_ordinal:, level_id:, location_key:)
     reach = role_id || level_id ? 2 : (role_family_id ? 1 : 0)
-    reach + (level_ordinal || level_id ? 1 : 0) + (any_location? ? 0 : 1)
+    reach + (level_ordinal || level_id ? 1 : 0) + (location_key.blank? ? 0 : 1)
   end
 
   # A figure with both its decimal places, as entered: "120000.00".
@@ -209,8 +182,10 @@ class PayBand < ApplicationRecord
   # @return [Boolean] whether this is the fallback band for any location
   def any_location? = location_key.blank?
 
-  # @return [String] the refusal for a second band that matches the same seats
-  def duplicate_message = "There is already a band for #{level_label} in #{any_location? ? 'any location' : location}"
+  # @return [String] the refusal for a second band that matches the same seats, from its names
+  def self.duplicate_message(role_name:, level_name:, location:)
+    "There is already a band for #{role_name}, #{level_name} in #{location.presence || 'any location'}"
+  end
 
   private
 
@@ -223,21 +198,5 @@ class PayBand < ApplicationRecord
 
   def role_or_family
     errors.add(:base, "A band matches on a role or a role family, not both: a role already names its family") if role_id && role_family_id
-  end
-
-  def one_band_per_matcher
-    same = level_id ? { level_id: } : { role_family_id:, role_id:, level_ordinal:, level_id: nil }
-    taken = PayBand.where(**same, location_key:).where.not(id:).exists?
-    errors.add(:base, duplicate_message) if taken
-  end
-
-  # A new band lands after the last band no more specific than it, so the
-  # wider bands stay above the narrower ones without anyone moving them.
-  def take_place_after_wider_bands
-    self.class.with_list_lock(tenant_id)
-    bands = PayBand.where(tenant_id:).order(:position).to_a
-    after = bands.reverse.find { it.specificity <= specificity }
-    self.position = after ? after.position + 1 : 1
-    PayBand.where(tenant_id:).where(position: position..).update_all("position = position + 1")
   end
 end

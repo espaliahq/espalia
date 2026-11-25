@@ -16,7 +16,7 @@ class Operations::Tenants::RemoveBudgetLine < Operations::Base
   # @return [Hash] `{ budget_line_id, role, starts_on, ends_on }` of the line removed
   def perform
     line = find_line(params[:budget_line_id])
-    line.destroy!
+    refusing_as_parameters { planning_inputs.remove(:budget_lines, line.id, changed_by_id: context.person&.id) }
     { budget_line_id: line.id, role: line.role_label, starts_on: line.starts_on.iso8601, ends_on: line.ends_on.iso8601 }
   end
 end

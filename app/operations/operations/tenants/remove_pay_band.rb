@@ -15,6 +15,8 @@ class Operations::Tenants::RemovePayBand < Operations::Base
   # @return [Hash] the band removed, as tenants_pay_bands listed it
   def perform
     band = find_band(params[:pay_band_id])
-    band_payload(band, shadowed: Set.new).except(:shadowed).tap { band.destroy! }
+    band_payload(band, shadowed: Set.new).except(:shadowed).tap do
+      refusing_as_parameters { planning_inputs.remove(:pay_bands, band.id, changed_by_id: context.person&.id) }
+    end
   end
 end

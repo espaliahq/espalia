@@ -47,7 +47,7 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
       people.set_membership(@brook.id, @payments, **ESPALIA, allocation: 1.0)
 
       ReferenceCurrency.create!(currency: "EUR")
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
 
       @planner = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
       @plan_id = SecureRandom.uuid_v7
@@ -374,7 +374,7 @@ class TeamPlanning::BudgetTest < ActiveSupport::TestCase
   end
 
   should "fund a seat whose on-cost is refused on its base under base_only, and list it as unpriced when inclusive" do
-    as_tenant { PayBand.create!(level: @e6, currency: "USD", period: "year", minimum: 0, midpoint: 150_000, maximum: 200_000) }
+    as_tenant { add_pay_band!(level: @e6, currency: "USD", period: "year", minimum: 0, midpoint: 150_000, maximum: 200_000) }
     platform = line(amount: 200_000, currency: "USD", period: "year", cost_centre: "Platform")
     staff = open_position(level: @e6)
     laptop = { model: "itemised", params: { items: [ { name: "Laptop", amount: "2000", currency: "EUR" } ] } }

@@ -28,7 +28,7 @@ class PlanCostSystemTest < ApplicationSystemTestCase
       [ ada, cy ].each { people.set_membership(it.id, @payments, **ESPALIA, effective_on: since, allocation: 1.0) }
       @ada_id = ada.id
 
-      PayBand.create!(level: e5, currency: "EUR", period: "year", minimum: 61_000, midpoint: 100_000, maximum: 177_419)
+      add_pay_band!(level: e5, currency: "EUR", period: "year", minimum: 61_000, midpoint: 100_000, maximum: 177_419)
       ReferenceCurrency.create!(currency: "EUR")
       @level_id = e5.level_id
       @role_id = engineer.role_id

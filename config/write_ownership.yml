@@ -219,16 +219,18 @@ users:
     - lib/tasks/example_seed.rb
     - lib/tasks/stress_seed.rb
 tenants:
-  owner: plain
+  owner: tenant_planning_inputs/tables
+  columns:
+    - pay_bands_changed_at
   reason: >-
-    The tenant's configuration and operational stamps. Retention and scheduled forgetting are also
-    written here, beside tenant_retention_settings, until Track C of https://github.com/espaliahq/espalia/issues/539 drops the old keys.
+    The tenant's configuration and operational stamps. The pay band stamp is written from the
+    TenantPlanningInputs stream. Retention and scheduled forgetting are also written here, beside
+    tenant_retention_settings, until Track C of https://github.com/espaliahq/espalia/issues/539 drops the old keys.
   writers:
     - app/contexts/org_graph/people_cutover.rb
     - app/contexts/org_graph/person_development_cutover.rb
     - app/contexts/tenant_settings/command_handler.rb
     - app/integrations/hris/hibob/adapter.rb
-    - app/models/pay_band.rb
     - app/models/tenant.rb
     - app/operations/operations/integrations/hris_title_preview.rb
     - app/operations/operations/org_graph/update_staleness_threshold.rb
@@ -272,34 +274,20 @@ mcp_pending_approvals:
 # Pay and cost inputs
 
 pay_bands:
-  owner: plain
-  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
-  writers:
-    - app/models/pay_band.rb
-    - app/operations/operations/tenants/pay_band_support.rb
-    - app/operations/operations/tenants/remove_pay_band.rb
+  owner: tenant_planning_inputs/tables
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 exchange_rates:
-  owner: plain
-  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
-  writers:
-    - app/operations/operations/tenants/pay_band_support.rb
-    - app/operations/operations/tenants/remove_exchange_rate.rb
+  owner: tenant_planning_inputs/tables
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 reference_currencies:
-  owner: plain
-  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
-  writers:
-    - app/operations/operations/tenants/pay_band_support.rb
+  owner: tenant_planning_inputs/tables
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 budget_lines:
-  owner: plain
-  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
-  writers:
-    - app/operations/operations/tenants/pay_band_support.rb
-    - app/operations/operations/tenants/remove_budget_line.rb
+  owner: tenant_planning_inputs/tables
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 planning_rule_defaults:
-  owner: plain
-  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
-  writers:
-    - app/operations/operations/tenants/set_planning_rule.rb
+  owner: tenant_planning_inputs/tables
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 
 # Working data
 

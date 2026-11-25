@@ -175,7 +175,7 @@ class OrgGraph::Forgetting
   # @return [Report] with the retention_years that chose them
   # @raise [Hris::Hibob::Errors::Error] and the like, when the HRIS can't be reached
   def dry_run(on: Date.current)
-    years = TenantRetentionSetting.longer_period(@tenant)
+    years = TenantRetentionSetting.period(@tenant)
     due = within_tenant { OrgLeaver.due_to_be_forgotten(@tenant, on:, retention_years: years) }
     forgotten, held_back = without_the_last_admin(candidate_ids(due))
     Report.of(forgotten, retention_years: years, held_back:)
@@ -271,9 +271,10 @@ class OrgGraph::Forgetting
   end
 
   # The settings' lock is held shared, then the tenant row under a share
-  # lock, so neither place's retention period or schedule can change until
+  # lock, so neither the retention period nor the schedule can change until
   # this person is done. A command takes them in the same order. The previous
-  # release, while it still serves, changes the row alone.
+  # release, while it still serves, changes the row alone, so the row stays
+  # locked though only the settings are read.
   #
   # Lock order: the sync lock, the settings (shared), the tenant row
   # (shared), the person's row, the Org Graph stream, the plan keys, then the
@@ -285,11 +286,11 @@ class OrgGraph::Forgetting
     within_tenant do
       Person.transaction do
         hold_off_syncs
-        config = lock_settings
-        raise ScheduleTurnedOff if scheduled && !TenantRetentionSetting.scheduled?(@tenant, config:)
+        lock_settings
+        raise ScheduleTurnedOff if scheduled && !TenantRetentionSetting.scheduled?(@tenant)
         person = Person.lock.find(person_id)
         next false if person.forgotten?
-        if reason == "retention" && !due?(person_id, config, on)
+        if reason == "retention" && !due?(person_id, on)
           raise Refused, "This person is no longer due to be forgotten" if requested_by_id
 
           next false
@@ -303,7 +304,7 @@ class OrgGraph::Forgetting
         AuditMetadata.wrap_event_store do
           OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
             .forget_person(person_id, effective_on: on, reason:,
-                                      retention_years: TenantRetentionSetting.longer_period(@tenant, config:),
+                                      retention_years: TenantRetentionSetting.period(@tenant),
                                       requested_by_id:)
         end
         PlanKeyStore.new.destroy_person(person.id)
@@ -339,8 +340,8 @@ class OrgGraph::Forgetting
   # grants lock and decides.
   def holds_every_admin?(theirs, admins) = admins.any? && (admins - theirs).empty?
 
-  def due?(person_id, config, on)
-    cutoff = TenantRetentionSetting.forget_left_on_or_before(@tenant, on, config:)
+  def due?(person_id, on)
+    cutoff = TenantRetentionSetting.forget_left_on_or_before(@tenant, on)
     cutoff.present? && OrgLeaver.where(tenant: @tenant, person_id:, left_on: ..cutoff).exists?
   end
 
@@ -355,7 +356,7 @@ class OrgGraph::Forgetting
 
   def lock_settings
     TenantSettings::Repository.new.hold_shared
-    Tenant.lock("FOR SHARE").find(@tenant.id).org_graph_config
+    Tenant.lock("FOR SHARE").find(@tenant.id)
   end
 
   def erase_identifiers(person)

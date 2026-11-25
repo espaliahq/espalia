@@ -126,6 +126,10 @@ module ProjectionReplayHelpers
       when "AccountGrants::Projections::AccountFlags"
         # Only the grant columns; the rest of the row is the account's own.
         { tenant_users: rows(TenantUser.select(:id, *AccountGrants::Projections::AccountFlags::COLUMNS), stable_id: true) }
+      when "TenantPlanningInputs::Projections::Tables"
+        # Each row keeps its event's id; of the tenant's row, only the bands' stamp.
+        TenantPlanningInputs::Rows::TABLES.each_key.to_h { [ it, rows(TenantPlanningInputs::Rows.model(it), stable_id: true) ] }
+          .merge(pay_bands_changed_at: Tenant.where(id: tenant.id).pick(:pay_bands_changed_at))
       when "TenantSettings::Projections::Retention"
         # The PK derives from the tenant — assert it survives reset! + replay.
         { tenant_retention_settings: rows(TenantRetentionSetting, stable_id: true) }

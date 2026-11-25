@@ -13,6 +13,6 @@ class Operations::Tenants::AddBudgetLine < Operations::Base
 
   # @return [Hash] the line, as tenants_budget_lines lists it
   def perform
-    line_payload(save_setting!(assign_line(BudgetLine.new)))
+    line_payload(save_setting!(:budget_lines) { assign_line(BudgetLine.new) })
   end
 end

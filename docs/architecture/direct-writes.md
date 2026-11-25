@@ -19,13 +19,12 @@ Each entry is keyed by its table and has an `owner`:
 `writers` lists the files in `app/` or `lib/` allowed to write the table outside its owner. Where a projection owns only some `columns`, a writer may still insert rows, but only a file also in `column_writers` may update those columns. A projection's table with writers, a table whose projection owns only some columns, and a plain table each need a `reason` of one line. Write an issue as its full link: in YAML, ` #` starts a comment and cuts the reason short.
 
 ```yaml
-pay_bands:
+hris_sync_issues:
   owner: plain
-  reason: Pay and cost inputs, until Track A of https://github.com/espaliahq/espalia/issues/539 moves them to events.
+  reason: Each sync rebuilds them from what the HRIS reports; a to-do list, not a record.
   writers:
-    - app/models/pay_band.rb
-    - app/operations/operations/tenants/pay_band_support.rb
-    - app/operations/operations/tenants/remove_pay_band.rb
+    - app/integrations/hris/level_handover.rb
+    - app/models/hris_sync_issue.rb
 ```
 
 **A new table** gets an entry in the same PR as its migration, or `test/db/write_ownership_test.rb` fails. The test also fails on a table declared twice, an entry whose table is gone, an owner that is no projection, a column the table doesn't have, a missing reason, or a writer that is no file in `app/` or `lib/`.
@@ -131,7 +130,7 @@ Each section names the writers the run saw and recommends one of two things: **k
 | `theme`, `custom_theme`, `settings` | `UpdateTheme` |
 | `comparison_config` | `UpdateComparisons` |
 | `*_label_translations` | `UpdateScoringVocabulary` |
-| `pay_bands_changed_at` | `PayBand` callbacks and `PayBand.reorder!` |
+| `pay_bands_changed_at` | `tenant_planning_inputs/tables`, from the TenantPlanningInputs stream |
 | `org_graph_people_projected_at` | `OrgGraph::PeopleCutover#run`, `#revert!` |
 | `person_development_fed_at` | `OrgGraph::PersonDevelopmentCutover#feed!`, `#revert!` |
 | rows | the example and stress seeds; the evidence evaluation (rolled back) |
@@ -150,17 +149,7 @@ Each section names the writers the run saw and recommends one of two things: **k
 
 ### Pay and cost inputs
 
-| Table | Writers |
-|---|---|
-| `pay_bands` | `Operations::Tenants::PayBandSupport#save_setting!` (add, change), `RemovePayBand`; `PayBand.reorder!` and its position callbacks |
-| `exchange_rates` | `save_setting!`, `RemoveExchangeRate` |
-| `reference_currencies` | `save_setting!` |
-| `budget_lines` | `save_setting!`, `RemoveBudgetLine` |
-| `planning_rule_defaults` | `SetPlanningRule` |
-
-Every write goes through an Operation, so each carries the actor in its provenance only while the request lasts. The tables keep `updated_by_id`, the last editor, and nothing before.
-
-**Recommendation: events.** These feed every cost figure in Team Planning. An archived plan freezes a copy of the inputs it used, but a live plan reads the tables as they are now, so today nobody can say what a band was last month or who changed it. This is the first thing 2b should take up, and it is a choice for the product owner: the cost of a new stream against the value of that history.
+**Moved to events** in Track A of [#539](https://github.com/espaliahq/espalia/issues/539). `pay_bands`, `exchange_rates`, `reference_currencies`, `budget_lines` and `planning_rule_defaults` are now written only by `tenant_planning_inputs/tables`, from the tenant's TenantPlanningInputs stream. Each change names its actor (`changed_by_id`) and keeps the figures, so a band's past values and who changed them can be read back. [app/contexts/tenant_planning_inputs/AGENTS.md](../../app/contexts/tenant_planning_inputs/AGENTS.md) holds the rules the move keeps.
 
 ### HRIS sync working data
 
