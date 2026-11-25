@@ -177,7 +177,7 @@ Each section names the writers the run saw and recommends one of two things: **k
 
 ### `framework_explorer_graphs`
 
-`Frameworks::ExplorerGraph#store` writes the snapshot, from the repository after each framework write and from `#rebuild` on a load that finds no current row. **Keep:** it is a cache of the framework's stream, so a missing or stale row costs one rebuild and loses nothing. `PublishedState.reset!` once deleted it through the framework's cascade, which made each rebuild of that projection throw away every snapshot ([#539](https://github.com/espaliahq/espalia/issues/539) c7).
+`Frameworks::ExplorerGraph#store` writes the snapshot, from the repository after each framework write and from `#rebuild` on a load that finds no current row. **Keep:** it is a cache of the framework's stream, so a missing or stale row costs one rebuild and loses nothing. Each row records the last stream event it has seen (`last_event_id`), and `#load` treats a row behind its stream as missing. `PublishedState.reset!` once deleted it through the framework's cascade, which made each rebuild of that projection throw away every snapshot ([#539](https://github.com/espaliahq/espalia/issues/539) c7).
 
 ### `framework_publications`
 

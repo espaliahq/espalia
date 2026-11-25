@@ -12,9 +12,10 @@
 # bug that let untrusted input reach this column would cost data integrity,
 # not RCE.
 #
-# `format_version` is bumped whenever the serialized hash shape changes;
-# stale rows are treated as missing so the controller falls back to a lazy
-# {Frameworks::ExplorerGraph.rebuild} from the aggregate.
+# `format_version` is bumped whenever the serialized hash shape changes, and
+# `last_event_id` names the last stream event the row has seen. A row in an
+# older format, or behind its stream, is treated as missing so the controller
+# falls back to a lazy {Frameworks::ExplorerGraph.rebuild} from the aggregate.
 #
 class FrameworkExplorerGraph < ApplicationRecord
   self.table_name = "framework_explorer_graphs"

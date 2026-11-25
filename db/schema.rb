@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_24_122130) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -516,6 +516,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_122130) do
     t.jsonb "graph_data", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
+    t.uuid "last_event_id"
     t.index ["tenant_id"], name: "index_framework_explorer_graphs_on_tenant_id"
   end
 
