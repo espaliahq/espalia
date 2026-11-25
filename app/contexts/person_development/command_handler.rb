@@ -219,8 +219,18 @@ class PersonDevelopment::CommandHandler
   # @param mappings [Array<Hash>] migration mappings; see
   #   {PersonDevelopment::Events::FrameworkVersionMigrated} for shape
   def migrate_framework_version(person_id, framework_id, old_version, new_version, mappings)
-    @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.migrate_framework_version(framework_id, old_version, new_version, mappings)
+    attempts = 0
+    begin
+      attempts += 1
+      # A placement job or a decision can store to the stream mid-publish. Losing that race must not roll the publish back.
+      ActiveRecord::Base.transaction(requires_new: true) do
+        @repository.with_person_development(person_id, framework_id) do |aggregate|
+          aggregate.migrate_framework_version(framework_id, old_version, new_version, mappings)
+        end
+      end
+    rescue RubyEventStore::WrongExpectedEventVersion
+      retry if attempts < PersonDevelopment::SuggestionWrites::ATTEMPTS
+      raise
     end
   end
 
