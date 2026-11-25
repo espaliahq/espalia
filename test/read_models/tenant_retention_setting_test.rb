@@ -5,7 +5,7 @@ require "test_helper"
 class TenantRetentionSettingTest < ActiveSupport::TestCase
   setup { @tenant = create(:tenant) }
 
-  def json(**settings) = Tenant.find(@tenant.id).tap { it.org_graph_config.assign_attributes(settings) }.tap(&:save!)
+  def json(**settings) = Tenant.where(id: @tenant.id).update_all([ "org_graph_config = ?::jsonb", settings.to_json ])
 
   def stream(**settings)
     ActsAsTenant.with_tenant(@tenant) do

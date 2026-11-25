@@ -11,8 +11,6 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
 
   setup do
     @tenant = create(:tenant)
-    @tenant.org_graph_config.retention_years = 7
-    @tenant.save!
     ActsAsTenant.current_tenant = @tenant
     OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       .claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")
@@ -202,8 +200,8 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_not @leaver.reload.forgotten?
     end
 
-    should "forget nobody on a schedule only the JSON says is on" do
-      Tenant.find(@tenant.id).tap { it.org_graph_config.scheduled_forgetting = true }.save!
+    should "forget nobody on a schedule only a retired JSON key says is on" do
+      Tenant.where(id: @tenant.id).update_all(%(org_graph_config = '{"scheduled_forgetting": true}'))
 
       assert_equal 0, forgetting.forget_due(on: TODAY, scheduled: true).count
       assert_not @leaver.reload.forgotten?
