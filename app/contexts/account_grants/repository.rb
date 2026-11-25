@@ -6,8 +6,8 @@
 # The grants used to live in `AccountGrants`. A release before this stream
 # may still write there during a deploy, so the lock keeps the old stream's
 # name and, under it, events only in the old stream are linked into the new
-# one before loading. Nothing is linked back, so the old stream stops at the
-# events written before this release. A read without the lock reads the new
+# one before loading. Nothing is linked back, so the old stream holds only
+# what earlier releases wrote. A read without the lock reads the new
 # stream, and misses an event the previous release wrote until the next
 # command or reconcile links it.
 #
