@@ -107,6 +107,8 @@ Rails.application.routes.draw do
     resources :budget_lines, only: [ :index, :create, :edit, :update, :destroy ]
     resources :exchange_rates, only: [ :create, :edit, :update, :destroy ]
     resource :reference_currency, only: [ :update ]
+    get "planning_inputs/:inputs/history", to: "planning_inputs_histories#show", as: :planning_inputs_history,
+                                           constraints: { inputs: /pay_bands|exchange_rates|budget_lines/ }
 
     # Org Graph Units view (#80), with "change it back" in its activity
     # sidebar (#137). Here, admins only, until the Org Graph screens are
