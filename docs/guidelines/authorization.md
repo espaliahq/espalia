@@ -299,6 +299,12 @@ them, recording first any link only the table holds. The `account_links`
 reconciler records links the table holds and the stream doesn't, as it does
 for roles, and logs any person two accounts share.
 
+Such a person can lose a right but not gain one ([#562](https://github.com/espaliahq/espalia/issues/562)).
+The add tools for planners and editors refuse them, as `SetAccountRole` does.
+The remove tools take the right from every linked account that isn't an admin,
+in one transaction through `AccountGrants::CommandHandler#remove_from_each`.
+`Operations::PersonAccounts` finds the accounts for all four.
+
 `org_graph_editors`, `team_planning_planners` and their add and remove tools
 give each holder `since`, `added_by` and `already_held` from the stream. Editor
 grants also show in the Org Graph's organisation activity
