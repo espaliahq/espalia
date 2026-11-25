@@ -2,10 +2,9 @@
 
 require "test_helper"
 
-# Role and link events reach TenantAccountGrants from a later release while
-# this one may still be serving ([#539](https://github.com/espaliahq/espalia/issues/539) Track B).
-# This release writes none of them, but must load them, and must keep them out
-# of the old stream that the release before it reads.
+# Role and link events on TenantAccountGrants, written straight to the
+# stream ([#539](https://github.com/espaliahq/espalia/issues/539) Track B).
+# They stay out of the old stream, which the release before the move loads.
 class AccountGrants::LaterEventsTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
@@ -58,19 +57,18 @@ class AccountGrants::LaterEventsTest < ActiveSupport::TestCase
     assert TenantUser.find(@ada.id).org_graph_editor
   end
 
-  should "link only grant events back into the old stream" do
+  should "link nothing back into the old stream" do
     as_tenant { AccountGrants::CommandHandler.new.add(:org_graph_editor, @ada) }
 
-    assert_equal %w[AccountGrants::Events::PlannerAdded AccountGrants::Events::OrgGraphEditorAdded],
-                 types(EventStreamNaming.account_grants_stream(tenant: @tenant))
+    assert_empty types(EventStreamNaming.account_grants_stream(tenant: @tenant))
     assert_equal 8, types(EventStreamNaming.tenant_account_grants_stream(tenant: @tenant)).size
   end
 
-  should "leave roles and links out of the read without the lock, which reads the old stream" do
+  should "include roles and links in the read without the lock" do
     grants = as_tenant { AccountGrants::Repository.new.load_grants }
 
-    assert_empty grants.roles
-    assert_empty grants.links
+    assert_equal({ @ada.id => "admin" }, grants.roles)
+    assert_equal({ @ada.id => @ada.person_id }, grants.links)
     assert grants.holds?(:team_planner, @bo.id)
   end
 

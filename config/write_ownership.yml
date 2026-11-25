@@ -226,8 +226,8 @@ tenants:
     - pay_bands_changed_at
   reason: >-
     The tenant's configuration and operational stamps. The pay band stamp is written from the
-    TenantPlanningInputs stream. Retention and scheduled forgetting are also written here, beside
-    tenant_retention_settings, until Track C of https://github.com/espaliahq/espalia/issues/539 drops the old keys.
+    TenantPlanningInputs stream. The tenant settings commands remove the retention keys the stream
+    replaced, which the previous release writes back while a deploy is in flight.
   writers:
     - app/contexts/org_graph/people_cutover.rb
     - app/contexts/org_graph/person_development_cutover.rb
