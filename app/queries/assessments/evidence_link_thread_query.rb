@@ -26,6 +26,12 @@ class Assessments::EvidenceLinkThreadQuery
     PersonDevelopment::Events::EvidencePlacementSuggestionDismissed
   ].freeze
 
+  CELL_EVENTS = [
+    PersonDevelopment::Events::EvidencePlacementSuggested,
+    PersonDevelopment::Events::EvidencePlacementSuggestionDismissed,
+    PersonDevelopment::Events::FrameworkVersionMigrated
+  ].freeze
+
   # One lifecycle row. `kind` is :linked | :revalenced | :suggestion_kept |
   # :suggestion_dismissed | :removed | :withdrawn (:suggestion_kept is a
   # suggestion accepted with the valence the link already had);
@@ -88,10 +94,11 @@ class Assessments::EvidenceLinkThreadQuery
   private
 
   def stream_events
-    stream = EventStreamNaming.person_development_stream(
-      @item.person_id, @item.framework_id, tenant: ActsAsTenant.current_tenant
-    )
-    @event_store.read.stream(stream).of_type(LIFECYCLE_EVENTS).to_a
+    @event_store.read.stream(stream_name).of_type(LIFECYCLE_EVENTS).to_a
+  end
+
+  def stream_name
+    EventStreamNaming.person_development_stream(@item.person_id, @item.framework_id, tenant: ActsAsTenant.current_tenant)
   end
 
   # Returns [kind, actor_id, extras] for events that concern this
@@ -151,11 +158,13 @@ class Assessments::EvidenceLinkThreadQuery
     end
   end
 
-  # The dismissal event names no cell; the suggestion's row does, and follows
-  # it through a framework migration.
+  # The dismissal event names no cell; {Assessments::DismissedSuggestionCells}
+  # reads it from the stream.
   def dismissed_here
-    @dismissed_here ||= EvidencePlacementSuggestion.for_evidence(@item.id)
-      .where(capability_stable_id: @capability_stable_id, level_ordinal: @level_ordinal).pluck(:id).to_set
+    @dismissed_here ||= begin
+      events = @event_store.read.stream(stream_name).of_type(CELL_EVENTS).to_a
+      Assessments::DismissedSuggestionCells.from(events).filter_map { |id, cell| id if cell == [ @capability_stable_id, @level_ordinal ] }.to_set
+    end
   end
 
   def on_cell?(capability_stable_id, level_ordinal)

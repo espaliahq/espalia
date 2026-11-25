@@ -369,9 +369,8 @@ class Assessments::ActivityFeedQuery
     )
   end
 
-  # The event names no cell, so it is read from the suggestion's row, which
-  # follows the cell through a framework migration. The reason is read from
-  # the event as stored.
+  # The event names no cell; {Assessments::DismissedSuggestionCells} reads it
+  # from the stream. The reason is read from the event as stored.
   def dismissal_entries
     dismissals = stream_events.filter_map do |event|
       next unless event.is_a?(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed)
@@ -383,8 +382,7 @@ class Assessments::ActivityFeedQuery
     end
     return [] if dismissals.empty?
 
-    cells = EvidencePlacementSuggestion.where(id: dismissals.map { |_, data| data[:suggestion_id] })
-      .pluck(:id, :capability_stable_id, :level_ordinal).to_h { |id, stable_id, level| [ id, [ stable_id, level ] ] }
+    cells = Assessments::DismissedSuggestionCells.from(stream_events)
     dismissals.filter_map do |event, data|
       stable_id, level_ordinal = cells[data[:suggestion_id]]
       next unless stable_id
