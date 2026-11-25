@@ -23,8 +23,10 @@ class Operations::Tenants::AddPayBand < Operations::Base
 
   # @return [Hash] the band, as tenants_pay_bands lists it
   def perform
-    band = PayBand.new(location: params[:location], currency: params[:currency], period: params[:period], **figures)
-    match!(band)
-    band_payload(save_setting!(band))
+    band = save_setting!(:pay_bands) do
+      PayBand.new(location: params[:location], currency: params[:currency], period: params[:period], **figures)
+             .tap { match!(it) }
+    end
+    band_payload(band)
   end
 end

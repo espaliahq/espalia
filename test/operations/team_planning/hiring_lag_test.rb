@@ -16,7 +16,7 @@ class Operations::TeamPlanning::HiringLagTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) do
       @engineer = create(:framework_role, code: "E")
       @e5 = create(:framework_level, role_id: @engineer.role_id, ordinal: 5)
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 73_000, maximum: 200_000)
+      add_pay_band!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 73_000, maximum: 200_000)
       squads = SecureRandom.uuid_v7
       structure.define_taxonomy([ { level_id: squads, name: "Squad" } ], effective_on: "2026-01-01")
       structure.create_unit(@unit_id, "Payments", level_id: squads, effective_on: "2026-01-01")

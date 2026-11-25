@@ -55,7 +55,7 @@ class Operations::TeamPlanning::SetBudgetLine < Operations::Base
   # The line's role and level as the scenario last set them, even before a cut, or as the organisation holds
   # them, so a role or level gone from the framework may be given again.
   def held_line(line_id, changes)
-    kept = changes.reverse.find { it.is_a?(KIND) }&.data || ::BudgetLine.find_by(id: line_id)&.attributes.to_h.symbolize_keys
+    kept = changes.reverse.find { it.is_a?(KIND) }&.data || TenantPlanningInputs::Projections::Tables.unless_rebuilding { ::BudgetLine.find_by(id: line_id) }&.attributes.to_h.symbolize_keys
     ::BudgetLine.new(kept.to_h.slice(:role_id, :level_id, :role_name, :level_name))
   end
 

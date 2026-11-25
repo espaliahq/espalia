@@ -22,7 +22,7 @@ class Tenant::PayBandsSystemTest < ApplicationSystemTestCase
   def store_band(location, **match)
     ActsAsTenant.with_tenant(@tenant) do
       PayBand.new(location:, currency: "AUD", period: "year", minimum: 100_000, midpoint: 120_000, maximum: 140_000)
-             .tap { it.match_on(**match) }.tap(&:save!)
+             .tap { it.match_on(**match) }.then { save_planning_input!(:pay_bands, it) }
     end
   end
 

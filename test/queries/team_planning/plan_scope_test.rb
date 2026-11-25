@@ -36,7 +36,7 @@ class TeamPlanning::PlanScopeTest < ActiveSupport::TestCase
       people.set_membership(@dee.id, @sales, **ESPALIA, allocation: 1.0)
       people.change_manager(@ada.id, @cy.id, **ESPALIA)
 
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
       ReferenceCurrency.create!(currency: "EUR")
 
       @planner = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))

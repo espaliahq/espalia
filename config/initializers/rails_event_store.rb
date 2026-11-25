@@ -149,6 +149,11 @@ Rails.configuration.to_prepare do
   )
 
   event_store.subscribe(
+    TenantPlanningInputs::Projections::Tables.new,
+    to: TenantPlanningInputs::Projections::Tables.handled_events
+  )
+
+  event_store.subscribe(
     TenantSettings::Projections::Retention.new,
     to: TenantSettings::Projections::Retention.handled_events
   )

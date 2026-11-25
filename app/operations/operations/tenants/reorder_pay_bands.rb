@@ -20,9 +20,9 @@ class Operations::Tenants::ReorderPayBands < Operations::Base
   # @return [Hash] `{ pay_bands: [...] }` in the new order, as tenants_pay_bands lists them
   # @raise [Operations::Base::ParameterError] unless the ids are every band once, in a list that hasn't moved since it was read
   def perform
-    case PayBand.reorder!(ids(:pay_band_ids), from: (ids(:from_pay_band_ids) unless params[:from_pay_band_ids].nil?))
-    when false then raise Operations::Base::ParameterError, "List every pay band once, as tenants_pay_bands lists them"
-    when :stale then raise Operations::Base::ParameterError, "The list has changed since you read it: read tenants_pay_bands again"
+    refusing_as_parameters do
+      planning_inputs.reorder_bands(ids(:pay_band_ids), from: (ids(:from_pay_band_ids) unless params[:from_pay_band_ids].nil?),
+                                                        changed_by_id: context.person&.id)
     end
 
     Operations::Tenants::PayBands.call(context:, params: {})

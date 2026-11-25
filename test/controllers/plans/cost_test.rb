@@ -31,7 +31,7 @@ class Plans::CostTest < ActionDispatch::IntegrationTest
       people.set_membership(@ada.id, @payments, **ESPALIA, allocation: 1.0)
       people.set_membership(@cy.id, @payments, **ESPALIA, allocation: 1.0)
 
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 61_337, midpoint: 100_000, maximum: 177_419)
+      add_pay_band!(level: @e5, currency: "EUR", period: "year", minimum: 61_337, midpoint: 100_000, maximum: 177_419)
       ReferenceCurrency.create!(currency: "EUR")
 
       @editor = account(team_planner: true, name: "Erin Editor")

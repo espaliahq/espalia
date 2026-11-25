@@ -15,7 +15,7 @@ class Operations::Tenants::RemoveExchangeRate < Operations::Base
   # @return [Hash] `{ exchange_rate_id, from_currency, to_currency, applies_from }` of the rate removed
   def perform
     rate = find_rate(params[:exchange_rate_id])
-    rate.destroy!
+    refusing_as_parameters { planning_inputs.remove(:exchange_rates, rate.id, changed_by_id: context.person&.id) }
     rate_payload(rate).slice(:exchange_rate_id, :from_currency, :to_currency, :applies_from)
   end
 end
