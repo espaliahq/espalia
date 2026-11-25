@@ -55,7 +55,7 @@ Each change still writes the old keys of `tenants.org_graph_config` as well, tho
 
 - **c2** stops reading the JSON and keeps writing it. Deploy it only once c1, which put the settings on the stream, serves on every web and worker instance.
 - **c2b** stops writing the JSON, removes the reconciler and deletes the keys. Deploy it only once c2 serves everywhere.
-- **Once c2b is deployed, don't roll back to c1.** c1's commands would record the missing keys as the defaults: seven years, off, with any "never" lost. Roll back to c2 instead, which never reads them.
+- **Once c2b is deployed, don't roll back to c1.** c1's commands would record the missing keys as the defaults: seven years, off, with any "never" lost. Roll back to c2 instead. Its reconciler records nothing from a JSON holding none of the keys, and its commands write them all back.
 
 A run holds the stream's lock shared, then the tenant row, for each person. A change from either release waits for that person to finish, or the run sees it before the next one.
 
