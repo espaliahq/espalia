@@ -92,6 +92,18 @@ class AccountGrants::LinksTest < ActiveSupport::TestCase
       assert_equal %w[sign_in cleared sign_in], link_events.map { it.data[:match] || it.data[:reason] }
       assert_equal @bo.id, column(@account)
     end
+
+    should "unlink a person from an account since destroyed, then link another" do
+      as_tenant do
+        @account.link_to!(@ada, match: :sign_in)
+        TenantUser.find(@account.id).destroy!
+        @other.link_to!(@ada, match: :sign_in)
+      end
+
+      assert_equal({ @other.id => @ada.id }, links)
+      assert_equal %w[sign_in account_removed sign_in], link_events.map { it.data[:match] || it.data[:reason] }
+      assert_equal @ada.id, column(@other)
+    end
   end
 
   context "unlink_forgotten" do
