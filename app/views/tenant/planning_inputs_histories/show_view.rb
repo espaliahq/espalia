@@ -46,8 +46,17 @@ class Views::Tenant::PlanningInputsHistories::ShowView < Views::Base
   private
 
   def empty
+    return past_the_end if @read[:page] > 1
+
     render Components::Kit::EmptyState.new(title: "No changes yet", size: :page) do
       plain "Each change made from now on is listed here."
+    end
+  end
+
+  def past_the_end
+    render Components::Kit::EmptyState.new(title: "No changes on this page", size: :page) do |state|
+      plain "The history ends on an earlier page."
+      state.action { page_link("Newest changes", 1) }
     end
   end
 

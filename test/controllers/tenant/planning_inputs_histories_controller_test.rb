@@ -74,6 +74,14 @@ class Tenant::PlanningInputsHistoriesControllerTest < ActionDispatch::Integratio
       assert_includes response.body, "No changes yet"
     end
 
+    should "lead back to the newest changes from a page past the end" do
+      get tenant_planning_inputs_history_path("pay_bands", page: 9)
+
+      assert_response :success
+      assert_includes response.body, "No changes on this page"
+      assert_select "a[href='#{tenant_planning_inputs_history_path('pay_bands', page: 1)}']", text: "Newest changes"
+    end
+
     should "link each screen to its history" do
       get tenant_pay_bands_path
       assert_select "a[href='#{tenant_planning_inputs_history_path('pay_bands')}']", text: "Band history"
