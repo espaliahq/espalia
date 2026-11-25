@@ -1528,6 +1528,7 @@ class PersonDevelopment::Aggregate
         record_held_suggestion(row, status: "superseded")
       end
     when "dismissed"
+      # A link naming this row can't precede it: the release before dismissed only pending rows, and a link accepts one.
       record_held_suggestion(row, status: "pending") unless held == "pending" && same
       apply(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed.new(data: {
         suggestion_id: row[:id], evidence_id: row[:evidence_id], dismissed_by_id: row[:decided_by_id],
