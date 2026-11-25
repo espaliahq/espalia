@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-# What the Org Graph editor operations share: finding a person's account in
+# What the Org Graph editor operations share: finding a person's accounts in
 # the tenant, and the list as it reads after a change.
 module Operations::OrgGraph::EditorSupport
   include Operations::GrantHoldersPayload
+  include Operations::PersonAccounts
 
   private
 
@@ -14,11 +15,6 @@ module Operations::OrgGraph::EditorSupport
 
   def grant_handler
     AccountGrants::CommandHandler.new
-  end
-
-  def account!
-    TenantUser.find_by(person_id: params[:person_id].to_s.downcase) or
-      raise Operations::Base::ParameterError, "person_id: that person has no account in this organisation"
   end
 
   # Admins may always edit, so they are listed apart from the editors an admin chose.
