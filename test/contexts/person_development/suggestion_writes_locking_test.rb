@@ -42,6 +42,7 @@ class PersonDevelopment::SuggestionWritesLockingTest < ActiveSupport::TestCase
     assert_equal :refused, command.value
   ensure
     erase&.close
+    command&.join(5)
   end
 
   private
