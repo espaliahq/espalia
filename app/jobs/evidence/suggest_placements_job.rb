@@ -106,7 +106,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   # Runs for one item are serialised (an edit and its original, or a double
   # "Suggest again", can overlap), and a run whose feedback was edited or
   # withdrawn while the model was answering stores nothing: the edit's own
-  # run is coming.
+  # run is coming. So does one whose person was forgotten meanwhile.
   #
   # @return [Boolean] whether a set was stored
   def store(item, proposals, model:, asked_about:)
@@ -114,9 +114,6 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
       AuditMetadata.wrap_event_store do
         PersonDevelopment::SuggestionWrites.with_aggregate(item.person_id, item.framework_id, evidence_ids: [ item.id ]) do |aggregate|
           next false if EvidenceItem.where(id: item.id).pick(:content) != asked_about
-          # A rationale quotes the feedback, and the person may have been forgotten while the model answered.
-          next false if Person.forgotten.exists?(id: item.person_id)
-
           aggregate.suggest_placements(item.id, proposals: proposals.map { proposal_data(it) }, provider: model.provider,
                                        model: model.model, prompt_version: model.prompt_version,
                                        generated_at: Time.current.iso8601(6))
