@@ -194,6 +194,11 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
       sentence
     when :suggestion_kept
       "#{actor} accepted a suggestion to keep this as “#{valence_label(entry.valence)}”"
+    when :suggestion_dismissed
+      sentence = "#{actor} dismissed a suggestion to place this feedback here"
+      reason = Prose.to_plain(entry.reason).presence
+      sentence += " — #{reason}" if reason
+      sentence
     when :removed
       sentence = "#{actor} removed this feedback from this behaviour"
       sentence += " — #{entry.reason}" if entry.reason.present?

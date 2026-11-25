@@ -22,12 +22,20 @@ class Assessments::EvidenceLinkThreadQuery
     PersonDevelopment::Events::EvidenceLinkRemoved,
     PersonDevelopment::Events::EvidenceLinkRevalenced,
     PersonDevelopment::Events::EvidenceRelinked,
-    PersonDevelopment::Events::EvidenceWithdrawn
+    PersonDevelopment::Events::EvidenceWithdrawn,
+    PersonDevelopment::Events::EvidencePlacementSuggestionDismissed
+  ].freeze
+
+  CELL_EVENTS = [
+    PersonDevelopment::Events::EvidencePlacementSuggested,
+    PersonDevelopment::Events::EvidencePlacementSuggestionDismissed,
+    PersonDevelopment::Events::FrameworkVersionMigrated
   ].freeze
 
   # One lifecycle row. `kind` is :linked | :revalenced | :suggestion_kept |
-  # :removed | :withdrawn (:suggestion_kept is a suggestion accepted with the
-  # valence the link already had); `valence`/`previous_valence`/`reason` are kind-specific
+  # :suggestion_dismissed | :removed | :withdrawn (:suggestion_kept is a
+  # suggestion accepted with the valence the link already had);
+  # `valence`/`previous_valence`/`reason` are kind-specific
   # and nil otherwise. `actor_name` is resolved from the Person read
   # model and nil when the person no longer resolves.
   Entry = Data.define(:kind, :actor_name, :valence, :previous_valence, :reason, :at)
@@ -35,12 +43,16 @@ class Assessments::EvidenceLinkThreadQuery
   # @param item [EvidenceItem]
   # @param capability_stable_id [String]
   # @param level_ordinal [Integer]
+  # @param viewer_person_id [String, nil]
+  # @param viewer_sees_all [Boolean] decides, with the viewer, which dismissals show
   # @param event_store [RailsEventStore::Client] override for tests
-  def initialize(item:, capability_stable_id:, level_ordinal:,
+  def initialize(item:, capability_stable_id:, level_ordinal:, viewer_person_id: nil, viewer_sees_all: false,
                  event_store: Rails.configuration.event_store)
     @item = item
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
+    @viewer_person_id = viewer_person_id
+    @viewer_sees_all = viewer_sees_all
     @event_store = event_store
   end
 
@@ -75,17 +87,19 @@ class Assessments::EvidenceLinkThreadQuery
   def lifecycle_entries
     @lifecycle_entries ||= begin
       entries = stream_events.filter_map { |event| build_entry(event) }
-      resolve_actor_names(entries)
+      # A dismissal recorded from a table row is dated before the events around it.
+      resolve_actor_names(entries).each_with_index.sort_by { |entry, i| [ entry.at || Time.at(0), i ] }.map(&:first)
     end
   end
 
   private
 
   def stream_events
-    stream = EventStreamNaming.person_development_stream(
-      @item.person_id, @item.framework_id, tenant: ActsAsTenant.current_tenant
-    )
-    @event_store.read.stream(stream).of_type(LIFECYCLE_EVENTS).to_a
+    @event_store.read.stream(stream_name).of_type(LIFECYCLE_EVENTS).to_a
+  end
+
+  def stream_name
+    EventStreamNaming.person_development_stream(@item.person_id, @item.framework_id, tenant: ActsAsTenant.current_tenant)
   end
 
   # Returns [kind, actor_id, extras] for events that concern this
@@ -132,6 +146,25 @@ class Assessments::EvidenceLinkThreadQuery
       # each thread regardless of cell.
       [ Entry.new(kind: :withdrawn, actor_name: nil, valence: nil,
                   previous_valence: nil, reason: data[:reason], at: at), data[:withdrawn_by_id] ]
+    when PersonDevelopment::Events::EvidencePlacementSuggestionDismissed
+      return nil unless dismissed_here.include?(data[:suggestion_id])
+      return nil unless Assessments::SuggestionDismissalVisibility.visible?(
+        dismissed_by_id: data[:dismissed_by_id], viewer_person_id: @viewer_person_id, viewer_sees_all: @viewer_sees_all
+      )
+
+      # One recorded from a table row carries when it was first made.
+      dismissed_at = data[:dismissed_at].present? ? Time.zone.parse(data[:dismissed_at].to_s) : at
+      [ Entry.new(kind: :suggestion_dismissed, actor_name: nil, valence: nil,
+                  previous_valence: nil, reason: data[:reason], at: dismissed_at), data[:dismissed_by_id] ]
+    end
+  end
+
+  # The dismissal event names no cell; {Assessments::DismissedSuggestionCells}
+  # reads it from the stream.
+  def dismissed_here
+    @dismissed_here ||= begin
+      events = @event_store.read.stream(stream_name).of_type(CELL_EVENTS).to_a
+      Assessments::DismissedSuggestionCells.from(events).filter_map { |id, cell| id if cell == [ @capability_stable_id, @level_ordinal ] }.to_set
     end
   end
 
