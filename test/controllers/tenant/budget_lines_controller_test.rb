@@ -10,7 +10,7 @@ class Tenant::BudgetLinesControllerTest < ActionDispatch::IntegrationTest
     @admin_user = create(:user, password: "password123")
     @planner_user = create(:user, password: "password123")
     ActsAsTenant.with_tenant(@tenant) do
-      create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: create(:person, tenant: @tenant, name: "Ada Admin"))
+      create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin, person: @admin_person = create(:person, tenant: @tenant, name: "Ada Admin"))
       create(:tenant_user, tenant: @tenant, user: @planner_user, role: :member, team_planner: true, org_graph_editor: true)
       @role = create(:framework_role, tenant: @tenant, name: "Software Engineer")
       @level = create(:framework_level, tenant: @tenant, role_id: @role.role_id, code: "E2", title: "Engineer II")
@@ -47,7 +47,7 @@ class Tenant::BudgetLinesControllerTest < ActionDispatch::IntegrationTest
 
       assert_redirected_to tenant_budget_lines_path
       line = ActsAsTenant.with_tenant(@tenant) { BudgetLine.sole }
-      assert_equal [ "AUD", BigDecimal("120000"), @level.level_id, @admin_user ], [ line.currency, line.amount, line.level_id, line.updated_by ]
+      assert_equal [ "AUD", BigDecimal("120000"), @level.level_id, @admin_person.id ], [ line.currency, line.amount, line.level_id, line.updated_by_person_id ]
 
       follow_redirect!
       assert_includes response.body, "Budget line added for Software Engineer, E2 Engineer II."

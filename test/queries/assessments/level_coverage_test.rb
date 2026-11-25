@@ -82,6 +82,21 @@ class Assessments::LevelCoverageTest < ActiveSupport::TestCase
       assert_equal 1, coverage[:self_rated]
     end
 
+    should "count a carried side once its cell is agreed" do
+      rate(@cap1, self_rated_frequency: "consistent", self_rating_source: "seeded",
+        manager_rated_frequency: "consistent", manager_rating_source: "seeded", aligned_frequency: "consistent")
+      rate(@cap2, self_rated_frequency: "some", self_rating_source: "seeded",
+        manager_rated_frequency: "some", manager_rating_source: "seeded")
+
+      assert_equal [ 1, 1 ], coverage.values_at(:self_rated, :manager_rated)
+      assert_not coverage[:self_complete], "the unagreed carried cell is still to confirm"
+
+      AssessmentLevelRating.find_by(capability_stable_id: @cap2.stable_id).update!(aligned_frequency: "some")
+
+      assert coverage[:self_complete]
+      assert coverage[:manager_complete]
+    end
+
     should "treat nil provenance as vetted (legacy rows)" do
       rate(@cap1, self_rated_frequency: "consistent")
       rate(@cap2, self_rated_frequency: "some")

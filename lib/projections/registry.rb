@@ -44,7 +44,8 @@ module Projections::Registry
     "team_planning/overrides"                => "TeamPlanning::Projections::Overrides",
     "team_planning/history"                  => "TeamPlanning::Projections::History",
     "account_grants/account_flags"           => "AccountGrants::Projections::AccountFlags",
-    "tenant_settings/retention"              => "TenantSettings::Projections::Retention"
+    "tenant_settings/retention"              => "TenantSettings::Projections::Retention",
+    "tenant_planning_inputs/tables"          => "TenantPlanningInputs::Projections::Tables"
   }.freeze
 
   # @return [Array<String>] the registered projection names

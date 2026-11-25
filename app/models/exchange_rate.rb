@@ -23,7 +23,6 @@ class ExchangeRate < ApplicationRecord
   validates :applies_from, presence: true
   validates :rate, presence: true, numericality: { greater_than: 0, less_than: 10**12 }
   validate :two_currencies
-  validate :one_rate_per_pair_and_date
 
   # Converts an amount using the rate in force on a date: the pair's own rate,
   # or the inverse of the reverse pair's, whichever applies from later. It
@@ -103,20 +102,14 @@ class ExchangeRate < ApplicationRecord
   # @return [String] such as "NZD to AUD"
   def pair = "#{from_currency} to #{to_currency}"
 
-  # @return [String] the refusal for a second rate on the pair's date, either way round
-  def duplicate_message = "There is already a rate between #{from_currency} and #{to_currency} applying from #{applies_from&.iso8601}"
+  # @return [String] the refusal for a second rate on the pair's ISO 8601 date, either way round
+  def self.duplicate_message(from_currency, to_currency, applies_from)
+    "There is already a rate between #{from_currency} and #{to_currency} applying from #{applies_from}"
+  end
 
   private
 
   def two_currencies
     errors.add(:base, "A rate converts between two different currencies") if from_currency.present? && from_currency == to_currency
-  end
-
-  # A pair and its reverse on one date would contradict each other, so a date holds one of them.
-  def one_rate_per_pair_and_date
-    pair = ExchangeRate.where(from_currency:, to_currency:)
-    taken = pair.or(ExchangeRate.where(from_currency: to_currency, to_currency: from_currency))
-                .where(applies_from:).where.not(id:).exists?
-    errors.add(:base, duplicate_message) if taken
   end
 end

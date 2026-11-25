@@ -22,24 +22,18 @@ class OrgGraph::ForgettingLockingTest < ActiveSupport::TestCase
     @tenant.delete
   end
 
-  should "make a disable by the previous release wait for an erase that read the schedule as on" do
-    holding_erase_locks do |config|
-      assert TenantRetentionSetting.scheduled?(@tenant, config:)
-      assert_equal :blocked, previous_release_disables
-    end
-    assert_equal :committed, previous_release_disables
-  end
-
-  should "make a disable by this release wait for an erase that read the schedule as on" do
+  should "make a disable wait for an erase that read the schedule as on" do
     holding_erase_locks do
-      assert_equal :blocked, disables { TenantSettings::CommandHandler.new(Tenant.find(@tenant.id)).disable_scheduled_forgetting }
+      assert TenantRetentionSetting.scheduled?(@tenant)
+      assert_equal :blocked, disable
     end
+    assert_equal :committed, disable
   end
 
-  should "let an erase see a disable the previous release committed first" do
-    assert_equal :committed, previous_release_disables
+  should "let an erase see a disable committed first" do
+    assert_equal :committed, disable
 
-    holding_erase_locks { |config| assert_not TenantRetentionSetting.scheduled?(@tenant, config:) }
+    holding_erase_locks { assert_not TenantRetentionSetting.scheduled?(@tenant) }
   end
 
   private
@@ -48,12 +42,15 @@ class OrgGraph::ForgettingLockingTest < ActiveSupport::TestCase
   # the block runs.
   def holding_erase_locks
     ActsAsTenant.with_tenant(@tenant) do
-      Tenant.transaction { yield OrgGraph::Forgetting.new(@tenant).send(:lock_settings) }
+      Tenant.transaction do
+        OrgGraph::Forgetting.new(@tenant).send(:lock_settings)
+        yield
+      end
     end
   end
 
-  def previous_release_disables
-    disables { Tenant.find(@tenant.id).tap { it.org_graph_config.scheduled_forgetting = false }.save! }
+  def disable
+    disables { TenantSettings::CommandHandler.new(Tenant.find(@tenant.id)).disable_scheduled_forgetting }
   end
 
   # Runs the write on its own connection, giving up on any lock after a second.

@@ -24,7 +24,7 @@ class Plans::FundingPayPrivacyTest < ActionDispatch::IntegrationTest
       structure.create_unit(payments, "Payments", level_id: departments, effective_on: "2025-01-01")
       engineer = create(:framework_role, code: "E", name: "Software Engineer")
       e5 = create(:framework_level, role_id: engineer.role_id, ordinal: 5, title: "Senior SWE")
-      PayBand.create!(level: e5, currency: "AUD", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level: e5, currency: "AUD", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
       ReferenceCurrency.create!(currency: "AUD")
       ada = create(:person, tenant: @tenant, name: "Ada Quill")
       people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)

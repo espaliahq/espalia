@@ -18,7 +18,7 @@ module Operations::Tenants::BudgetLineSupport
   private
 
   # @param line [BudgetLine]
-  # @param names [Hash{String => String}] editors by user id
+  # @param names [Hash{String => String}] editors by person id
   # @return [Hash]
   def line_payload(line, names: editor_names([ line ]))
     {
@@ -38,7 +38,7 @@ module Operations::Tenants::BudgetLineSupport
       location: line.location.presence,
       cost_centre: line.cost_centre.presence,
       updated_at: line.updated_at.iso8601,
-      updated_by: names[line.updated_by_id]
+      updated_by: names[editor_id(line)]
     }
   end
 

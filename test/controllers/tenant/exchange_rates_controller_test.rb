@@ -11,7 +11,7 @@ class Tenant::ExchangeRatesControllerTest < ActionDispatch::IntegrationTest
     @member_user = create(:user, password: "password123")
     ActsAsTenant.with_tenant(@tenant) do
       create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin,
-                           person: create(:person, tenant: @tenant, name: "Ada Admin"))
+                           person: @admin_person = create(:person, tenant: @tenant, name: "Ada Admin"))
       create(:tenant_user, tenant: @tenant, user: @member_user, role: :member, org_graph_editor: true)
     end
   end
@@ -62,7 +62,7 @@ class Tenant::ExchangeRatesControllerTest < ActionDispatch::IntegrationTest
 
       assert_redirected_to tenant_pay_bands_path
       rate = ActsAsTenant.with_tenant(@tenant) { ExchangeRate.sole }
-      assert_equal [ "NZD", BigDecimal("0.92"), @admin_user ], [ rate.from_currency, rate.rate, rate.updated_by ]
+      assert_equal [ "NZD", BigDecimal("0.92"), @admin_person.id ], [ rate.from_currency, rate.rate, rate.updated_by_person_id ]
 
       follow_redirect!
       assert_includes response.body, "Rate added for NZD to AUD from 1 Jul 2026."

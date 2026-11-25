@@ -260,8 +260,8 @@ class CalibrationSessions::DrillInStats
   # capability at the person's assessed level, in their assessed role's
   # cells — a person whose role doesn't read this capability stays an
   # unrated dot. `carried` = the manager value was seeded from the previous
-  # cycle and not confirmed this one (ADR-20); only "seeded" counts, nil
-  # being a legacy/factory row.
+  # cycle and not confirmed this one, by the manager or by agreeing the
+  # cell (ADR-20).
   def ratings
     @ratings ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
@@ -271,12 +271,12 @@ class CalibrationSessions::DrillInStats
       ))
       .where(level_ordinal: ordinals)
       .pluck(:person_id, :level_ordinal, :manager_rated_frequency, :self_rated_frequency,
-             :manager_rating_source)
-      .each_with_object({}) do |(person_id, level_ordinal, manager_frequency, self_frequency, source), map|
+             :manager_rating_source, :aligned_frequency)
+      .each_with_object({}) do |(person_id, level_ordinal, manager_frequency, self_frequency, source, aligned), map|
         next unless level_ordinal == assessed_ordinals[person_id]
 
         map[person_id] = { frequency: manager_frequency, self_frequency: self_frequency,
-                           carried: source == "seeded" }
+                           carried: Assessments::CarriedCell.unconfirmed?(source, aligned) }
       end
   end
 

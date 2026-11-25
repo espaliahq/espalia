@@ -111,6 +111,18 @@ class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
       assert_equal "consistent", l2.dig(:ratings, :self)
     end
 
+    should "read the assessee's agreed carried value as confirmed while the agreed value stays hidden" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2)
+          .update!(self_rating_source: "seeded", aligned_frequency: "occasional")
+      end
+
+      l2 = call_assessment_op[:expectations].find { |e| e[:level_ordinal] == 2 }
+      assert_nil l2.dig(:ratings, :aligned)
+      assert_equal false, l2.dig(:ratings, :self_carried)
+    end
+
     should "expose manager fields to the manager viewer" do
       mgr_user = create(:user)
       mgr_tu = ActsAsTenant.with_tenant(@tenant) do
@@ -127,6 +139,17 @@ class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
       l2 = result[:expectations].find { |e| e[:level_ordinal] == 2 }
       assert_equal "occasional", l2.dig(:ratings, :manager)
       assert_equal true, l2.dig(:ratings, :manager_carried)
+
+      agreed = ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2).update!(aligned_frequency: "occasional")
+        Operations::Assessments::CapabilityGet.call(
+          context: mgr_context,
+          params: { assignment_id: @assignment.id, capability_id: @cap.capability_id }
+        )
+      end
+      assert_equal false, agreed[:expectations].find { |e| e[:level_ordinal] == 2 }.dig(:ratings, :manager_carried),
+        "agreeing the cell confirms the carried value"
     end
   end
 

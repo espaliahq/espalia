@@ -22,14 +22,16 @@ class TeamPlanning::PricingInputs
   MODELS = { pay_bands: PayBand, exchange_rates: ExchangeRate, budget_lines: BudgetLine,
              reference_currencies: ReferenceCurrency, planning_rule_defaults: PlanningRuleDefault }.freeze
   # What no copy keeps of a row: whose it is and who last edited it.
-  LEFT_OUT = %w[tenant_id updated_by_id].freeze
+  LEFT_OUT = %w[tenant_id updated_by_id updated_by_person_id].freeze
 
   # @param tenant [Tenant]
   # @return [Hash{String => Object}] every row of each model, without who
   #   edited it, as JSON values
   def self.capture(tenant)
-    rows = MODELS.to_h { |name, model| [ name.to_s, model.where(tenant_id: tenant.id).order(:id).map { it.attributes.except(*LEFT_OUT).as_json } ] }
-    rows.merge("pay_bands_changed_at" => tenant.pay_bands_changed_at.as_json)
+    TenantPlanningInputs::Projections::Tables.unless_rebuilding do
+      rows = MODELS.to_h { |name, model| [ name.to_s, model.where(tenant_id: tenant.id).order(:id).map { it.attributes.except(*LEFT_OUT).as_json } ] }
+      rows.merge("pay_bands_changed_at" => Tenant.where(id: tenant.id).pick(:pay_bands_changed_at).as_json)
+    end
   end
 
   # @param plan [TeamPlanningPlan]

@@ -260,6 +260,16 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
       assert_equal "consistent", ivy[:frequency], "the value is still shown"
     end
 
+    should "not mark a seeded rating whose cell is agreed" do
+      create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+             person_id: @r1.id, framework_id: @framework_id,
+             capability_stable_id: @cap.stable_id, level_ordinal: 3,
+             manager_rated_frequency: "consistent", manager_rating_source: "seeded",
+             aligned_frequency: "consistent")
+
+      assert_not dot(stats, @r1)[:carried], "agreeing the cell confirmed it"
+    end
+
     should "not mark a human or legacy rating as carried" do
       create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
              person_id: @r1.id, framework_id: @framework_id,

@@ -46,6 +46,20 @@ class Slack::IdentityTest < ActiveSupport::TestCase
     assert_not ghost.person_only?
   end
 
+  should "act as no one when the member's person is held by another account" do
+    ActsAsTenant.with_tenant(@tenant) do
+      user = create(:user, email: "shared@example.com")
+      create(:tenant_user, tenant: @tenant, user:, person: nil, role: :member, slack_user_id: "U_SHARED")
+      held = create(:person, tenant: @tenant, email: "shared@example.com")
+      create(:tenant_user, tenant: @tenant, person: nil).link_to!(held, match: :admin)
+    end
+
+    identity = Slack::Identity.resolve(team_id: TEAM_ID, slack_user_id: "U_SHARED", client: SlackFixture::FakeClient.new)
+
+    assert identity.connected?
+    assert_not identity.member?
+  end
+
   should "be unconnected for an unknown workspace" do
     identity = Slack::Identity.resolve(team_id: "T_NOPE", slack_user_id: "U_JORDAN", client: SlackFixture::FakeClient.new)
     assert_not identity.connected?

@@ -115,7 +115,7 @@ class TenantUser < ApplicationRecord
 end
 ```
 
-TenantUser carries the user's role within a tenant and optionally links to a Person domain entity. The `person_id` association is the bridge between authentication (User → TenantUser) and domain (Person).
+TenantUser carries the user's role within a tenant and optionally links to a Person domain entity. The `person_id` association is the bridge between authentication (User → TenantUser) and domain (Person). The link is recorded on the grants stream and written by its projection; change it with `TenantUser#link_to!` (see [authorization.md → Where the tenant role lives](../guidelines/authorization.md#where-the-tenant-role-lives)).
 
 ---
 

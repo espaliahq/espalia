@@ -104,6 +104,16 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       assert_nil hidden[:aligned_frequency]
     end
 
+    should "read the assessee's agreed carried value as confirmed, as level coverage does, even where the value is hidden" do
+      AssessmentLevelRating.find_by!(person_id: @person_id, cycle_id: @cycle_id,
+        capability_stable_id: @capability.stable_id, level_ordinal: 2).update!(self_rating_source: "seeded")
+
+      hidden = build_at(level: @level)[:categories].first[:capabilities].first[:cells][2]
+
+      assert_nil hidden[:aligned_frequency], "the value stays hidden"
+      assert_not hidden[:current_frequency_carried]
+    end
+
     should "keep whole-page manager scores withheld even with a disclosed cell" do
       disclosed = Assessments::Disclosure.new([ [ @capability.stable_id, 2 ] ])
       data = build_at(level: @level, disclosure: disclosed)
@@ -383,6 +393,31 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
         capability_stable_id: @capability2.stable_id, level_ordinal: 2
       ).update!(self_rating_source: "human")
       assert build_completion(:self)[:current_level_complete]
+    end
+
+    should "be true once a carried current-level cell is agreed, on either side" do
+      rate_capability2(self_rated_frequency: "some", self_rating_source: "seeded",
+        manager_rated_frequency: "some", manager_rating_source: "seeded")
+      assert_not build_completion(:manager)[:current_level_complete]
+
+      AssessmentLevelRating.find_by!(
+        cycle_id: @cycle_id, person_id: @person_id,
+        capability_stable_id: @capability2.stable_id, level_ordinal: 2
+      ).update!(aligned_frequency: "some")
+
+      # The assessee sees an agreed value only where a started alignment
+      # disclosed the cell, as a start does.
+      disclosed = Assessments::Disclosure.new([ [ @capability2.stable_id, 2 ] ])
+      views = { self: build_at(level: @level, disclosure: disclosed), manager: build_completion(:manager) }
+      views.each do |context, data|
+        cell = data[:categories].first[:capabilities]
+          .find { |cap| cap[:capability].stable_id == @capability2.stable_id }[:cells][2]
+
+        assert data[:current_level_complete], "#{context}: agreeing the cell vets its carried value"
+        assert_equal({ unrated: 0, to_confirm: 0 }, data[:current_level_work])
+        assert_not cell[:current_frequency_carried]
+        assert_not cell[:manager_frequency_carried]
+      end
     end
 
     should "count what is left at the current level: unrated cells and carried ones to confirm" do

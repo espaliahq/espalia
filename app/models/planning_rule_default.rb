@@ -9,7 +9,7 @@ class PlanningRuleDefault < ApplicationRecord
   belongs_to :tenant
   belongs_to :updated_by, class_name: "User", optional: true
 
-  validates :rule, presence: true, uniqueness: { scope: :tenant_id }
+  validates :rule, presence: true
 
   # @param rows [Enumerable<PlanningRuleDefault>] one tenant's, from the table or an archive's copy
   # @return [Hash{String => Hash}] each rule's value, the tenant's own over the built-in default
