@@ -13,6 +13,7 @@ class SeedFrameworkTaskTest < ActiveSupport::TestCase
   teardown do
     # Tests in this file use a real tenant + framework; wipe between runs.
     FrameworkState::Framework.destroy_all
+    FrameworkExplorerGraph.delete_all
     Tenant.where(slug: "nullisland").destroy_all
   end
 
