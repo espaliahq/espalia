@@ -44,6 +44,21 @@ class OrgGraph::ForgetDueLeaversJobTest < ActiveJob::TestCase
     assert forgotten.reload.forgotten?
   end
 
+  should "report a leaver held back as the only admin, by count alone" do
+    tenant, leaver = tenant_with_leaver(scheduled: true)
+    ActsAsTenant.with_tenant(tenant) { create(:tenant_user, tenant:, person: leaver, role: :admin) }
+    reported = []
+    report = ->(error, **options) { reported << [ error, options ] }
+
+    Rails.error.stub(:report, report) { OrgGraph::ForgetDueLeaversJob.perform_now }
+
+    assert_not leaver.reload.forgotten?
+    error, options = reported.sole
+    assert_instance_of OrgGraph::Forgetting::LastAdmin, error
+    assert_equal :warning, options[:severity]
+    assert_equal({ tenant_id: tenant.id, held_back: 1, job: OrgGraph::ForgetDueLeaversJob.name }, options[:context])
+  end
+
   should "fail loudly, forgetting nobody, without the key" do
     _, leaver = tenant_with_leaver(scheduled: true)
 

@@ -30,11 +30,20 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
     should "count who is due, by id, and erase nobody" do
       result = call(Operations::Tenants::ForgettingDryRun)
 
-      assert_equal({ tenant_id: @tenant.id, retention_years: 7, count: 1, person_ids: [ @leaver.id ] }, result)
+      assert_equal({ tenant_id: @tenant.id, retention_years: 7, count: 1, held_back: 0, person_ids: [ @leaver.id ] }, result)
       assert_not @leaver.reload.forgotten?
     end
 
-    should "report the period that decides who is due, the longer of the two places" do
+    should "count a leaver holding the only admin account as held back, without their id" do
+      account = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, person: @leaver, role: :admin) }
+      context = AuthorizationContext.new(user: account.user, tenant_user: account, person: @leaver)
+
+      result = call(Operations::Tenants::ForgettingDryRun, context:)
+
+      assert_equal({ count: 0, held_back: 1, person_ids: [] }, result.slice(:count, :held_back, :person_ids))
+    end
+
+    should "report the stream's period, whatever the JSON says" do
       Tenant.find(@tenant.id).tap { it.org_graph_config.assign_attributes(retention_years: 3) }.save!
 
       assert_equal 7, call(Operations::Tenants::ForgettingDryRun)[:retention_years]
@@ -79,7 +88,7 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
     end
 
     should "count under the retention period saved now, not the one the request loaded" do
-      Tenant.find(@tenant.id).update!(org_graph_config: { retention_years: 30 })
+      TenantSettings::CommandHandler.new(Tenant.find(@tenant.id)).set_retention_period(30)
 
       assert_raises(Operations::Base::ParameterError) do
         call(Operations::Tenants::EnableScheduledForgetting, confirm_count: 1)
@@ -88,11 +97,12 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
     end
 
     should "refuse while the tenant keeps leavers for ever" do
-      @tenant.update!(org_graph_config: { retention_years: nil })
+      TenantSettings::CommandHandler.new(@tenant).set_retention_period(nil)
 
-      assert_raises(Operations::Base::ParameterError) do
+      error = assert_raises(Operations::Base::ParameterError) do
         call(Operations::Tenants::EnableScheduledForgetting, confirm_count: 0)
       end
+      assert_match "set to never", error.message
     end
 
     should "refuse anyone but a tenant admin" do

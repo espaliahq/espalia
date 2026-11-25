@@ -77,7 +77,7 @@ class Views::Tenant::PlanningInputsHistories::ShowView < Views::Base
         detail("After", change[:after])
       elsif change[:change] == "changed"
         detail("Unchanged", change[:after])
-      elsif change[:before] || change[:after]
+      elsif (change[:before] || change[:after]) && change[:table] != "reference_currency"
         detail(nil, change[:after] || change[:before])
       end
       p(class: "text-xs text-muted") { byline(change) }
@@ -108,7 +108,9 @@ class Views::Tenant::PlanningInputsHistories::ShowView < Views::Base
     when "pay_bands" then "#{range_text(row)} · #{midpoint_text(row)}"
     when "budget_lines" then "#{figures_text(row)} · #{terms_text(row)}"
     when "exchange_rates"
-      row[:rate] && "1 #{row[:from_currency]} is #{row[:rate]} #{row[:to_currency]} from #{day_text(row[:applies_from])}"
+      return row[:currency] unless row[:rate]
+
+      "1 #{row[:from_currency]} is #{row[:rate]} #{row[:to_currency]} from #{day_text(row[:applies_from])}"
     end
   end
 

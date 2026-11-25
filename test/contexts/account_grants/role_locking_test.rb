@@ -33,6 +33,7 @@ class AccountGrants::RoleLockingTest < ActiveSupport::TestCase
 
   should "make a forget wait while a role change holds the accounts it counted" do
     forget = nil
+    as_tenant { @cy.update_columns(role: "admin") }
 
     holding(-> { AccountGrants::CommandHandler.new.set_role(@ada, :member) }) do
       pids = Queue.new
@@ -43,6 +44,26 @@ class AccountGrants::RoleLockingTest < ActiveSupport::TestCase
     forget.join
     assert_equal "member", role_of(@ada)
     assert TenantUser.unscoped.find(@bo.id).forgotten_at, "the forget goes ahead once the change commits"
+  end
+
+  should "refuse a forget that waited for a demotion and now holds the last admin" do
+    forget = nil
+
+    holding(-> { AccountGrants::CommandHandler.new.set_role(@ada, :member) }) do
+      pids = Queue.new
+      forget = Thread.new do
+        on_another_connection { |connection| pids << backend_pid(connection); erase(@bo) }
+        nil
+      rescue AccountGrants::Aggregate::LastAdmin => error
+        error
+      end
+      assert_waiting(pids, forget)
+    end
+
+    assert_instance_of AccountGrants::Aggregate::LastAdmin, forget.value
+    assert_equal "member", role_of(@ada)
+    assert_nil TenantUser.unscoped.find(@bo.id).forgotten_at
+    assert_not Person.unscoped.find(@bo.person_id).forgotten?, "the refusal rolls the erase back"
   end
 
   should "not count an admin a forget took first, and refuse to demote the last one" do

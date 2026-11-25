@@ -94,6 +94,13 @@ class AccountGrants::Aggregate
     @links.filter_map { |id, linked| id if linked == person_id.to_s }
   end
 
+  # @param tenant_user_ids [Array<String>] the accounts about to stop signing in
+  # @raise [LastAdmin] when the tenant has an admin and every one is among them
+  def ensure_an_admin_outlives!(tenant_user_ids)
+    admins = roles.filter_map { |id, role| id if role == "admin" }
+    raise LastAdmin, "the organisation must keep an admin" if admins.any? && (admins - tenant_user_ids.map(&:to_s)).empty?
+  end
+
   # @return [Hash{String => Array<String>}] each person linked to more than one account, to those accounts
   def shared_people
     @links.group_by(&:last).filter_map { |person, pairs| [ person, pairs.map(&:first) ] if pairs.size > 1 }.to_h
