@@ -73,7 +73,9 @@ class AccountGrants::CommandHandler
     end
   end
 
-  # Links an account to its person.
+  # Links an account to its person. A link the stream records to a person
+  # since destroyed is unlinked first: destroying a person clears the column
+  # with no event.
   #
   # @param account [TenantUser]
   # @param person [Person]
@@ -86,6 +88,7 @@ class AccountGrants::CommandHandler
     ActiveRecord::Base.transaction do
       hold_person(person.id)
       @repository.with_grants do |grants|
+        release_destroyed_link(grants, account.id)
         raise AccountGrants::Aggregate::PersonForgotten, "a forgotten person can't be linked" if forgotten?(person.id)
 
         grants.link_account(tenant_user_id: account.id, person_id: person.id, effective_on: today,
@@ -150,6 +153,13 @@ class AccountGrants::CommandHandler
     else
       grants.remove(grant, tenant_user_id:, person_id:, effective_on: date)
     end
+  end
+
+  def release_destroyed_link(grants, tenant_user_id)
+    recorded = grants.person_of(tenant_user_id)
+    return if recorded.nil? || Person.unscoped.exists?(recorded)
+
+    grants.unlink_account(tenant_user_id:, effective_on: today, reason: :cleared)
   end
 
   def forgotten?(person_id) = Person.unscoped.where(id: person_id).where.not(forgotten_at: nil).exists?
