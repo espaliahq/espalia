@@ -63,9 +63,11 @@ class Views::Tenant::PlanningInputsHistories::ShowView < Views::Base
   def change_row(change)
     li(class: "py-3 first:pt-0 last:pb-0", data: { history_change: change[:change] }) do
       p(class: "text-sm font-medium text-default break-words") { headline(change) }
-      if change[:change] == "changed"
+      if change[:change] == "changed" && row_text(change[:before]) != row_text(change[:after])
         detail("Before", change[:before])
         detail("After", change[:after])
+      elsif change[:change] == "changed"
+        detail("Unchanged", change[:after])
       elsif change[:before] || change[:after]
         detail(nil, change[:after] || change[:before])
       end

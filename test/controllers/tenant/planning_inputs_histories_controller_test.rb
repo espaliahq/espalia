@@ -52,6 +52,20 @@ class Tenant::PlanningInputsHistoriesControllerTest < ActionDispatch::Integratio
       assert_select "#planning-inputs-history li:first-child p", text: "On 2 Dec 2026, 09:00"
     end
 
+    should "show a change that left the figures alone once, as unchanged" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @band.position = 2
+        save_planning_input!(:pay_bands, @band)
+      end
+
+      get tenant_planning_inputs_history_path("pay_bands")
+
+      assert_select "#planning-inputs-history li:first-child" do
+        assert_select "p", text: "Unchanged: AUD 100,000 to 140,000 a year · Midpoint 125,000"
+        assert_select "p", text: /Before|After/, count: 0
+      end
+    end
+
     should "say so when an input has no changes yet" do
       get tenant_planning_inputs_history_path("budget_lines")
 
