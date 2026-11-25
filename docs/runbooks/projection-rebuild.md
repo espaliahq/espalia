@@ -115,6 +115,12 @@ Every count should be 0. If one isn't, run `bin/rails events:reconcile` and coun
 
 **After a4b deploys, never roll back to a4 or a release before it.** Releases before a4 name `updated_by_id` while they serve, and the column is gone. a4 itself serves without it, but its predeploy `events:reconcile` reads the column, so a redeploy of a4 stops at predeploy with a4b still serving. To undo a4b, roll forward with a fix.
 
+#### Recorded: suggestions stop the catch-up ([#539](https://github.com/espaliahq/espalia/issues/539) c5), with no bump
+
+No rebuild and no `CODE_VERSION` bump. c5 removes the catch-up a suggestion command and a framework migration ran before they decided, and the `evidence_suggestions` reconciler leaves `events:reconcile`. Deploy it only onto a release that holds c3's writes, where nothing writes `evidence_placement_suggestions` outside its projection.
+
+**Never upgrade to c5 straight from a release before c3's writes ([#577](https://github.com/espaliahq/espalia/pull/577)).** Their reconciler was the only step that recorded the table's rows on the streams and adopted `person_development/evidence_suggestions` without a reset. Without it, a database with no suggestion events yet has the projection reset and stamped at step 4, which deletes every suggestion and dismissal reason. One that has some fails `verify` and keeps the previous release serving. Deploy c3's writes or c4 first, then c5.
+
 #### Recorded: no linking back to `AccountGrants` ([#539](https://github.com/espaliahq/espalia/issues/539) b3), with no bump
 
 No `CODE_VERSION` bump and no `REBUILD_ON_DEPLOY`. `AccountGrants::Repository` stops linking grants back into the old stream and reads `TenantAccountGrants` without the lock. Linking an account no longer records what the column says first.
