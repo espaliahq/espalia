@@ -11,7 +11,7 @@ class TenantSettings::CommandHandlerTest < ActiveSupport::TestCase
   def handler = TenantSettings::CommandHandler.new(Tenant.find(@tenant.id))
   def row = TenantRetentionSetting.for(@tenant)
   def stream = Rails.configuration.event_store.read.stream(EventStreamNaming.tenant_settings_stream(tenant: @tenant)).to_a
-  def stored_config = JSON.parse(Tenant.where(id: @tenant.id).pick(Arel.sql("org_graph_config::text")))
+  def stored_config = JSON.parse(Tenant.connection.select_value(Tenant.where(id: @tenant.id).select("org_graph_config::text").to_sql))
 
   # Writes the retired keys, as the previous release does while a deploy is in flight.
   def previous_release_writes(**settings)

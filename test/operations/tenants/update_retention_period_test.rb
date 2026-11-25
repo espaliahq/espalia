@@ -24,7 +24,7 @@ class Operations::Tenants::UpdateRetentionPeriodTest < ActiveSupport::TestCase
   def retention_years = row.retention_years
   def scheduled = row.scheduled_forgetting
   def row = TenantRetentionSetting.for(@tenant)
-  def stored_config = JSON.parse(Tenant.where(id: @tenant.id).pick(Arel.sql("org_graph_config::text")))
+  def stored_config = JSON.parse(Tenant.connection.select_value(Tenant.where(id: @tenant.id).select("org_graph_config::text").to_sql))
   def handler = TenantSettings::CommandHandler.new(Tenant.find(@tenant.id))
 
   context "as a tenant admin" do

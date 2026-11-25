@@ -10,7 +10,7 @@ class RemoveRetentionKeysFromOrgGraphConfigTest < ActiveSupport::TestCase
     tenant
   end
 
-  def config_of(tenant) = JSON.parse(Tenant.where(id: tenant.id).pick(Arel.sql("org_graph_config::text")))
+  def config_of(tenant) = JSON.parse(Tenant.connection.select_value(Tenant.where(id: tenant.id).select("org_graph_config::text").to_sql))
 
   def migrate(direction)
     ActiveRecord::Migration.suppress_messages { RemoveRetentionKeysFromOrgGraphConfig.new.migrate(direction) }
