@@ -192,6 +192,12 @@ class PersonDevelopment::SuggestionCommandsTest < ActiveSupport::TestCase
       assert_equal [ suggestion.id ] * 2, suggestion_ids
     end
 
+    should "store confidence as the job does" do
+      catch_up(row("pending", confidence: BigDecimal("0.80")))
+
+      assert_equal "0.8", events_of(PersonDevelopment::Events::EvidencePlacementSuggested).sole.data[:confidence]
+    end
+
     should "follow a row the old release left on its cell when it migrated the stream" do
       suggest(proposal(@collaboration, 3))
       suggestion = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find(suggestion_ids.first) }

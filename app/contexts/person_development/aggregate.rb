@@ -1552,7 +1552,7 @@ class PersonDevelopment::Aggregate
     apply(PersonDevelopment::Events::EvidencePlacementSuggested.new(data: {
       suggestion_id: row[:id], evidence_id: row[:evidence_id],
       capability_stable_id: row[:capability_stable_id], level_ordinal: row[:level_ordinal],
-      valence: row[:valence], confidence: row[:confidence].to_s, rationale: row[:rationale],
+      valence: row[:valence], confidence: row[:confidence]&.to_s("F"), rationale: row[:rationale],
       provider: row[:provider], model: row[:model], prompt_version: row[:prompt_version],
       generated_at: row[:generated_at]&.iso8601(6), already_held: true, status: status,
       decided_by_id: (row[:decided_by_id] if decided), decided_at: (row[:decided_at]&.iso8601(6) if decided)
