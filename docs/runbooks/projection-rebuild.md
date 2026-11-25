@@ -103,17 +103,23 @@ No rebuild and no `CODE_VERSION` bump. a4 changes what commands do, not what the
 
 **a4** removes the catch-up a command ran before it decided, and the `pay_bands:<tenant>` lock. The models ignore `updated_by_id`. Deploy it only onto a release that holds a1, which went live at 03:27Z on 2026-11-25. While the previous release still serves, it takes the list lock and then the stream lock; a4 takes the stream lock alone, so neither waits on the other in a cycle. The reconciler still runs at steps 2b and 6. A row that still names an account in `updated_by_id` is recorded under that account's person, and the reconciler then clears the column. An account that has been forgotten, or has no membership in the tenant, has no person to record, so the row reads "Changed on" with a date and no name, as the screens show any change no one is named on. We accept that: the account is gone, and naming no one beats naming the wrong person. Only `events:reconcile` names the column, so a4 keeps serving once a4b drops it.
 
-**Before a4b**, once a4 is live, confirm no row still names an account. This prints one count per table and nothing else:
+**Before a4b**, once a4 is live, you can check that no row still names an account. This prints one count per table and nothing else:
 
 ```bash
 bin/rails runner 'TenantPlanningInputs::Rows::TABLES.each_key { |t| puts "#{t}: #{TenantPlanningInputs::Rows.model(t).where.not(updated_by_id: nil).count}" }'
 ```
 
-Every count should be 0. If one isn't, run `bin/rails events:reconcile` and count again: it records each such row under its account's person and clears the column. Go ahead only when every count is 0.
+Every count should be 0. If one isn't, run `bin/rails events:reconcile`: it records each such row under its account's person and clears the column. The count is optional, since a4b's migration counts the same rows and refuses to drop anything while one remains. A refused predeploy leaves a4 serving with the column intact; run `events:reconcile` on a4 and deploy again.
 
 **a4b** drops `updated_by_id`, its foreign keys and its indexes from the five tables. Deploy it only once a4 is live. It also removes the reconciler's read and clearing of the column, the one thing a4 keeps for legacy rows.
 
 **After a4b deploys, never roll back to a4 or a release before it.** Releases before a4 name `updated_by_id` while they serve, and the column is gone. a4 itself serves without it, but its predeploy `events:reconcile` reads the column, so a redeploy of a4 stops at predeploy with a4b still serving. To undo a4b, roll forward with a fix.
+
+#### Recorded: suggestions stop the catch-up ([#539](https://github.com/espaliahq/espalia/issues/539) c5), with no bump
+
+No rebuild and no `CODE_VERSION` bump. c5 removes the catch-up a suggestion command and a framework migration ran before they decided, and the `evidence_suggestions` reconciler leaves `events:reconcile`. Deploy it only onto a release that holds c3's writes, where nothing writes `evidence_placement_suggestions` outside its projection.
+
+**Never upgrade to c5 straight from a release before c3's writes ([#577](https://github.com/espaliahq/espalia/pull/577)).** Their reconciler was the only step that recorded the table's rows on the streams and adopted `person_development/evidence_suggestions` without a reset. Without it, a database with no suggestion events yet has the projection reset and stamped at step 4, which deletes every suggestion and dismissal reason. One that has some fails `verify` and keeps the previous release serving. Deploy c3's writes or c4 first, then c5.
 
 #### Recorded: no linking back to `AccountGrants` ([#539](https://github.com/espaliahq/espalia/issues/539) b3), with no bump
 

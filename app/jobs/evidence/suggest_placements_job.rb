@@ -112,7 +112,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   def store(item, proposals, model:, asked_about:)
     AuditMetadata.with(acting_via: :system, correlation_id: job_id) do
       AuditMetadata.wrap_event_store do
-        PersonDevelopment::SuggestionWrites.with_caught_up(item.person_id, item.framework_id, evidence_ids: [ item.id ]) do |aggregate|
+        PersonDevelopment::SuggestionWrites.with_aggregate(item.person_id, item.framework_id, evidence_ids: [ item.id ]) do |aggregate|
           next false if EvidenceItem.where(id: item.id).pick(:content) != asked_about
           # A rationale quotes the feedback, and the person may have been forgotten while the model answered.
           next false if Person.forgotten.exists?(id: item.person_id)

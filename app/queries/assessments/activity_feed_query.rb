@@ -12,6 +12,8 @@
 # - `EvidenceLinkAdded` / `EvidenceLinkRemoved` events from the same RES
 #   stream for the multi-linkage `evidence_linked` / `evidence_unlinked`
 #   entries (a single item attached to / detached from additional cells).
+# - `EvidencePlacementSuggestionDismissed` events, each placed on its
+#   suggestion's cell.
 # - {AssessmentCycleProgress} rows for alignment milestones
 #   (`alignment_started_at`, `aligned_at`).
 #
@@ -70,6 +72,10 @@ class Assessments::ActivityFeedQuery
   # `EvidenceLinkRevalenced` with the valence unchanged. Nothing was
   # reclassified, so it gets an entry of its own.
   SUGGESTION_KEPT_KIND = "evidence_suggestion_accepted"
+
+  # A placement suggestion someone turned down, with their reason. Shown only
+  # to whom {Assessments::SuggestionDismissalVisibility} allows.
+  SUGGESTION_DISMISSED_KIND = "evidence_suggestion_dismissed"
 
   # Per-capability re-keying entry — emitted for every mapping in a
   # `FrameworkVersionMigrated` event that has a survivor `to_stable_id`.
@@ -136,7 +142,8 @@ class Assessments::ActivityFeedQuery
     PersonDevelopment::Events::EvidenceLinkAdded      => :linked_by_id,
     PersonDevelopment::Events::EvidenceLinkRemoved    => :removed_by_id,
     PersonDevelopment::Events::EvidenceLinkRevalenced => :changed_by_id,
-    PersonDevelopment::Events::EvidenceRelinked       => :relinked_by_id
+    PersonDevelopment::Events::EvidenceRelinked       => :relinked_by_id,
+    PersonDevelopment::Events::EvidencePlacementSuggestionDismissed => :dismissed_by_id
   }.freeze
 
   # @param assignment [PersonFrameworkAssignment]
@@ -165,7 +172,7 @@ class Assessments::ActivityFeedQuery
   def call
     entries = rating_entries + relink_entries + link_entries + evidence_entries +
               alignment_entries + reopen_entries + comment_entries + migration_entries +
-              authority_entries + revisit_entries + exploration_entries
+              authority_entries + revisit_entries + exploration_entries + dismissal_entries
     entries.sort_by { |e| e.occurred_at || Time.at(0) }.reverse
   end
 
@@ -360,6 +367,44 @@ class Assessments::ActivityFeedQuery
       capability_name: capability_name_for(stable_id),
       category_id: category_id_for(stable_id)
     )
+  end
+
+  # The event names no cell; {Assessments::DismissedSuggestionCells} reads it
+  # from the stream. The reason is read from the event as stored.
+  def dismissal_entries
+    dismissals = stream_events.filter_map do |event|
+      next unless event.is_a?(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed)
+
+      data = event.data.with_indifferent_access
+      [ event, data ] if Assessments::SuggestionDismissalVisibility.visible?(
+        dismissed_by_id: data[:dismissed_by_id], viewer_person_id: @viewer_person_id, viewer_sees_all: @viewer_sees_all
+      )
+    end
+    return [] if dismissals.empty?
+
+    cells = Assessments::DismissedSuggestionCells.from(stream_events)
+    dismissals.filter_map do |event, data|
+      stable_id, level_ordinal = cells[data[:suggestion_id]]
+      next unless stable_id
+
+      Entry.new(
+        id: event.event_id,
+        kind: SUGGESTION_DISMISSED_KIND,
+        occurred_at: dismissed_at(data) || event_timestamp(event),
+        payload: data.merge(evidence_title: evidence_title_for(data[:evidence_id]),
+                            actor_name: actor_names[data[:dismissed_by_id]]),
+        capability_stable_id: stable_id,
+        level_ordinal: level_ordinal,
+        cycle_id: nil,
+        capability_name: capability_name_for(stable_id),
+        category_id: category_id_for(stable_id)
+      )
+    end
+  end
+
+  # A dismissal recorded from a table row carries the time it was first made.
+  def dismissed_at(data)
+    data[:dismissed_at].present? ? Time.zone.parse(data[:dismissed_at].to_s) : nil
   end
 
   # Best-effort title for the evidence behind a link entry (nil when the

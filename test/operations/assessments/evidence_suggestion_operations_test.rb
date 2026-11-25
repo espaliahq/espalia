@@ -93,19 +93,6 @@ class Operations::Assessments::EvidenceSuggestionOperationsTest < ActiveSupport:
       end
     end
 
-    should "record what the release before wrote, then refuse it" do
-      ActsAsTenant.with_tenant(@tenant) do
-        @suggestion.update!(status: "dismissed", decided_by_id: @alex.id, decided_at: Time.current, dismiss_reason: "Not this")
-      end
-      assert_raises(Operations::Base::ParameterError) do
-        run_op(Operations::Assessments::AcceptEvidenceSuggestion, as: @morgan, suggestion_id: @suggestion.id)
-      end
-      dismissal = Rails.configuration.event_store.read
-        .stream(EventStreamNaming.person_development_stream(@alex.id, @framework_id, tenant: @tenant))
-        .of_type([ PersonDevelopment::Events::EvidencePlacementSuggestionDismissed ]).to_a.sole
-      assert_equal [ @suggestion.id, true ], dismissal.data.values_at(:suggestion_id, :already_held)
-    end
-
     should "refuse someone who may not place this feedback" do
       assert_raises(Pundit::NotAuthorizedError) do
         run_op(Operations::Assessments::AcceptEvidenceSuggestion, as: @stranger, suggestion_id: @suggestion.id)

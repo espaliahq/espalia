@@ -61,8 +61,9 @@ framework_capabilities:
 framework_capability_categories:
   owner: frameworks/published_state
   reason: >-
-    The evidence evaluation builds a throwaway tenant and rolls it back. The framework seed sets a
-    category's threshold on the row after publishing, which a rebuild loses; that is a finding to fix.
+    The evidence evaluation builds a throwaway tenant and rolls it back. No command carries a
+    category's threshold yet, so the framework seed sets it on the row after publishing, and a
+    rebuild loses it (#571).
   writers:
     - lib/tasks/evidence_suggestions_eval.rb
     - lib/tasks/seed_framework.rake
@@ -74,10 +75,10 @@ framework_capability_role_bindings:
 framework_collaborators:
   owner: frameworks/published_state
 framework_explorer_graphs:
-  owner: frameworks/published_state
+  owner: plain
   reason: >-
-    ExplorerGraph caches the snapshot it builds from the stream, and the projection's reset deletes it.
-    A missing row is rebuilt on the next load.
+    ExplorerGraph caches the snapshot it builds from the stream. No projection resets it, and a
+    missing or stale row is rebuilt on the next load.
   writers:
     - app/contexts/frameworks/explorer_graph.rb
 framework_levels:
@@ -174,8 +175,9 @@ people:
     - status
   reason: >-
     The row holds a person's identifiers, which must be erasable. The HiBob adapter writes the
-    projection's columns only before a tenant is cut over, and the calibration seed moves reporting
-    lines on the row, a finding to fix.
+    projection's columns only before a tenant is cut over. The seeds never cut the demo tenant over,
+    so the calibration history seed moves reporting lines on the row, which manager-rating authority
+    falls back to; it also records each move on the person's development stream (#572).
   writers:
     - app/contexts/org_graph/forgetting.rb
     - app/integrations/hris/hibob/adapter.rb
@@ -277,39 +279,19 @@ mcp_pending_approvals:
 
 pay_bands:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 exchange_rates:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 reference_currencies:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 budget_lines:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 planning_rule_defaults:
   owner: tenant_planning_inputs/tables
-  reason: >-
-    Pay and cost inputs, written from the TenantPlanningInputs stream. The deploy's reconcile clears the
-    updated_by_id a release before a4 wrote, until a4b of https://github.com/espaliahq/espalia/issues/539 drops it.
-  writers:
-    - app/contexts/tenant_planning_inputs/reconciliation.rb
+  reason: Pay and cost inputs, written from the TenantPlanningInputs stream.
 
 # Working data
 

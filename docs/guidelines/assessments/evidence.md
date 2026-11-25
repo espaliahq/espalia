@@ -558,7 +558,12 @@ Rules, all deliberate:
   confidence; the `person_development/evidence_suggestions` projection writes
   `EvidencePlacementSuggestion`, one row per item × cell, keyed by the
   suggestion's id. Dismissing writes `EvidencePlacementSuggestionDismissed`
-  with an optional reason, and is not a feed entry. Accepting goes through
+  with an optional reason. The dismissal is an Evidence entry in the
+  activity feed, on the suggestion's cell with the reason as its secondary
+  line, and a row in that cell's link thread when the item is linked there.
+  The viewers who see the whole assessment and the person who dismissed it
+  see both; no other peer sees either. `Assessments::SuggestionDismissalVisibility`
+  holds that rule, and both queries call it. Accepting goes through
   `Operations::Assessments::AcceptEvidenceSuggestion`, which publishes
   `EvidenceLinkAdded` — or `EvidenceLinkRevalenced` when someone linked the
   cell meanwhile, even to the same valence — carrying `via_suggestion_id`.
@@ -595,14 +600,12 @@ Rules, all deliberate:
   different valence. "Suggest again" enqueues at most one run per
   item a minute: every run is a paid model call.
 - **One run per item at a time.** Every suggestion command, the job's
-  included, runs in `PersonDevelopment::SuggestionWrites`: a Postgres
-  advisory lock on the item, then the person's suggestion rows, then the
-  command, retried in a savepoint if another command for the person stored
-  first. The job stores nothing if the feedback was edited while the model
-  answered; the edit's own run follows. Until
-  [#539](https://github.com/espaliahq/espalia/issues/539) c5 these are also
-  the locks the release before took, and the command first records on the
-  stream what that release wrote to the table.
+  included, runs in `PersonDevelopment::SuggestionWrites`: the person's
+  row held `FOR KEY SHARE`, so an erase can't land mid-command, then a
+  Postgres advisory lock on the item, then the command, retried in a
+  savepoint if another command for the person stored first. The job stores nothing if
+  the feedback was edited while the model answered; the edit's own run
+  follows.
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; a placement notifier would hook in
   there.

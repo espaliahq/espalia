@@ -10,6 +10,8 @@
 # which redirects back here so the frame re-renders in place.
 #
 class Assessments::EvidenceLinkThreadsController < ApplicationController
+  include AssessmentVisibility
+
   before_action :require_person
   before_action :set_assignment
 
@@ -38,7 +40,9 @@ class Assessments::EvidenceLinkThreadsController < ApplicationController
     query = Assessments::EvidenceLinkThreadQuery.new(
       item: item,
       capability_stable_id: capability_stable_id,
-      level_ordinal: level_ordinal
+      level_ordinal: level_ordinal,
+      viewer_person_id: current_person.id,
+      viewer_sees_all: viewer_sees_all_evidence?
     )
 
     render Views::Assessments::Evidence::LinkThreadFrame.new(

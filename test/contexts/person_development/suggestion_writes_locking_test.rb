@@ -20,7 +20,7 @@ class PersonDevelopment::SuggestionWritesLockingTest < ActiveSupport::TestCase
   should "keep an erase off the person's row until the command commits" do
     during = nil
     ActsAsTenant.with_tenant(@tenant) do
-      PersonDevelopment::SuggestionWrites.with_caught_up(@person.id, @framework_id, evidence_ids: []) do
+      PersonDevelopment::SuggestionWrites.with_aggregate(@person.id, @framework_id, evidence_ids: []) do
         during = erase_can_lock?
       end
     end

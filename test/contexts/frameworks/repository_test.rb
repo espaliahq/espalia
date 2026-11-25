@@ -75,6 +75,7 @@ class Frameworks::RepositoryTest < ActiveSupport::TestCase
 
         # Chat traffic changes nothing the graph renders — no row churn.
         assert_equal before, FrameworkExplorerGraph.find_by(framework_id: framework_id).updated_at
+        assert Frameworks::ExplorerGraph.load(framework_id), "the snapshot stays current through chat traffic"
 
         # A graph-relevant command still rewrites it.
         sleep 0.01
@@ -134,9 +135,9 @@ class Frameworks::RepositoryTest < ActiveSupport::TestCase
 
         graph_writes = 0
         original_store = Frameworks::ExplorerGraph.method(:store)
-        Frameworks::ExplorerGraph.stub(:store, lambda { |id, graph|
+        Frameworks::ExplorerGraph.stub(:store, lambda { |id, graph, **kwargs|
           graph_writes += 1
-          original_store.call(id, graph)
+          original_store.call(id, graph, **kwargs)
         }) do
           handler.batch(framework_id) do
             handler.create_framework(framework_id, "Engineering Growth")
@@ -192,9 +193,9 @@ class Frameworks::RepositoryTest < ActiveSupport::TestCase
 
         graph_writes = 0
         original_store = Frameworks::ExplorerGraph.method(:store)
-        Frameworks::ExplorerGraph.stub(:store, lambda { |id, graph|
+        Frameworks::ExplorerGraph.stub(:store, lambda { |id, graph, **kwargs|
           graph_writes += 1
-          original_store.call(id, graph)
+          original_store.call(id, graph, **kwargs)
         }) do
           handler.batch(framework_id) do
             handler.create_framework(framework_id, "Engineering Growth")

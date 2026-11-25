@@ -73,6 +73,29 @@ class Frameworks::SyncHandlers::FrameworkVersionMigrationSyncTest < ActiveSuppor
       end
     end
 
+    should "still migrate a stream another command stores to mid-publish" do
+      original = PersonDevelopment::Aggregate.instance_method(:migrate_framework_version)
+      raced = false
+      person_id = @p1
+      framework_id = @framework_id
+      PersonDevelopment::Aggregate.define_method(:migrate_framework_version) do |*args|
+        unless raced
+          raced = true
+          PersonDevelopment::CommandHandler.new.record_reporting_manager(person_id, framework_id, SecureRandom.uuid_v7)
+        end
+        original.bind_call(self, *args)
+      end
+
+      @handler.call(publish_event)
+
+      stream = EventStreamNaming.person_development_stream(@p1, @framework_id)
+      events = Rails.configuration.event_store.read.stream(stream).to_a
+      assert raced
+      assert_equal 1, events.count { |e| e.is_a?(PersonDevelopment::Events::FrameworkVersionMigrated) }
+    ensure
+      PersonDevelopment::Aggregate.define_method(:migrate_framework_version, original)
+    end
+
     should "include per-person rating/evidence/comment counts in the payload" do
       # Plant one rating on the from_stable_id for @p1; @p2 has no data.
       cycle = create(:assessment_cycle, :closed,
