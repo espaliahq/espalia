@@ -5,6 +5,8 @@
 #
 # Approval is :in_app, as it changes someone's permissions.
 class Operations::Tenants::SetAccountRole < Operations::Base
+  include Operations::PersonAccounts
+
   description "Set the role of a person's account in the active tenant: member, or admin. An admin manages " \
               "the tenant's people, settings and permissions. Refused unless the caller is a tenant admin, " \
               "and refused when it would leave the tenant with no admin. Returns the person and their role."
@@ -25,11 +27,7 @@ class Operations::Tenants::SetAccountRole < Operations::Base
     role = params[:role].to_s
     raise ParameterError, "role: must be one of #{AccountGrants::Aggregate::ROLES.join(', ')}" unless AccountGrants::Aggregate::ROLES.include?(role)
 
-    accounts = TenantUser.where(person_id: params[:person_id].to_s.downcase).to_a
-    raise ParameterError, "person_id: that person has no account in this organisation" if accounts.empty?
-    raise ParameterError, "person_id: that person has more than one account here, so the role can't be changed" if accounts.many?
-
-    account = accounts.sole
+    account = sole_account!("the role can't be changed")
 
     AccountGrants::CommandHandler.new.set_role(account, role, set_by_id: context.person&.id)
     { person_id: account.person_id, role: account.reload.role }
