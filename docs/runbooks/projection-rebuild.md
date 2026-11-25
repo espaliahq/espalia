@@ -111,7 +111,7 @@ bin/rails runner 'TenantPlanningInputs::Rows::TABLES.each_key { |t| puts "#{t}: 
 
 Every count should be 0. If one isn't, run `bin/rails events:reconcile` and count again: it records each such row under its account's person and clears the column. Go ahead only when every count is 0.
 
-**a4b** drops `updated_by_id`, its foreign keys and its indexes from the five tables. Deploy it only once a4 is live.
+**a4b** drops `updated_by_id`, its foreign keys and its indexes from the five tables. Deploy it only once a4 is live. It also removes the work a4 keeps only for legacy rows: the projection's UPDATE that clears the column, and the reconciler's SELECT for rows that still name an account.
 
 **After a4b deploys, never roll back to a release before a4.** Those releases name `updated_by_id`, and the column is gone.
 
