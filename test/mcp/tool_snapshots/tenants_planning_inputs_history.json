@@ -1,0 +1,31 @@
+{
+  "name": "tenants_planning_inputs_history",
+  "description": "Read what changed in the active tenant's planning inputs, newest first, 25 changes a page. inputs picks which: pay_bands, exchange_rates (the rates and the reference currency), budget_lines or planning_rules (the tenant's rule defaults). Each change gives its table, what happened (added, changed, removed or, for pay bands, reordered), the row's id, when, who made it (a person's name, \"Former member\" once forgotten, or null when no one is recorded), and the row before and after; null where there was no row. A row carries the fields tenants_pay_bands, tenants_exchange_rates, tenants_budget_lines and tenants_planning_rules give, with figures written the same way, less the row's id (it is the change's id), its position and who last changed it. Role and level names are as recorded then, not renamed since. A reorder has no row: tenants_pay_bands gives the order now. already_held marks a row recorded as the table held it when this history began, or as an earlier release changed it; its time and person are then the row's last change before that. Refused unless the caller is a tenant admin.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "inputs": {
+        "type": "string",
+        "enum": [
+          "pay_bands",
+          "exchange_rates",
+          "budget_lines",
+          "planning_rules"
+        ]
+      },
+      "page": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "inputs"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

@@ -172,14 +172,12 @@ module EvidenceDiffSubmit
     EvidencePlacementSuggestion.pending.for_evidence(item.id).where(id: ids).index_by(&:cell)
   end
 
-  # A suggestion kept through "Adjust" is accepted, attributed, and recorded
-  # as edited: the person reviewed it in the editor, whatever valence they
-  # left on it.
+  # A suggestion kept through "Adjust" is accepted with the valence the
+  # person left on it: edited when they changed it, accepted when they didn't.
   def accept_adjusted(suggestion, valence)
     Operations::Assessments::AcceptEvidenceSuggestion.call(context: pundit_user, params: {
       suggestion_id: suggestion.id, valence: valence
     })
-    EvidencePlacementSuggestion.where(id: suggestion.id, status: "accepted").update_all(status: "edited", updated_at: Time.current)
   end
 
   # Checked before any write, like the valences: the framework may have

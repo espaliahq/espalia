@@ -3,9 +3,9 @@
 require "test_helper"
 require_relative "../../support/placement_suggestion_fixture"
 
-# Suggestion events reach the development stream from a later release while
-# this one may still be serving ([#539](https://github.com/espaliahq/espalia/issues/539) c3).
-# This release writes none of them, but must load them.
+# The suggestion events, as the release before the one that wrote them had to
+# load them ([#539](https://github.com/espaliahq/espalia/issues/539) c3): any
+# history of them, of every shape, replays on the aggregate.
 class PersonDevelopment::LaterSuggestionEventsTest < ActiveSupport::TestCase
   include PlacementSuggestionFixture
 
