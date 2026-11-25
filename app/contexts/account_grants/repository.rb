@@ -3,48 +3,17 @@
 # Loads and saves a tenant's account grants, held in one stream per tenant:
 # `TenantAccountGrants`.
 #
-# The grants used to live in `AccountGrants`, and a release still serving
-# during a deploy writes there. Until that can't happen, the two streams are
-# kept equal by linking: an event is recorded once and indexed in both. The
-# lock keeps the old stream's name, so both releases take the same lock.
-# Under it, events only in the old stream are linked into the new one before
-# loading, and grant events appended to the new one are linked back. A read
-# without the lock uses the old stream, the only one holding every grant
-# while both releases write. [#539](https://github.com/espaliahq/espalia/issues/539) Track B stops
-# the linking back and moves that read to the new stream in the same change.
-#
-# Only grant events are linked back. A release before this one has no class
-# for a role or link event and would fail to load the old stream holding
-# one, so those live in the new stream alone, and the read without the lock
-# sees no roles or links: read them under the lock.
+# The grants used to live in `AccountGrants`. The release before this one
+# writes the new stream and links its grants back into the old one, which it
+# reads without the lock; this one links nothing back. So while it still
+# serves, its unlocked read misses a grant this release writes until it
+# next writes itself. The lock keeps the old stream's name, as that release
+# takes it, and anything only the old stream holds is linked in before
+# loading.
 #
 # @example
 #   AccountGrants::Repository.new.with_grants { |grants| grants.add(:team_planner, ...) }
 class AccountGrants::Repository < TenantStreams::Repository
-  # The types the release before the new stream knows. Fixed, so a type added later is never linked back.
-  LEGACY_EVENTS = [
-    AccountGrants::Events::OrgGraphEditorAdded, AccountGrants::Events::OrgGraphEditorRemoved,
-    AccountGrants::Events::PlannerAdded, AccountGrants::Events::PlannerRemoved
-  ].freeze
-  private_constant :LEGACY_EVENTS
-
-  # @see TenantStreams::Repository#with_aggregate
-  def with_aggregate(&block)
-    ActiveRecord::Base.transaction do
-      super.tap do
-        link_missing(from: stream_name(current_tenant!), to: legacy_stream_name(current_tenant!), only: LEGACY_EVENTS)
-      end
-    end
-  end
-
-  # Reads the old stream, which holds every grant whichever release wrote it,
-  # and no role or link. It stops being complete once the linking back stops.
-  #
-  # @return [AccountGrants::Aggregate]
-  def load_aggregate
-    @repository.load(new_aggregate, legacy_stream_name(current_tenant!))
-  end
-
   alias with_grants with_aggregate
   alias load_grants load_aggregate
 
@@ -63,11 +32,9 @@ class AccountGrants::Repository < TenantStreams::Repository
     link_missing(from: legacy_stream_name(tenant), to: stream_name(tenant))
   end
 
-  def link_missing(from:, to:, only: nil)
+  def link_missing(from:, to:)
     linked = @event_store.read.stream(to).map(&:event_id).to_set
-    source = @event_store.read.stream(from)
-    source = source.of_type(only) if only
-    missing = source.map(&:event_id).reject { linked.include?(it) }
+    missing = @event_store.read.stream(from).map(&:event_id).reject { linked.include?(it) }
     @event_store.link(missing, stream_name: to) if missing.any?
   end
 end
