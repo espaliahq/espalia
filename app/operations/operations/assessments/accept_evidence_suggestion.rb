@@ -29,7 +29,7 @@ class Operations::Assessments::AcceptEvidenceSuggestion < Operations::Base
   # @return [Hash] the decided suggestion plus `links`, every active link the
   #   item now carries
   def perform
-    valence = PersonDevelopment::SuggestionWrites.with_caught_up(evidence_item.person_id, evidence_item.framework_id,
+    valence = PersonDevelopment::SuggestionWrites.with_aggregate(evidence_item.person_id, evidence_item.framework_id,
                                                                  evidence_ids: [ evidence_item.id ]) do |aggregate|
       next unless suggestion.reload.pending? && cell_still_exists?
 

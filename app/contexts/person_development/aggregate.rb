@@ -291,17 +291,6 @@ class PersonDevelopment::Aggregate
     }))
   end
 
-  # Records what the release before suggestions were events wrote to the
-  # suggestions table and this stream doesn't know yet, so a command reads
-  # the table's truth before it acts
-  # ([#539](https://github.com/espaliahq/espalia/issues/539) c5 removes it).
-  #
-  # @param rows [Array<Hash>] suggestion rows, with the table's column names
-  # @return [Integer] how many rows it recorded anything for
-  def catch_up_suggestions(rows)
-    rows.count { |row| catch_up_suggestion(row.symbolize_keys) }
-  end
-
   # ── Manager-rating delegation ──
 
   # Grants manager-rating authority for this person/framework to another person.
@@ -1499,65 +1488,13 @@ class PersonDevelopment::Aggregate
     via_suggestion_id.present? ? { via_suggestion_id: via_suggestion_id } : {}
   end
 
-  # An id the stream doesn't hold is let through: the table may know it
-  # still, and the projection decides the row the link names.
+  # An id the stream doesn't hold is let through: the projection decides the
+  # row the link names.
   def ensure_suggestion_open!(suggestion_id)
     status = suggestion_status(suggestion_id)
     return if status.nil? || status == "pending"
 
     raise CommandError, "this suggestion was already #{status}"
-  end
-
-  # The release before this one reopens a cell's superseded row in place, and
-  # never moves a row when its own publish migrates the stream, so a row held
-  # with the same status can still be a later run's, or on another cell.
-  def catch_up_suggestion(row)
-    held = suggestion_status(row[:id])
-    return false if DECIDED_SUGGESTION_STATUSES.include?(held)
-
-    same = held && held_as_row?(row)
-    return false if row[:status] == held && same
-
-    case row[:status]
-    when "superseded"
-      if held == "pending" && same
-        apply(PersonDevelopment::Events::EvidencePlacementSuggestionsSuperseded.new(
-          data: { evidence_id: row[:evidence_id], suggestion_ids: [ row[:id] ] }
-        ))
-      else
-        record_held_suggestion(row, status: "superseded")
-      end
-    when "dismissed"
-      # A link naming this row can't precede it: the release before dismissed only pending rows, and a link accepts one.
-      record_held_suggestion(row, status: "pending") unless held == "pending" && same
-      apply(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed.new(data: {
-        suggestion_id: row[:id], evidence_id: row[:evidence_id], dismissed_by_id: row[:decided_by_id],
-        reason: row[:dismiss_reason].presence, dismissed_at: row[:decided_at]&.iso8601(6), already_held: true
-      }))
-    else
-      record_held_suggestion(row, status: row[:status])
-    end
-    true
-  end
-
-  def held_as_row?(row)
-    held = @suggestions[row[:id].to_s]
-    held_at = held[:generated_at]
-    held_at = Time.zone.parse(held_at) if held_at.is_a?(String)
-    held[:cell] == [ row[:capability_stable_id], row[:level_ordinal] ] &&
-      held_at.present? && held_at.floor(6) == row[:generated_at]&.floor(6)
-  end
-
-  def record_held_suggestion(row, status:)
-    decided = %w[accepted edited].include?(status)
-    apply(PersonDevelopment::Events::EvidencePlacementSuggested.new(data: {
-      suggestion_id: row[:id], evidence_id: row[:evidence_id],
-      capability_stable_id: row[:capability_stable_id], level_ordinal: row[:level_ordinal],
-      valence: row[:valence], confidence: row[:confidence]&.to_s("F"), rationale: row[:rationale],
-      provider: row[:provider], model: row[:model], prompt_version: row[:prompt_version],
-      generated_at: row[:generated_at]&.iso8601(6), already_held: true, status: status,
-      decided_by_id: (row[:decided_by_id] if decided), decided_at: (row[:decided_at]&.iso8601(6) if decided)
-    }))
   end
 
   # Direct aggregate callers cannot inspect the org chart. The command handler

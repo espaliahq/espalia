@@ -43,15 +43,6 @@ class PersonDevelopment::SuggestionCommandsTest < ActiveSupport::TestCase
     end
   end
 
-  def row(status, **attrs)
-    ActsAsTenant.with_tenant(@tenant) do
-      create(:evidence_placement_suggestion, tenant: @tenant, item: @item, capability_stable_id: @ownership.stable_id,
-             level_ordinal: 3, status: status, **attrs)
-    end
-  end
-
-  def catch_up(*rows) = with_aggregate { |agg| agg.catch_up_suggestions(rows.map(&:attributes)) }
-
   def migrate(from, to)
     event_store.with_metadata(tenant_id: @tenant.id, person_id: @alex.id, framework_id: @framework_id) do
       event_store.publish(PersonDevelopment::Events::FrameworkVersionMigrated.new(data: {
@@ -155,87 +146,6 @@ class PersonDevelopment::SuggestionCommandsTest < ActiveSupport::TestCase
       event = events_of(PersonDevelopment::Events::EvidenceLinkRevalenced).sole
       assert_equal [ "demonstrated", "demonstrated", @suggestion_id ], event.data.values_at(:previous_valence, :valence, :via_suggestion_id)
       assert_equal "accepted", aggregate.suggestion_status(@suggestion_id)
-    end
-  end
-
-  context "catch_up_suggestions" do
-    should "record a row the stream lacks, with its status and who decided it" do
-      accepted = row("edited", decided_by_id: @morgan.id, decided_at: 1.hour.ago)
-      catch_up(accepted)
-
-      event = events_of(PersonDevelopment::Events::EvidencePlacementSuggested).sole
-      assert event.data[:already_held]
-      assert_equal [ "edited", @morgan.id ], event.data.values_at(:status, :decided_by_id)
-      assert_equal "accepted", aggregate.suggestion_status(accepted.id)
-    end
-
-    should "record a dismissal with its reason and who made it" do
-      dismissed = row("dismissed", decided_by_id: @morgan.id, decided_at: 1.hour.ago, dismiss_reason: "Not this level")
-      catch_up(dismissed)
-
-      dismissal = events_of(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed).sole
-      assert_equal [ @morgan.id, "Not this level", true ], dismissal.data.values_at(:dismissed_by_id, :reason, :already_held)
-      assert_equal "pending", events_of(PersonDevelopment::Events::EvidencePlacementSuggested).sole.data[:status]
-      assert_equal "dismissed", aggregate.suggestion_status(dismissed.id)
-    end
-
-    should "follow a row the old release superseded, then reopened" do
-      suggest(proposal(@ownership, 3))
-      suggestion = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find(suggestion_ids.first) }
-      suggestion.update!(status: "superseded")
-      catch_up(suggestion)
-      assert_equal "superseded", aggregate.suggestion_status(suggestion.id)
-
-      suggestion.update!(status: "pending")
-      catch_up(suggestion)
-      assert_equal "pending", aggregate.suggestion_status(suggestion.id)
-      assert_equal [ suggestion.id ] * 2, suggestion_ids
-    end
-
-    should "store confidence as the job does" do
-      catch_up(row("pending", confidence: BigDecimal("0.80")))
-
-      assert_equal "0.8", events_of(PersonDevelopment::Events::EvidencePlacementSuggested).sole.data[:confidence]
-    end
-
-    should "follow a row the old release left on its cell when it migrated the stream" do
-      suggest(proposal(@collaboration, 3))
-      suggestion = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find(suggestion_ids.first) }
-      event_store.append(
-        PersonDevelopment::Events::FrameworkVersionMigrated.new(
-          data: { framework_id: @framework_id, old_version: 1, new_version: 2,
-                  mappings: [ { from_stable_id: @collaboration.stable_id, to_stable_id: @ownership.stable_id, mapping_type: "evolved" } ] },
-          metadata: { tenant_id: @tenant.id, person_id: @alex.id, framework_id: @framework_id }
-        ), stream_name: stream
-      )
-
-      assert_equal 1, catch_up(suggestion)
-      assert_equal [ @collaboration.stable_id ] * 2,
-                   events_of(PersonDevelopment::Events::EvidencePlacementSuggested).map { it.data[:capability_stable_id] }
-      assert_equal 0, catch_up(suggestion)
-    end
-
-    should "follow a row the old release reopened and superseded again" do
-      suggest(proposal(@ownership, 3))
-      suggestion = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find(suggestion_ids.first) }
-      suggestion.update!(status: "superseded")
-      catch_up(suggestion)
-      suggestion.update!(status: "superseded", valence: "growth_area", generated_at: 1.minute.from_now)
-
-      assert_equal 1, catch_up(suggestion)
-      latest = events_of(PersonDevelopment::Events::EvidencePlacementSuggested).last.data
-      assert_equal %w[growth_area superseded], latest.values_at(:valence, :status)
-      assert_equal 0, catch_up(suggestion)
-    end
-
-    should "write nothing when the stream already agrees, or has decided" do
-      held = row("pending")
-      catch_up(held)
-      assert_no_difference(-> { event_store.read.stream(stream).count }) { catch_up(held) }
-
-      with_aggregate { |agg| agg.dismiss_suggestion(held.id, evidence_id: @item.id, dismissed_by_id: @morgan.id) }
-      held.update!(status: "superseded")
-      assert_no_difference(-> { event_store.read.stream(stream).count }) { catch_up(held) }
     end
   end
 

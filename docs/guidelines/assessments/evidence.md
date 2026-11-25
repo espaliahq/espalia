@@ -601,13 +601,10 @@ Rules, all deliberate:
   item a minute: every run is a paid model call.
 - **One run per item at a time.** Every suggestion command, the job's
   included, runs in `PersonDevelopment::SuggestionWrites`: a Postgres
-  advisory lock on the item, then the person's suggestion rows, then the
-  command, retried in a savepoint if another command for the person stored
-  first. The job stores nothing if the feedback was edited while the model
-  answered; the edit's own run follows. Until
-  [#539](https://github.com/espaliahq/espalia/issues/539) c5 these are also
-  the locks the release before took, and the command first records on the
-  stream what that release wrote to the table.
+  advisory lock on the item, then the command, retried in a savepoint if
+  another command for the person stored first. The job stores nothing if
+  the feedback was edited while the model answered; the edit's own run
+  follows.
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; a placement notifier would hook in
   there.

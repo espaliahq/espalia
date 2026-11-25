@@ -26,7 +26,7 @@ class Operations::Assessments::DismissEvidenceSuggestion < Operations::Base
 
   # @return [Hash] the dismissed suggestion
   def perform
-    dismissed = PersonDevelopment::SuggestionWrites.with_caught_up(evidence_item.person_id, evidence_item.framework_id,
+    dismissed = PersonDevelopment::SuggestionWrites.with_aggregate(evidence_item.person_id, evidence_item.framework_id,
                                                        evidence_ids: [ evidence_item.id ]) do |aggregate|
       next unless suggestion.reload.pending?
 
