@@ -97,6 +97,24 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: planning inputs stop the catch-up, then drop `updated_by_id` ([#539](https://github.com/espaliahq/espalia/issues/539) a4 and a4b), 2026-11-25
+
+No rebuild and no `CODE_VERSION` bump. a4 changes what commands do, not what the projection writes from an event.
+
+**a4** removes the catch-up a command ran before it decided, and the `pay_bands:<tenant>` lock. The models ignore `updated_by_id`. Deploy it only onto a release that holds a1, which went live at 03:27Z on 2026-11-25. While the previous release still serves, it takes the list lock and then the stream lock; a4 takes the stream lock alone, so neither waits on the other in a cycle. The reconciler still runs at steps 2b and 6. A row that still names an account in `updated_by_id` is recorded under that account's person, and the projection then clears the column.
+
+**Before a4b**, once a4 is live, confirm no row still names an account. This prints one count per table and nothing else:
+
+```bash
+bin/rails runner 'TenantPlanningInputs::Rows::TABLES.each_key { |t| puts "#{t}: #{TenantPlanningInputs::Rows.model(t).where.not(updated_by_id: nil).count}" }'
+```
+
+Every count should be 0. If one isn't, run `bin/rails events:reconcile` and count again: it records each such row under its account's person and clears the column. Go ahead only when every count is 0.
+
+**a4b** drops `updated_by_id`, its foreign keys and its indexes from the five tables. Deploy it only once a4 is live.
+
+**After a4b deploys, never roll back to a release before a4.** Those releases name `updated_by_id`, and the column is gone.
+
 #### Recorded: `account_grants/account_flags` v2 takes the link to a person ([#539](https://github.com/espaliahq/espalia/issues/539) b2), 2026-11-24
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection now also writes `tenant_users.person_id` from `AccountLinkedToPerson` and `AccountUnlinkedFromPerson`. Its reset sets a link the stream records and keeps one it doesn't. A link to a person since destroyed stays as the table has it, which is clear.
