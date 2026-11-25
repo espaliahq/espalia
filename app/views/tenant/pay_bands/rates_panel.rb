@@ -15,6 +15,10 @@ module Views::Tenant::PayBands::RatesPanel
           add_rate_form
         end
       end
+      card.actions do
+        render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true,
+                                           href: tenant_planning_inputs_history_path("exchange_rates")) { "Rate history" }
+      end
     end
   end
 
