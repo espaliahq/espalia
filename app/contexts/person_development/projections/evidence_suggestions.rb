@@ -38,6 +38,7 @@ class PersonDevelopment::Projections::EvidenceSuggestions
   # @param event [RubyEventStore::Event]
   def call(event)
     ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) { handle(event) }
+    broadcast_assessment_sync(event) if event.is_a?(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed)
   end
 
   private
@@ -120,5 +121,19 @@ class PersonDevelopment::Projections::EvidenceSuggestions
       survivor.destroy!
       retiring.update!(capability_stable_id: to_stable_id)
     end
+  end
+
+  # A dismissal shows in the activity feed, and nothing else nudges the open
+  # assessment about it. The link events are {EvidenceCollection}'s to announce.
+  def broadcast_assessment_sync(event)
+    return if Projections::Replayer.replay_mode?
+
+    Turbo::StreamsChannel.broadcast_replace_to(
+      "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
+      target: "assessment-sync-signal",
+      html: "<div id=\"assessment-sync-signal\" class=\"hidden\" data-assessment-sync-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
+    )
+  rescue => e
+    Rails.logger.warn("[EvidenceSuggestions] Broadcast failed: #{e.message}")
   end
 end
