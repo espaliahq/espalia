@@ -13,7 +13,7 @@ module TenantPlanningInputs::Rows
   }.freeze
 
   # Written by the projection from the event itself, not from the row.
-  BOOKKEEPING = %w[id tenant_id created_at updated_at updated_by_id updated_by_person_id].freeze
+  BOOKKEEPING = %w[id tenant_id created_at updated_at updated_by_person_id].freeze
 
   # @param table [Symbol] one of {TABLES}
   # @return [Class<ApplicationRecord>]

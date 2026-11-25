@@ -11,9 +11,6 @@
 # an actor; each names who last changed the row, as `last_changed_by_id`.
 # The rows name no person, so none is ever left alone as forgotten.
 #
-# A command runs it first, through {#catch_up}, so a row the previous
-# release wrote during a deploy is in the stream before the command decides.
-#
 # @example
 #   TenantPlanningInputs::Reconciliation.new(tenant).call
 #   # => #<data Report added=3, removed=0, changed=0>
@@ -24,26 +21,34 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
   # @return [TenantPlanningInputs::Repository]
   def self.repository = TenantPlanningInputs::Repository.new
 
-  # Takes the band list's lock first, as a command does, so the previous
-  # release's band writes wait for the run rather than land under it.
-  #
-  # @return [TenantStreams::Reconciliation::Report]
-  def call = PayBand.with_list_lock(@tenant.id) { super }
-
-  # Records what the table holds that the aggregate doesn't, under the lock
-  # the caller holds.
+  # Records what the tables hold, then clears `updated_by_id` on each row that
+  # still named an account, now that the row is recorded under its person.
   #
   # @param aggregate [TenantPlanningInputs::Aggregate]
   # @return [TenantStreams::Reconciliation::Report]
-  def catch_up(aggregate) = reconcile(aggregate)
+  def reconcile(aggregate) = super.tap { clear_legacy_accounts }
 
   private
 
-  # Locks the rows it reads, so a change the previous release makes waits
-  # for the run and is recorded by the next, never written over by this one.
+  # Locks the rows it reads, so the projection cannot change one between this
+  # read and the events the run records.
   def held_in_table
+    @legacy_editors = {}
     Rows::TABLES.each_key.with_object({}) do |table, held|
-      Rows.model(table).where(tenant_id: @tenant.id).lock.find_each { |record| held[[ table, record.id ]] = record }
+      rows = Rows.model(table).where(tenant_id: @tenant.id).lock
+      rows.find_each { |record| held[[ table, record.id ]] = record }
+      @legacy_editors.merge!(legacy_accounts(rows).transform_keys { [ table, it ] })
+    end
+  end
+
+  # A release before a4 named the account that last changed a row in
+  # `updated_by_id`, which the models now ignore. Only this deploy-time run
+  # names the column, so a serving release never does when a4b drops it.
+  def legacy_accounts(rows) = rows.where.not(updated_by_id: nil).pluck(:id, :updated_by_id).to_h
+
+  def clear_legacy_accounts
+    @legacy_editors.keys.group_by(&:first).each do |table, keys|
+      Rows.model(table).where(id: keys.map(&:last)).update_all(updated_by_id: nil)
     end
   end
 
@@ -57,11 +62,12 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
 
   # Both sides are read as the table types read them, so a figure the stream
   # holds as "120000.0" equals the table's 120000.00. A comparison of the raw
-  # values would record a change on every run.
+  # values would record a change on every run. A row that still names an
+  # account counts as changed, so its editor is recorded before the column goes.
   def changed?(record, entry)
     table = table_of(record)
     Rows.cast(table, Rows.dump(table, record)) != Rows.cast(table, Rows.complete(table, entry.row)) ||
-      Rows.time(record.updated_at) != entry.updated_at
+      Rows.time(record.updated_at) != entry.updated_at || @legacy_editors.key?([ table, record.id ])
   end
 
   def record_held(aggregate, (table, id), record)
@@ -81,12 +87,12 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
     { updated_at: Rows.time(record.updated_at), last_changed_by_id: editor(record), **band_stamp(table) }
   end
 
-  # Only the previous release writes `updated_by_id`, and the projection
-  # clears it, so a row that holds one was last changed through it.
+  # Only a release before a4 wrote `updated_by_id`, and each run clears it, so
+  # a row that still holds one was last changed through that release.
   def editor(record)
-    return record.updated_by_person_id unless record.updated_by_id
+    account = @legacy_editors[[ table_of(record), record.id ]] or return record.updated_by_person_id
 
-    TenantUser.where(tenant_id: @tenant.id, user_id: record.updated_by_id, forgotten_at: nil).pick(:person_id)
+    TenantUser.where(tenant_id: @tenant.id, user_id: account, forgotten_at: nil).pick(:person_id)
   end
 
   def band_stamp(table)
