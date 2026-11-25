@@ -53,4 +53,5 @@ module PersonDevelopment::SuggestionWrites
                                                   "placement-suggestions:#{evidence_id}" ])
     EvidencePlacementSuggestion.connection.execute(sql)
   end
+  private_class_method :lock_item
 end
