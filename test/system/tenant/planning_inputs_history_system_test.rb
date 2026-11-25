@@ -43,6 +43,27 @@ class Tenant::PlanningInputsHistorySystemTest < ApplicationSystemTestCase
         assert_no_link "Older"
         assert_no_sideways_overflow
       end
+
+      should "show the reference currency before and after it changes in the rate history" do
+        ActsAsTenant.with_tenant(@tenant) do
+          currency = add_planning_input!(:reference_currencies, currency: "AUD")
+          currency.currency = "USD"
+          save_planning_input!(:reference_currencies, currency)
+        end
+
+        visit tenant_pay_bands_path
+        click_link_with_js_fallback("Rate history", expect_text: "Set the reference currency to USD")
+
+        within "#planning-inputs-history li:first-child" do
+          assert_text "Before: AUD"
+          assert_text "After: USD"
+        end
+        within "#planning-inputs-history li:last-child" do
+          assert_text "Set the reference currency to AUD"
+          assert_no_text "Before:"
+        end
+        assert_no_sideways_overflow
+      end
     end
   end
 end
