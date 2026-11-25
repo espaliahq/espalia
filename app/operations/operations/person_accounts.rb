@@ -15,14 +15,14 @@ module Operations::PersonAccounts
     accounts
   end
 
-  # @param right [String] what is being granted, as the refusal names it
+  # @param refusal [String] how the refusal ends, e.g. "the right to create plans can't be granted"
   # @return [TenantUser] the person's only account
   # @raise [Operations::Base::ParameterError] when the person has none, or more than one
-  def sole_account!(right)
+  def sole_account!(refusal)
     accounts = accounts!
     if accounts.many?
       raise Operations::Base::ParameterError,
-            "person_id: that person has more than one account here, so #{right} can't be granted"
+            "person_id: that person has more than one account here, so #{refusal}"
     end
 
     accounts.sole

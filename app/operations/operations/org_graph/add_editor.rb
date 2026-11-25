@@ -19,7 +19,7 @@ class Operations::OrgGraph::AddEditor < Operations::Base
   # @return [Hash] editors and admins
   # @raise [ParameterError] for a person with no account or two, an admin, or someone who has left
   def perform
-    account = sole_account!("the right to edit the Org Graph")
+    account = sole_account!("the right to edit the Org Graph can't be granted")
     raise ParameterError, "person_id: admins may already edit the Org Graph" if account.admin?
     raise ParameterError, "person_id: only someone still in the organisation can be an editor" unless account.person&.status == "active"
 

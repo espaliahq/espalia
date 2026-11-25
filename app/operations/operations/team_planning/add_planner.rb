@@ -19,7 +19,7 @@ class Operations::TeamPlanning::AddPlanner < Operations::Base
   # @return [Hash] planners and admins
   # @raise [ParameterError] for a person with no account or two, an admin, or someone who has left
   def perform
-    account = sole_account!("the right to create plans")
+    account = sole_account!("the right to create plans can't be granted")
     raise ParameterError, "person_id: admins may already create plans" if account.admin?
     raise ParameterError, "person_id: only someone still in the organisation can be a planner" unless account.person&.status == "active"
 
