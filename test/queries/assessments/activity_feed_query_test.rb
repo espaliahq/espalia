@@ -370,6 +370,19 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "evidence", Views::Assessments::Activity::Entry::KIND_GROUP[entry.kind]
     end
 
+    should "show a suggestion accepted with the link's valence as an accept, not a reclassification" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.set_evidence_link_valence(@assessee.id, @framework_id, @evidence_id,
+          capability_stable_id: @other_cap, level_ordinal: 3, valence: "growth_area",
+          changed_by_id: @assessee.id, via_suggestion_id: SecureRandom.uuid_v7)
+      end
+      kinds = run_query(viewer: @assessee, sees_all: true, context: :self, alignment_started: false).map(&:kind)
+
+      assert_equal 1, kinds.count("evidence_revalenced")
+      assert_equal 1, kinds.count("evidence_suggestion_accepted")
+      assert_equal "evidence", Views::Assessments::Activity::Entry::KIND_GROUP["evidence_suggestion_accepted"]
+    end
+
     should "hide a revalence a peer did not perform" do
       entries = run_query(viewer: @peer, sees_all: false, context: :self,
         alignment_started: false)

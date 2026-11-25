@@ -3,9 +3,10 @@
 require "test_helper"
 
 class Projections::ReconcilersTest < ActiveSupport::TestCase
-  should "name a reconciler of a tenant stream for every entry" do
+  should "name a reconciler that reports what it recorded for every entry" do
+    tenant = create(:tenant)
     Projections::Reconcilers.names.each do |name|
-      assert_operator Projections::Reconcilers.fetch(name), :<, TenantStreams::Reconciliation, name
+      assert_kind_of TenantStreams::Reconciliation::Report, Projections::Reconcilers.fetch(name).new(tenant).call, name
     end
   end
 

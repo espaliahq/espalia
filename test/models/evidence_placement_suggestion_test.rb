@@ -35,26 +35,6 @@ class EvidencePlacementSuggestionTest < ActiveSupport::TestCase
     end
   end
 
-  context "#decide!" do
-    should "record who decided, when and why" do
-      suggestion = create(:evidence_placement_suggestion, tenant: @tenant)
-      person = create(:person, tenant: @tenant)
-
-      suggestion.decide!(status: "dismissed", by: person, reason: "Not about delivery")
-
-      suggestion.reload
-      assert_equal "dismissed", suggestion.status
-      assert_equal person.id, suggestion.decided_by_id
-      assert_not_nil suggestion.decided_at
-      assert_equal "Not about delivery", suggestion.dismiss_reason
-    end
-
-    should "refuse a status that is not a decision" do
-      suggestion = create(:evidence_placement_suggestion, tenant: @tenant)
-      assert_raises(ArgumentError) { suggestion.decide!(status: "pending", by: create(:person, tenant: @tenant)) }
-    end
-  end
-
   context ".pending_by_evidence" do
     should "group pending rows per item, most confident first" do
       evidence_id = SecureRandom.uuid_v7

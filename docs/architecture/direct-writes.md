@@ -2,7 +2,7 @@
 
 Every table is written by a projection from events, or it is not. This page lists the writes that are not: who makes them, from where, and whether the table should stay plain state or move to events. It is the catalogue part 2a of [#539](https://github.com/espaliahq/espalia/issues/539) asked for. Part 2b works through the recommendations; nothing here has been moved yet.
 
-Of the 74 tables, 46 are read models. The other 28 are below, with the columns on read-model tables that something besides their projection writes.
+Of the 74 tables, 47 are read models. The other 27 are below, with the columns on read-model tables that something besides their projection writes.
 
 The rules now live in [`config/write_ownership.yml`](../../config/write_ownership.yml), one entry per table, and CI holds every write to them. This page keeps the reasons at length.
 
@@ -164,14 +164,13 @@ Each section names the writers the run saw and recommends one of two things: **k
 
 | Table | Writers |
 |---|---|
-| `evidence_placement_suggestions` | `Evidence::SuggestPlacementsJob#store`, `#upsert`; `EvidencePlacementSuggestion#decide!`; `EvidenceDiffSubmit#accept_adjusted` |
 | `feedback_drafts` | `Slack::Feedback#draft`; `FeedbackDraft#consume!` |
 | `feedback_exchange_acks` | `FeedbackExchangeAck.record_all` |
 | `feedback_exchange_imports` | `FeedbackExchange::Importer#write`; forgetting (`scrub_exchange_ledger`) |
 
-**Keep.** Suggestions are AI output until someone accepts one, and accepting writes evidence through events. A draft lives until the Slack modal submits it. The exchange tables are a ledger of what was sent and received, used to skip duplicates.
+**Keep.** A draft lives until the Slack modal submits it. The exchange tables are a ledger of what was sent and received, used to skip duplicates.
 
-One open question for 2b: `decide!` records who dismissed a suggestion, and why, only on the row. If a dismissal ever needs to stand as history, it belongs on the person's development stream.
+`evidence_placement_suggestions` left this list in [#539](https://github.com/espaliahq/espalia/issues/539) c3: the `person_development/evidence_suggestions` projection writes it from the development stream, so a dismissal and who made it now stand as history.
 
 ### Level comparison groups and snapshots
 
