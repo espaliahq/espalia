@@ -81,7 +81,7 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
       end
     end
 
-    should "not serve a snapshot older than its stream after a PublishedState rebuild" do
+    should "return nil for a row behind its stream" do
       ActsAsTenant.with_tenant(@tenant) do
         store_current
         family_id = SecureRandom.uuid_v7
@@ -114,6 +114,24 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
         handler = Frameworks::CommandHandler.new
         rfid = SecureRandom.uuid_v7
         handler.add_role_family(@framework_id, rfid, "Engineering")
+      end
+    end
+
+    should "leave the row behind its stream when a write lands during the rebuild" do
+      ActsAsTenant.with_tenant(@tenant) do
+        build = Frameworks::ExplorerGraphBuilder.method(:new)
+        landed = false
+        landing = lambda do |agg|
+          unless landed
+            landed = true
+            Frameworks::CommandHandler.new.add_role_family(@framework_id, SecureRandom.uuid_v7, "Product")
+          end
+          build.call(agg)
+        end
+
+        Frameworks::ExplorerGraphBuilder.stub(:new, landing) { Frameworks::ExplorerGraph.rebuild(@framework_id) }
+
+        assert_nil Frameworks::ExplorerGraph.load(@framework_id)
       end
     end
 

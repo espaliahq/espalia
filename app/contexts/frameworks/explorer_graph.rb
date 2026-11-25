@@ -90,12 +90,13 @@ module Frameworks::ExplorerGraph
   # @return [Frameworks::ExplorerGraph::Framework]
   def rebuild(framework_id)
     graph = nil
-    head = nil
+    # Read before the aggregate loads: a write landing in between then leaves
+    # the row behind its stream, so the next load rebuilds instead of trusting it.
+    head = stream_head(framework_id)
     Frameworks::Repository.new.with_framework(framework_id) do |agg|
       next unless agg.framework_id
 
       graph = Frameworks::ExplorerGraphBuilder.new(agg).build
-      head = stream_head(framework_id)
     end
 
     if graph
