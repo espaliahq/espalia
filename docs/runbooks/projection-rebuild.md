@@ -97,6 +97,14 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: no linking back to `AccountGrants` ([#539](https://github.com/espaliahq/espalia/issues/539) b3), with no bump
+
+No `CODE_VERSION` bump and no `REBUILD_ON_DEPLOY`. `AccountGrants::Repository` stops linking grants back into the old stream and reads `TenantAccountGrants` without the lock. Linking an account no longer records what the column says first.
+
+**Deploy this only onto a release that holds [PR #566](https://github.com/espaliahq/espalia/pull/566), and confirm that release is serving before you start.** An older release reads the old stream without the lock and writes links only to the column, which this one would no longer record before linking.
+
+While the previous release still serves, its editor and planner lists read the old stream, so they miss a grant this release gives or takes back until that release next writes one. Nothing authorizes from those lists. A rollback heals at the previous release's next grant command, which links the missing grants back.
+
 #### Recorded: `account_grants/account_flags` v2 takes the link to a person ([#539](https://github.com/espaliahq/espalia/issues/539) b2), 2026-11-24
 
 Path A: `REBUILD_ON_DEPLOY=account_grants/account_flags`, removed once the deploy is live. The projection now also writes `tenant_users.person_id` from `AccountLinkedToPerson` and `AccountUnlinkedFromPerson`. Its reset sets a link the stream records and keeps one it doesn't. A link to a person since destroyed stays as the table has it, which is clear.

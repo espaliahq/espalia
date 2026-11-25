@@ -3,13 +3,13 @@
 # Loads and saves a tenant's account grants, held in one stream per tenant:
 # `TenantAccountGrants`.
 #
-# The grants used to live in `AccountGrants`. A release before this stream
-# may still write there during a deploy, so the lock keeps the old stream's
-# name and, under it, events only in the old stream are linked into the new
-# one before loading. Nothing is linked back, so the old stream holds only
-# what earlier releases wrote. A read without the lock reads the new
-# stream, and misses an event the previous release wrote until the next
-# command or reconcile links it.
+# The grants used to live in `AccountGrants`. The release before this one
+# writes the new stream and links its grants back into the old one, which it
+# reads without the lock; this one links nothing back. So while it still
+# serves, its unlocked read misses a grant this release writes until it
+# next writes itself. The lock keeps the old stream's name, as that release
+# takes it, and anything only the old stream holds is linked in before
+# loading.
 #
 # @example
 #   AccountGrants::Repository.new.with_grants { |grants| grants.add(:team_planner, ...) }
