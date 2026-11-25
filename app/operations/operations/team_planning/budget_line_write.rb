@@ -40,7 +40,9 @@ module Operations::TeamPlanning::BudgetLineWrite
   # A tenant line the organisation has since removed stays one, so it keeps reading as orphaned.
   #
   # @return [Boolean] whether the id names one of the organisation's lines
-  def tenant_line?(line_id, prior = nil) = prior&.data&.dig(:tenant_line) == true || ::BudgetLine.exists?(id: line_id)
+  def tenant_line?(line_id, prior = nil)
+    prior&.data&.dig(:tenant_line) == true || TenantPlanningInputs::Projections::Tables.unless_rebuilding { ::BudgetLine.exists?(id: line_id) }
+  end
 
   # Refuses a line the scenario doesn't hold: neither the organisation's nor one this plan set or cut along its
   # chain, or one outside a scoped plan's cost centres. Both read the same, so a member can't use a write to learn

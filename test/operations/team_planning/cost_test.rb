@@ -27,7 +27,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
       people.set_membership(@ada.id, @payments, **ESPALIA, allocation: 1.0)
       people.set_membership(@cy.id, @payments, **ESPALIA, allocation: 1.0)
 
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_419)
+      add_pay_band!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_419)
       ReferenceCurrency.create!(currency: "EUR")
 
       @admin = create(:tenant_user, tenant: @tenant, role: :admin, person: create(:person, tenant: @tenant))
@@ -126,7 +126,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
     role_band = band_of(cost(unit_id: @payments))
     assert_not_equal family.id, role_band[:pay_band_id]
 
-    ActsAsTenant.with_tenant(@tenant) { PayBand.reorder!(PayBand.order(:position).ids - [ family.id ] + [ family.id ]) }
+    ActsAsTenant.with_tenant(@tenant) { reorder_pay_bands!(PayBand.order(:position).ids - [ family.id ] + [ family.id ]) }
     assert_equal [ family.id, PayBand.count ], band_of(cost(unit_id: @payments)).values_at(:pay_band_id, :position)
   end
 
@@ -283,7 +283,7 @@ class Operations::TeamPlanning::CostTest < ActiveSupport::TestCase
 
   def band_entry!(midpoint:, minimum: 0, role: nil, role_family: nil, level_ordinal: nil, location: nil)
     PayBand.new(location:, currency: "EUR", period: "year", minimum:, midpoint:, maximum: 200_419)
-           .tap { it.match_on(role:, role_family:, level_ordinal:) }.tap(&:save!)
+           .tap { it.match_on(role:, role_family:, level_ordinal:) }.then { save_planning_input!(:pay_bands, it) }
   end
 
   def band_of(result) = result[:seats][:scenario].find { it[:seat_id] == @ada.id }[:band]

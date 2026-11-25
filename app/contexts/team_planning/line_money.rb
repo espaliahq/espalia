@@ -23,7 +23,7 @@ module TeamPlanning::LineMoney
     return Set.new if line_ids.empty?
 
     planned = entries.filter_map { it.data[:subject_id] if it.is_a?(TeamPlanning::Events::BudgetLineSet) && it.data[:amount].present? }
-    tenant = ::BudgetLine.where(id: line_ids).where.not(amount: nil).pluck(:id)
+    tenant = TenantPlanningInputs::Projections::Tables.unless_rebuilding { ::BudgetLine.where(id: line_ids).where.not(amount: nil).pluck(:id) }
     (planned + tenant).to_set { [ it, FACET ] }
   end
 
@@ -35,7 +35,8 @@ module TeamPlanning::LineMoney
   def self.priced?(aggregate, scenario_id, subject_id, facet)
     return false unless facet == FACET
 
-    priced_keys(aggregate, scenario_id).include?([ subject_id, facet ]) || ::BudgetLine.where(id: subject_id).where.not(amount: nil).exists?
+    priced_keys(aggregate, scenario_id).include?([ subject_id, facet ]) ||
+      TenantPlanningInputs::Projections::Tables.unless_rebuilding { ::BudgetLine.where(id: subject_id).where.not(amount: nil).exists? }
   end
 
   def self.facet_of(entry) = entry.is_a?(TeamPlanning::Events::Change) ? entry.class.facet : entry.data[:facet]

@@ -85,7 +85,7 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
   def handler = TeamPlanning::CommandHandler.new(actor: context_for(@planner))
 
   def band(level, currency, period, midpoint, location: nil)
-    PayBand.create!(level:, location:, currency:, period:, minimum: 0, midpoint:, maximum: midpoint * 2)
+    add_pay_band!(level:, location:, currency:, period:, minimum: 0, midpoint:, maximum: midpoint * 2)
   end
 
   def operation(operation, scenario_id: @year, **params)
@@ -173,7 +173,7 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
     assert_equal %w[level_left], cost.scenario.unpriced.select { it.position_id == position }.map(&:reason).uniq
     assert_includes TeamPlanning::Cost::REASONS["level_left"], "or one for every role and level"
 
-    as_tenant { PayBand.new(currency: "NZD", period: "year", minimum: 1, midpoint: 2, maximum: 3).tap { it.match_on }.tap(&:save!) }
+    as_tenant { PayBand.new(currency: "NZD", period: "year", minimum: 1, midpoint: 2, maximum: 3).tap { it.match_on }.then { save_planning_input!(:pay_bands, it) } }
     assert_empty cost.scenario.unpriced.select { it.position_id == position }
   end
 
@@ -585,14 +585,14 @@ class TeamPlanning::CostTest < ActiveSupport::TestCase
 
   should "state when the bands last changed, since a plan reprices live" do
     travel_to Time.utc(2026, 1, 5, 9)
-    as_tenant { PayBand.find_by(level_id: @e5.level_id, location_key: "").update!(midpoint: 110_000) }
+    as_tenant { save_planning_input!(:pay_bands, PayBand.find_by(level_id: @e5.level_id, location_key: "").tap { it.midpoint = 110_000 }) }
 
     report = cost
     assert_equal Time.utc(2026, 1, 5, 9), report.bands_changed_at
     assert_equal [ 110_000r ], amounts(report.scenario, @ada.id)
 
     travel_to Time.utc(2026, 1, 6, 9)
-    as_tenant { PayBand.find_by(level_id: @e6.level_id).destroy! }
+    as_tenant { remove_planning_inputs!(PayBand.find_by(level_id: @e6.level_id)) }
     assert_equal Time.utc(2026, 1, 6, 9), cost.bands_changed_at, "a removed band reprices plans too"
   end
 

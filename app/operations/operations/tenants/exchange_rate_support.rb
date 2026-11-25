@@ -32,14 +32,14 @@ module Operations::Tenants::ExchangeRateSupport
       rate: rate.figure,
       applies_from: rate.applies_from.iso8601,
       updated_at: rate.updated_at.iso8601,
-      updated_by: names[rate.updated_by_id]
+      updated_by: names[editor_id(rate)]
     }
   end
 
   # @param reference [ReferenceCurrency, nil]
   # @return [Hash, nil]
   def reference_payload(reference, names: editor_names([ reference ].compact))
-    reference && { currency: reference.currency, updated_at: reference.updated_at.iso8601, updated_by: names[reference.updated_by_id] }
+    reference && { currency: reference.currency, updated_at: reference.updated_at.iso8601, updated_by: names[editor_id(reference)] }
   end
 
   # @param exchange_rate_id [String]

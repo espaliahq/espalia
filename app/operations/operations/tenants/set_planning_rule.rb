@@ -21,8 +21,8 @@ class Operations::Tenants::SetPlanningRule < Operations::Base
   def perform
     kind = TeamPlanning::RuleKinds.fetch(params[:rule])
     value = TeamPlanning::RuleKinds.check(params[:rule], params[:value])
-    record = ActsAsTenant.current_tenant.with_lock do
-      PlanningRuleDefault.find_or_initialize_by(rule: kind.rule_name).tap { it.update!(value:, updated_by: context.user) }
+    record = save_setting!(:planning_rule_defaults) do
+      PlanningRuleDefault.find_or_initialize_by(rule: kind.rule_name).tap { it.value = value }
     end
     rule_payload(kind, record, editor_names([ record ]))
   rescue TeamPlanning::Error => e

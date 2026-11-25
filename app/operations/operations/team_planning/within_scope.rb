@@ -71,7 +71,7 @@ module Operations::TeamPlanning::WithinScope
     return !map.holds_cost_centre?(set.data[:cost_centre]) if set
     return map.outside_line?(line_id) if map.line?(line_id)
 
-    !map.holds_cost_centre?(::BudgetLine.find_by(id: line_id)&.cost_centre)
+    !map.holds_cost_centre?(TenantPlanningInputs::Projections::Tables.unless_rebuilding { ::BudgetLine.find_by(id: line_id)&.cost_centre })
   end
 
   def lands_inside?(map, kind, subject_id, end_state)

@@ -21,7 +21,7 @@ class TeamPlanning::SplitTest < ActiveSupport::TestCase
       family = create(:framework_role_family, name: "Engineering")
       engineer = create(:framework_role, code: "E", name: "Software Engineer", role_family_id: family.role_family_id)
       @e5 = create(:framework_level, role_id: engineer.role_id, ordinal: 5, title: "Senior SWE")
-      PayBand.create!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level: @e5, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
       ReferenceCurrency.create!(currency: "EUR")
 
       structure.define_taxonomy([ { level_id: departments, name: "Department" } ], effective_on: "2025-01-01")

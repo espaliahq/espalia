@@ -14,7 +14,7 @@ class Operations::TeamPlanning::BudgetTest < ActiveSupport::TestCase
       @outsider = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant))
       @engineer = create(:framework_role, tenant: @tenant, name: "Software Engineer")
       @e2 = create(:framework_level, tenant: @tenant, role_id: @engineer.role_id, ordinal: 2, title: "Engineer II")
-      PayBand.create!(level: @e2, currency: "EUR", period: "year", minimum: 0, midpoint: 73_000, maximum: 100_000)
+      add_pay_band!(level: @e2, currency: "EUR", period: "year", minimum: 0, midpoint: 73_000, maximum: 100_000)
       ReferenceCurrency.create!(currency: "EUR")
       @platform = BudgetLine.create!(**YEAR, amount: 146_000, currency: "EUR", period: "year", head_count: 2, cost_centre: "Platform")
     end
