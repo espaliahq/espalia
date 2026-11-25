@@ -69,24 +69,16 @@ class AccountGrants::LinksTest < ActiveSupport::TestCase
       assert_raises(ArgumentError) { as_tenant { @account.link_to!(@ada, match: :guess) } }
     end
 
-    should "record a link the previous release wrote to the column before acting on it" do
-      @other.update_columns(person_id: @ada.id)
-
-      assert_raises(AccountGrants::Aggregate::LinkTaken) { as_tenant { @account.link_to!(@ada, match: :sign_in) } }
-      assert_empty links, "a refused link records nothing, its settling included"
-    end
-
-    should "record an unlink the previous release wrote to the column before acting on it" do
+    should "act on the link the stream records, whatever the column says" do
       as_tenant { @account.link_to!(@ada, match: :sign_in) }
       @account.update_columns(person_id: nil)
+      @other.update_columns(person_id: @bo.id)
 
-      as_tenant { @other.link_to!(@ada, match: :sign_in) }
-      assert_raises(AccountGrants::Aggregate::LinkTaken) { as_tenant { TenantUser.find(@account.id).link_to!(@ada, match: :sign_in) } }
+      assert_raises(AccountGrants::Aggregate::LinkTaken) { as_tenant { @other.link_to!(@ada, match: :sign_in) } }
+      as_tenant { @other.link_to!(@bo, match: :sign_in) }
 
-      as_tenant { TenantUser.find(@account.id).link_to!(@bo, match: :sign_in) }
-      assert_equal({ @other.id => @ada.id, @account.id => @bo.id }, links)
-      assert_equal %w[sign_in cleared sign_in],
-                   link_events.select { it.data[:tenant_user_id] == @account.id }.map { it.data[:match] || it.data[:reason] }
+      assert_equal({ @account.id => @ada.id, @other.id => @bo.id }, links)
+      assert_equal %w[sign_in sign_in], link_events.map { it.data[:match] }
     end
   end
 
@@ -102,7 +94,7 @@ class AccountGrants::LinksTest < ActiveSupport::TestCase
       assert_nil column(@account)
     end
 
-    should "record a link the previous release wrote to the column, then unlink it" do
+    should "record a link only the column holds, then unlink it" do
       @other.update_columns(person_id: @ada.id)
 
       ids = as_tenant { handler.unlink_forgotten(@ada.id) }

@@ -295,8 +295,9 @@ from them. Link through `TenantUser#link_to!`, never by writing the column.
 The aggregate refuses an account already linked, a person another account
 holds and a forgotten person. Forgetting unlinks the person's accounts
 through `AccountGrants::CommandHandler#unlink_forgotten` before it erases
-them. The `account_links` reconciler records links the table holds and the
-stream doesn't, as it does for roles, and logs any person two accounts share.
+them, recording first any link only the table holds. The `account_links`
+reconciler records links the table holds and the stream doesn't, as it does
+for roles, and logs any person two accounts share.
 
 `org_graph_editors`, `team_planning_planners` and their add and remove tools
 give each holder `since`, `added_by` and `already_held` from the stream. Editor
