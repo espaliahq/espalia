@@ -23,13 +23,6 @@ class Operations::OrgGraph::UpdateStalenessThresholdTest < ActiveSupport::TestCa
     assert_equal 30, staleness_days
   end
 
-  should "keep the tenant's other Org Graph settings" do
-    @tenant.update!(org_graph_config: { retention_years: 2 })
-    call(staleness_days: 45)
-
-    assert_equal 2, @tenant.reload.org_graph_config.retention_years
-  end
-
   should "refuse a threshold that isn't a positive whole number of days within the limit" do
     [ 0, -5, OrgGraphConfig::MAX_STALENESS_DAYS + 1 ].each do |days|
       assert_raises(Operations::Base::ParameterError) { call(staleness_days: days) }

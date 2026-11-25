@@ -10,8 +10,6 @@ class OrgGraph::ForgettingLastAdminTest < ActiveSupport::TestCase
 
   setup do
     @tenant = create(:tenant)
-    @tenant.org_graph_config.retention_years = 7
-    @tenant.save!
     ActsAsTenant.current_tenant = @tenant
     OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       .claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")

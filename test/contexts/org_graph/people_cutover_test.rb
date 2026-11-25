@@ -165,8 +165,6 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
   context "a leaver recorded from their row" do
     setup do
       as_tenant do
-        @tenant.org_graph_config.retention_years = 7
-        @tenant.save!
         @by_hand.update!(external_id: "bob-3", hris_source: "hibob",
                          hris_raw_data: { "id" => "bob-3", "internal" => { "terminationDate" => "2019-03-15" } })
       end

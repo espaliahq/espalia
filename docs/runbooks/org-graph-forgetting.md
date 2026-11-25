@@ -49,13 +49,13 @@ The schedule ships off for every tenant. `OrgGraph::ForgetDueLeaversJob` runs da
 
 The period and the schedule are events on the tenant's `TenantSettings` stream, projected to `tenant_retention_settings`, and that row is all a run reads. A tenant with no row reads as seven years, off. The panel shows who turned the schedule on and when, and "a former member" once that admin is forgotten too.
 
-Each change still writes the old keys of `tenants.org_graph_config` as well, though nothing in this release reads them. The release before it, which runs during a deploy, reads that JSON and records what it holds before each of its own commands. A JSON left behind the stream would be written back over it, and could turn back on a schedule an admin had just turned off. Each deploy's `events:reconcile` still records anything a release from before the stream wrote to the JSON alone.
+The old keys of `tenants.org_graph_config` are gone. A migration deletes them, and each settings change removes them again in the same transaction. The release before, which still serves during a deploy, writes them back from the stream with each of its own commands. So any keys left always match the stream: the first change in this release removes them.
 
-[#539](https://github.com/espaliahq/espalia/issues/539) Track C moves off the JSON in two deploys, each gated on the one before:
+[#539](https://github.com/espaliahq/espalia/issues/539) Track C moved off the JSON in two deploys, each gated on the one before:
 
-- **c2** stops reading the JSON and keeps writing it. Deploy it only once c1, which put the settings on the stream, serves on every web and worker instance.
-- **c2b** stops writing the JSON, removes the reconciler and deletes the keys. Deploy it only once c2 serves everywhere.
-- **Once c2b is deployed, don't roll back to c1.** c1's commands would record the missing keys as the defaults: seven years, off, with any "never" lost. Roll back to c2 instead. Its reconciler records nothing from a JSON holding none of the keys, and its commands write them all back.
+- **c2** stopped reading the JSON and kept writing it, once c1, which put the settings on the stream, served on every web and worker instance.
+- **c2b** stopped writing the JSON, removed the reconciler and deleted the keys, once c2 served everywhere.
+- **Once c2b is deployed, NO rollback to c1.** c1 reads the JSON alone, and would read the missing keys as the defaults: seven years, off, with any "never" lost. Roll back to c2 instead. Every c2b settings command removes the keys in the same transaction as its events. So a tenant that still has keys has run no c2b command since c2 wrote them, and they equal the stream. Its reconciler then records nothing new: not from a JSON holding none of the keys, and not from keys that match.
 
 A run holds the stream's lock shared, then the tenant row, for each person. A change from either release waits for that person to finish, or the run sees it before the next one.
 
