@@ -2072,7 +2072,7 @@ class PersonDevelopment::Aggregate
 
     recorded = event.data[:status] == "edited" ? "accepted" : event.data[:status] || "pending"
     accepted_first = @accepted_before_suggested.delete?(id)
-    carried = event.data[:already_held] && event.data[:status]
+    carried = event.data[:already_held] && event.data[:status].present? && event.data[:status] != "pending"
     @suggestions[id] = {
       evidence_id: event.data[:evidence_id],
       cell: [ event.data[:capability_stable_id], event.data[:level_ordinal] ],
