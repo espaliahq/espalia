@@ -15,7 +15,9 @@ class ExchangeRate < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
-  belongs_to :updated_by, class_name: "User", optional: true
+  # The previous releases named an account here; a4b drops it once no
+  # deployed release writes it.
+  self.ignored_columns += %w[updated_by_id]
 
   normalizes :from_currency, :to_currency, with: Currency::NORMALIZE
 

@@ -70,12 +70,10 @@ class TenantPlanningInputs::Projections::Tables
   # @param table [Symbol] one of {TenantPlanningInputs::Rows::TABLES}
   # @param id [String]
   # @param entry [TenantPlanningInputs::Aggregate::Entry]
-  # @return [Hash{String => Object}] the row as the table holds it. `updated_by_id` is the previous
-  #   release's: clearing it tells reconcile which release last changed the row.
+  # @return [Hash{String => Object}] the row as the table holds it
   def self.row_for(tenant, table, id, entry)
     TenantPlanningInputs::Rows.complete(table, entry.row).merge("id" => id, "tenant_id" => tenant.id, "created_at" => entry.created_at,
-                    "updated_at" => entry.updated_at, "updated_by_person_id" => entry.updated_by_person_id,
-                    "updated_by_id" => nil)
+                    "updated_at" => entry.updated_at, "updated_by_person_id" => entry.updated_by_person_id)
   end
 
   # @param event [RubyEventStore::Event]
@@ -114,9 +112,15 @@ class TenantPlanningInputs::Projections::Tables
       updated_by_person_id: data[:changed_by_id] || data[:last_changed_by_id]
     )
     row = self.class.row_for(tenant, table, data[:id], entry)
-    TenantPlanningInputs::Rows.model(table).upsert_all([ row ], unique_by: :id, record_timestamps: false,
-                              update_only: row.keys - %w[id tenant_id created_at])
+    model = TenantPlanningInputs::Rows.model(table)
+    model.upsert_all([ row ], unique_by: :id, record_timestamps: false, update_only: row.keys - %w[id tenant_id created_at])
+    clear_legacy_editor(model, data[:id])
   end
+
+  # A release before a4 named its editor's account in `updated_by_id`, which
+  # the models ignore until a4b drops it. Reconcile has mapped it to a person
+  # by the time a row is written here, so clearing it leaves nothing to count.
+  def clear_legacy_editor(model, id) = model.where(id:).where.not(updated_by_id: nil).update_all(updated_by_id: nil)
 
   def reorder(tenant, order)
     PayBand.where(tenant_id: tenant.id, id: order)

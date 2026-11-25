@@ -16,7 +16,7 @@ class TenantPlanningInputs::ReconciliationTest < ActiveSupport::TestCase
 
   def everything
     TenantPlanningInputs::Rows::TABLES.each_key.to_h do |table|
-      [ table, TenantPlanningInputs::Rows.model(table).where(tenant_id: @tenant.id).order(:id).map { it.attributes.except("updated_by_id") } ]
+      [ table, TenantPlanningInputs::Rows.model(table).where(tenant_id: @tenant.id).order(:id).map(&:attributes) ]
     end
   end
 
@@ -55,17 +55,28 @@ class TenantPlanningInputs::ReconciliationTest < ActiveSupport::TestCase
       assert_equal before, everything
     end
 
-    should "record a row changed in place, naming the person whose account changed it" do
+    should "record a row an earlier release changed in place, naming the person whose account changed it" do
       editor = create(:person, tenant: @tenant)
       user = create(:tenant_user, tenant: @tenant, person: editor).user
-      @first.update_columns(midpoint: 2.5, updated_at: 1.minute.from_now, updated_by_id: user.id)
+      PayBand.where(id: @first.id).update_all(midpoint: 2.5, updated_at: 1.minute.from_now, updated_by_id: user.id)
 
       assert_equal [ 0, 0, 1 ], reconcile.to_h.values_at(:added, :removed, :changed)
       change = events.last
       assert_instance_of TenantPlanningInputs::Events::PayBandChanged, change
       assert_equal [ @first.id, nil, editor.id ], change.data.values_at(:id, :changed_by_id, :last_changed_by_id)
       assert_equal editor.id, @first.reload.updated_by_person_id
-      assert_nil @first.updated_by_id
+      assert_nil PayBand.where(id: @first.id).pick(:updated_by_id)
+    end
+
+    should "record a row that names an account but matches the stream, so none is left to count" do
+      editor = create(:person, tenant: @tenant)
+      user = create(:tenant_user, tenant: @tenant, person: editor).user
+      PayBand.where(id: @first.id).update_all(updated_by_id: user.id)
+
+      assert_equal 1, reconcile.to_h[:changed]
+      assert_equal editor.id, events.last.data[:last_changed_by_id]
+      assert_nil PayBand.where(id: @first.id).pick(:updated_by_id)
+      assert_equal 0, reconcile.to_h[:changed]
     end
 
     should "record a row the table no longer holds as removed" do
@@ -111,19 +122,6 @@ class TenantPlanningInputs::ReconciliationTest < ActiveSupport::TestCase
                       role_name: "Every role", level_name: "Every level")
       end
     end
-  end
-
-  should "take the band list's lock before the stream's, as a command does, so the previous release's band writes wait" do
-    order = []
-    repository = TenantPlanningInputs::Repository.new
-    repository.define_singleton_method(:with_aggregate) { |&block| order << :stream; super(&block) }
-    taking = PayBand.method(:with_list_lock)
-
-    PayBand.stub(:with_list_lock, ->(tenant_id, &block) { order << [ :bands, tenant_id ]; taking.call(tenant_id, &block) }) do
-      TenantPlanningInputs::Reconciliation.new(@tenant, repository:).call
-    end
-
-    assert_equal [ [ :bands, @tenant.id ], :stream ], order
   end
 
   should "leave another tenant's stream alone" do

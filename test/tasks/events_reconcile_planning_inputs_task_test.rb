@@ -33,7 +33,7 @@ class EventsReconcilePlanningInputsTaskTest < ActiveSupport::TestCase
 
   def tables
     TenantPlanningInputs::Rows::TABLES.each_key.to_h do |table|
-      [ table, TenantPlanningInputs::Rows.model(table).unscoped.where(tenant_id: @tenant.id).order(:id).map { it.attributes.except("updated_by_id") } ]
+      [ table, TenantPlanningInputs::Rows.model(table).unscoped.where(tenant_id: @tenant.id).order(:id).map(&:attributes) ]
     end.merge(stamp: Tenant.where(id: @tenant.id).pick(:pay_bands_changed_at))
   end
 

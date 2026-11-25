@@ -25,7 +25,7 @@ class Tenant::BudgetLinesControllerTest < ActionDispatch::IntegrationTest
 
   def stored_line(**attrs)
     ActsAsTenant.with_tenant(@tenant) do
-      BudgetLine.create!(starts_on: "2027-01-01", ends_on: "2027-06-30", origin: "replacement",
+      add_planning_input!(:budget_lines, starts_on: "2027-01-01", ends_on: "2027-06-30", origin: "replacement",
                          amount: 9000, currency: "NZD", period: "month", **attrs)
     end
   end

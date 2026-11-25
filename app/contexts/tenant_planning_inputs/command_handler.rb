@@ -1,12 +1,7 @@
 # frozen_string_literal: true
 
-# Handles commands for a tenant's planning inputs.
-#
-# Every command takes the `pay_bands:<tenant>` lock, then the stream's, in
-# that order, as the previous release takes the first. Under both it catches
-# up with what the tables hold, so a row the previous release wrote during a
-# deploy is in the stream before the command decides.
-#
+# Handles commands for a tenant's planning inputs, each under the stream's
+# lock.
 class TenantPlanningInputs::CommandHandler
   # @param repository [TenantPlanningInputs::Repository]
   def initialize(repository: TenantPlanningInputs::Repository.new)
@@ -14,7 +9,7 @@ class TenantPlanningInputs::CommandHandler
   end
 
   # Writes the row the block returns, once its model's validations pass. The
-  # block runs under the locks, so it reads the row as it stands.
+  # block runs under the lock, so it reads the row as it stands.
   #
   # @param table [Symbol] one of {TenantPlanningInputs::Rows::TABLES}
   # @param changed_by_id [String, nil] person_id of the actor
@@ -53,15 +48,7 @@ class TenantPlanningInputs::CommandHandler
 
   private
 
-  def locked
-    tenant = ActsAsTenant.current_tenant or raise ArgumentError, "No tenant context available"
-    PayBand.with_list_lock(tenant.id) do
-      @repository.with_aggregate do |inputs|
-        TenantPlanningInputs::Reconciliation.new(tenant, repository: @repository).catch_up(inputs)
-        yield inputs
-      end
-    end
-  end
+  def locked(&) = @repository.with_aggregate(&)
 
   def now = TenantPlanningInputs::Rows.time(Time.current)
 end

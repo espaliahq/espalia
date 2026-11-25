@@ -92,7 +92,7 @@ class Tenant::CostCentreRulesControllerTest < ActionDispatch::IntegrationTest
     should "keep a unit, role and level the pickers no longer offer when only the label changes" do
       gone_unit, gone_role = Array.new(2) { SecureRandom.uuid_v7 }
       saved = { "unit_id" => gone_unit, "role_id" => gone_role, "level_ordinal" => 9, "location" => "Alpha", "cost_centre" => "Old" }
-      ActsAsTenant.with_tenant(@tenant) { PlanningRuleDefault.create!(rule: "cost_centre", value: { "entries" => [ saved ] }) }
+      ActsAsTenant.with_tenant(@tenant) { add_planning_input!(:planning_rule_defaults, rule: "cost_centre", value: { "entries" => [ saved ] }) }
 
       get edit_tenant_cost_centre_rule_path(1, version:)
       assert_select "#cost-centre-entry-unit option[selected]", count: 1 do
@@ -171,7 +171,7 @@ class Tenant::CostCentreRulesControllerTest < ActionDispatch::IntegrationTest
       assert_nil stored
 
       saved = { "entries" => [ { "location" => "Alpha", "cost_centre" => "Alpha" } ] }
-      ActsAsTenant.with_tenant(@tenant) { PlanningRuleDefault.create!(rule: "cost_centre", value: saved) }
+      ActsAsTenant.with_tenant(@tenant) { add_planning_input!(:planning_rule_defaults, rule: "cost_centre", value: saved) }
       get edit_tenant_cost_centre_rule_path(1, version:)
       assert_redirected_to root_path
       patch tenant_cost_centre_rule_path(1), params: { version:, entry: { location: "Beta", cost_centre: "Beta" } }

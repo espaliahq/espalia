@@ -92,7 +92,7 @@ class Operations::Tenants::ExchangeRatesTest < ActiveSupport::TestCase
 
   should "refuse a change to a rate removed after it was found" do
     added = add
-    stale = ActsAsTenant.with_tenant(@tenant) { ExchangeRate.find(added[:exchange_rate_id]).tap { ExchangeRate.find(it.id).destroy! } }
+    stale = ActsAsTenant.with_tenant(@tenant) { ExchangeRate.find(added[:exchange_rate_id]).tap { remove_planning_inputs!(it) } }
 
     ExchangeRate.stub(:find_by, stale) do
       error = assert_raises(Operations::Base::ParameterError) { call(:ChangeExchangeRate, exchange_rate_id: stale.id, rate: "1") }

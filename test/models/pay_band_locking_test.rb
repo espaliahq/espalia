@@ -97,7 +97,52 @@ class PayBandLockingTest < ActiveSupport::TestCase
     assert_equal [ 1, 2, 3, 4 ], PayBand.order(:position).pluck(:position)
   end
 
+  # The release a4 replaces takes the list lock and then the stream lock; a4
+  # takes the stream lock alone, so the two can serve side by side.
+  context "a command beside the previous release" do
+    should "not wait for a holder of the list lock alone" do
+      holding(-> { take_lock(list_lock_key) }) do
+        added = Thread.new do
+          on_another_connection do |connection|
+            connection.execute("SET LOCAL lock_timeout = '2s'")
+            any_band("Lemuria")
+          end
+        rescue ActiveRecord::LockWaitTimeout
+          :blocked
+        end
+
+        assert_kind_of PayBand, added.value
+      end
+    end
+
+    should "wait for a holder of both locks and finish once it commits" do
+      added = nil
+
+      holding(-> { take_lock(list_lock_key) && take_lock(stream_lock_key) }) do
+        pids = Queue.new
+        added = Thread.new do
+          on_another_connection do |connection|
+            pids << connection.select_value("SELECT pg_backend_pid()")
+            any_band("Lemuria")
+          end
+        end
+        assert_waiting_for_list(pids, added)
+      end
+
+      assert_kind_of PayBand, added.value
+      assert_equal 4, PayBand.count
+    end
+  end
+
   private
+
+  def list_lock_key = "pay_bands:#{@tenant.id}"
+
+  def stream_lock_key = TenantPlanningInputs::Repository.new.send(:lock_key, @tenant)
+
+  def take_lock(key)
+    PayBand.connection.execute(PayBand.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key ]))
+  end
 
   def any_band(location)
     save_planning_input!(:pay_bands, PayBand.new(location:, currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2).tap { it.match_on })
