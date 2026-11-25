@@ -38,6 +38,20 @@ class Tenant::PlanningInputsHistoriesControllerTest < ActionDispatch::Integratio
       end
     end
 
+    should "give each change's time in the tenant's own time zone" do
+      @tenant.update!(time_zone: "Australia/Sydney")
+      travel_to Time.utc(2026, 12, 1, 22, 0) do
+        ActsAsTenant.with_tenant(@tenant) do
+          @band.midpoint = 130_000
+          save_planning_input!(:pay_bands, @band)
+        end
+      end
+
+      get tenant_planning_inputs_history_path("pay_bands")
+
+      assert_select "#planning-inputs-history li:first-child p", text: "On 2 Dec 2026, 09:00"
+    end
+
     should "say so when an input has no changes yet" do
       get tenant_planning_inputs_history_path("budget_lines")
 

@@ -102,7 +102,7 @@ class Views::Tenant::PlanningInputsHistories::ShowView < Views::Base
   end
 
   def byline(change)
-    at = Time.zone.parse(change[:at]).strftime("%-d %b %Y, %H:%M")
+    at = Time.zone.parse(change[:at]).in_time_zone(@current_tenant.working_zone).strftime("%-d %b %Y, %H:%M")
     by = change[:by] && "by #{change[:by]}"
     return [ "Recorded as it stood, last changed", by, "on #{at}" ].compact.join(" ") if change[:already_held]
 
