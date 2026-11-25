@@ -136,4 +136,16 @@ class PersonDevelopment::Projections::EvidenceSuggestionsTest < ActiveSupport::T
 
     assert_equal before, snapshot
   end
+
+  should "nudge the open assessment when a suggestion is dismissed, and not when one is made" do
+    broadcasts = []
+    Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **_kw) { broadcasts << args }) do
+      suggest(proposal)
+      assert_empty broadcasts
+
+      dismiss(rows.sole.id)
+    end
+
+    assert_equal [ [ "assessment_updates", @framework_id, @alex.id ] ], broadcasts
+  end
 end
