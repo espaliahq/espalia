@@ -149,7 +149,7 @@ Forgetting the variable is safe. Step 4 finds events for a projection that was n
 
 #### Recorded: `tenant_settings/retention` v1 (retention settings as events, [#539](https://github.com/espaliahq/espalia/issues/539)), 2026-11-24
 
-No variable. The projection is new and the only writer of `tenant_retention_settings`. Step 2b records whatever each tenant's `org_graph_config` holds for retention and scheduled forgetting as `already_held` events with no actor, then adopts the projection, so step 3 has nothing to rebuild. A tenant still at the defaults gets no events and no row, which is what a replay writes. Step 6 records any change the previous release made in between, and a command in the new release records it first too.
+No variable. The projection is new and the only writer of `tenant_retention_settings`. Step 2b records whatever each tenant's `org_graph_config` holds for retention and scheduled forgetting as `already_held` events with no actor, then adopts the projection, so step 3 has nothing to rebuild. A tenant still at the defaults gets no events and no row, which is what a replay writes. Step 6 records any change the previous release made in between, and a command in the new release records it first too. Track C's c2b removed that reconciler and the keys it read, so a deploy from c2b on records nothing at step 2b.
 
 Forgetting with the new release asks both places until c2 stops reading the JSON: a tenant is scheduled only when both say so, by the longer period. So a change that reaches only the JSON can stop forgetting, never start it. See [org-graph-forgetting.md → Where the settings live](org-graph-forgetting.md#where-the-settings-live).
 
