@@ -95,11 +95,10 @@ class Frameworks::Projections::PublishedState
   #
   # `FrameworkState::Framework.destroy_all` cascades through
   # `role_families` → roles → levels/bindings/illustrations,
-  # `capability_categories` → capabilities → expectations,
-  # `suggested_edits`, and the `explorer_graph` snapshot — all via
-  # `dependent: :destroy`. The aggregate-side `FrameworkExplorerGraph`
-  # cache is cleared with the framework; live aggregate writes will
-  # rebuild it on next access.
+  # `capability_categories` → capabilities → expectations, and
+  # `suggested_edits`, all via `dependent: :destroy`. It leaves the
+  # `FrameworkExplorerGraph` snapshot, a cache of the stream that
+  # {Frameworks::ExplorerGraph} owns.
   #
   # `FrameworkState::Collaborator` and `FrameworkState::MigrationMapping`
   # are NOT associated to Framework via Rails associations and must be

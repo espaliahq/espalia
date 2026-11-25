@@ -160,6 +160,7 @@ Do **not** bump for:
 - Pure additions of new handlers for new event types where no past events exist.
 - Refactors that produce identical read-model state (extracted method, renamed variable, etc.).
 - DB-schema-only changes (column addition with a default; index addition).
+- A table leaving `reset!`'s truncate set when no handler writes it. Replay still writes the same rows to every table the projection keeps.
 
 **A brand-new registered projection is "stale" too, but predeploy stamps it when it has nothing to replay.** `verify` treats a projection with no `projection_versions` row as never rebuilt. Just before it, predeploy runs `events:projections:stamp_if_no_events`. For every never-stamped projection none of whose `handled_events` exist in the store, it does what a rebuild would: resets each tenant, replays nothing, stamps. So a new projection over new event types deploys on its own. It still needs `REBUILD_ON_DEPLOY=<name>` when an event of its types already exists, and the task stamps nothing while another projection is stale. A `CODE_VERSION` bump is never stamped this way. If historical events must populate a table, bump the owning projection's `CODE_VERSION` and rebuild it.
 

@@ -74,10 +74,10 @@ framework_capability_role_bindings:
 framework_collaborators:
   owner: frameworks/published_state
 framework_explorer_graphs:
-  owner: frameworks/published_state
+  owner: plain
   reason: >-
-    ExplorerGraph caches the snapshot it builds from the stream, and the projection's reset deletes it.
-    A missing row is rebuilt on the next load.
+    ExplorerGraph caches the snapshot it builds from the stream. No projection resets it, and a
+    missing or stale row is rebuilt on the next load.
   writers:
     - app/contexts/frameworks/explorer_graph.rb
 framework_levels:

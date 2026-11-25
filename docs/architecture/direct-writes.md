@@ -75,7 +75,6 @@ These are writes around a projection. None are fixed here.
 | Table or column | Written from | Why it matters | Suggested for 2b |
 |---|---|---|---|
 | `framework_capability_categories.deficit_threshold` | `lib/tasks/seed_framework.rake:166` | Sets a category's threshold on the read model after the framework is published. A rebuild of `frameworks/published_state` loses it. | Dispatch the command that sets it, or set it before publishing. Looks like a real bug in the seed. |
-| `framework_explorer_graphs` | `Frameworks::ExplorerGraph#store` (`app/contexts/frameworks/explorer_graph.rb:37`), on every load that finds no row | The repository writes the snapshot, and `PublishedState.reset!` deletes it. A missing row is rebuilt from the stream on the next load, so nothing is lost, but the table has two writers. | Declare it a repository cache owned by `ExplorerGraph`, and leave it out of `PublishedState.reset!`, or keep the delete and say why. |
 | `people.manager_id`, `job_title`, `status` | HiBob adapter: `sync_people_with_org_graph` (line 169), `save_person` (507), `deactivate_removed` (678) | `org_graph/people_columns` owns these once a tenant is cut over. The adapter writes them only before cut-over, by design. | Remove the pre-cut-over path once every tenant is cut over. |
 | `people.manager_id` | `lib/tasks/calibration_history_seed.rb:197` | A development seed moves reporting lines on the row and records the reporting manager beside it. | Move the seed to the Org Graph command, so a cut-over tenant's seed survives a rebuild. |
 | Framework, evidence and assignment read models | `lib/tasks/evidence_suggestions_eval.rb` (lines 99 to 134) | The evaluation builds a throwaway tenant by inserting read-model rows, then rolls the transaction back. Nothing persists. | Keep. Say in the file that it never commits. |
@@ -175,6 +174,10 @@ Each section names the writers the run saw and recommends one of two things: **k
 ### Level comparison groups and snapshots
 
 `LevelComparisonSnapshot.take!` writes both `level_comparison_snapshots` and `level_comparison_groups`, deleting the day's earlier take first. **Keep:** each snapshot is derived from ratings at the moment it is taken, so it can be taken again, and it holds no decision.
+
+### `framework_explorer_graphs`
+
+`Frameworks::ExplorerGraph#store` writes the snapshot, from the repository after each framework write and from `#rebuild` on a load that finds no current row. **Keep:** it is a cache of the framework's stream, so a missing or stale row costs one rebuild and loses nothing. `PublishedState.reset!` once deleted it through the framework's cascade, which made each rebuild of that projection throw away every snapshot ([#539](https://github.com/espaliahq/espalia/issues/539) c7).
 
 ### `framework_publications`
 
