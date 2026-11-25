@@ -2,14 +2,17 @@
 
 # Handles commands for a tenant's retention period and scheduled forgetting.
 #
-# Until [#539](https://github.com/espaliahq/espalia/issues/539) Track C's
-# c2b, each command also writes the old keys of `tenants.org_graph_config`,
-# under the stream's lock and then the tenant row's, in one transaction. The
-# previous release still reads them while a deploy is in flight, and records
-# what they hold before each of its commands, so they must keep matching the
-# stream. This release never reads them.
+# Each command also removes the retired retention keys from
+# `tenants.org_graph_config`, under the stream's lock and then the tenant
+# row's, in one transaction. The previous release writes them back while a
+# deploy is in flight, and its predeploy would record what they hold over
+# the stream if it were deployed again.
 #
 class TenantSettings::CommandHandler
+  # The keys the stream replaced.
+  RETIRED_KEYS = %w[retention_years scheduled_forgetting scheduled_forgetting_enabled_at
+                    scheduled_forgetting_enabled_by_id].freeze
+
   # What setting the period did.
   RetentionResult = Data.define(:retention_years, :scheduled_forgetting_stopped)
 
@@ -41,7 +44,7 @@ class TenantSettings::CommandHandler
   # @raise [TenantSettings::Aggregate::Refused]
   def enable_scheduled_forgetting(enabled_by: nil)
     count = nil
-    change(enabled_by_account_id: enabled_by&.id) do |settings|
+    change do |settings|
       raise TenantSettings::Aggregate::Refused, "retention is set to never, so there is nothing to schedule" if
         settings.retention_years.nil?
       raise TenantSettings::Aggregate::Refused, "scheduled forgetting is already on" if settings.scheduled_forgetting?
@@ -60,28 +63,21 @@ class TenantSettings::CommandHandler
 
   private
 
-  def change(enabled_by_account_id: nil)
+  def change
     ActsAsTenant.with_tenant(@tenant) do
       ActiveRecord::Base.transaction do
         @repository.with_settings do |settings|
           @tenant.with_lock do
-            was_on = settings.scheduled_forgetting?
             yield settings
-            write_json(settings, @tenant.org_graph_config.dup, was_on, enabled_by_account_id)
+            remove_retired_keys
           end
         end
       end
     end
   end
 
-  # The JSON names the admin by account, where the stream names their person.
-  def write_json(settings, config, was_on, enabled_by_account_id)
-    on = settings.scheduled_forgetting?
-    config.retention_years = settings.retention_years
-    config.scheduled_forgetting = on
-    config.scheduled_forgetting_enabled_at = settings.enabled_at
-    config.scheduled_forgetting_enabled_by_id = nil unless on
-    config.scheduled_forgetting_enabled_by_id = enabled_by_account_id if on && !was_on
-    @tenant.update!(org_graph_config: config)
+  def remove_retired_keys
+    Tenant.where(id: @tenant.id)
+          .update_all([ "org_graph_config = org_graph_config - ARRAY[?]::text[]", RETIRED_KEYS ])
   end
 end
