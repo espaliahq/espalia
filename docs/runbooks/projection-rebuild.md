@@ -97,6 +97,24 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
+#### Recorded: planning inputs stop the catch-up, then drop `updated_by_id` ([#539](https://github.com/espaliahq/espalia/issues/539) a4 and a4b), 2026-11-25
+
+No rebuild and no `CODE_VERSION` bump. a4 changes what commands do, not what the projection writes from an event.
+
+**a4** removes the catch-up a command ran before it decided, and the `pay_bands:<tenant>` lock. The models ignore `updated_by_id`. Deploy it only onto a release that holds a1, which went live at 03:27Z on 2026-11-25. While the previous release still serves, it takes the list lock and then the stream lock; a4 takes the stream lock alone, so neither waits on the other in a cycle. The reconciler still runs at steps 2b and 6. A row that still names an account in `updated_by_id` is recorded under that account's person, and the reconciler then clears the column. An account that has been forgotten, or has no membership in the tenant, has no person to record, so the row reads "Changed on" with a date and no name, as the screens show any change no one is named on. We accept that: the account is gone, and naming no one beats naming the wrong person. Only `events:reconcile` names the column, so a4 keeps serving once a4b drops it.
+
+**Before a4b**, once a4 is live, confirm no row still names an account. This prints one count per table and nothing else:
+
+```bash
+bin/rails runner 'TenantPlanningInputs::Rows::TABLES.each_key { |t| puts "#{t}: #{TenantPlanningInputs::Rows.model(t).where.not(updated_by_id: nil).count}" }'
+```
+
+Every count should be 0. If one isn't, run `bin/rails events:reconcile` and count again: it records each such row under its account's person and clears the column. Go ahead only when every count is 0.
+
+**a4b** drops `updated_by_id`, its foreign keys and its indexes from the five tables. Deploy it only once a4 is live. It also removes the reconciler's read and clearing of the column, the one thing a4 keeps for legacy rows.
+
+**After a4b deploys, never roll back to a4 or a release before it.** Releases before a4 name `updated_by_id` while they serve, and the column is gone. a4 itself serves without it, but its predeploy `events:reconcile` reads the column, so a redeploy of a4 stops at predeploy with a4b still serving. To undo a4b, roll forward with a fix.
+
 #### Recorded: no linking back to `AccountGrants` ([#539](https://github.com/espaliahq/espalia/issues/539) b3), with no bump
 
 No `CODE_VERSION` bump and no `REBUILD_ON_DEPLOY`. `AccountGrants::Repository` stops linking grants back into the old stream and reads `TenantAccountGrants` without the lock. Linking an account no longer records what the column says first.
