@@ -154,7 +154,7 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       html = render_entry(kind: "evidence_suggestion_accepted",
         payload: { actor_name: "Ada", valence: "demonstrated", previous_valence: "demonstrated",
                    via_suggestion_id: SecureRandom.uuid_v7, evidence_title: "Launch" })
-      assert_includes html, "Ada accepted a suggestion for “Launch” on"
+      assert_includes html, "Ada accepted the suggested placement of “Launch” on"
       assert_includes html, "Demonstrates"
       refute_includes html, "was"
     end

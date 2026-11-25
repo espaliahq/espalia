@@ -563,7 +563,7 @@ Rules, all deliberate:
   `EvidenceLinkAdded` — or `EvidenceLinkRevalenced` when someone linked the
   cell meanwhile, even to the same valence — carrying `via_suggestion_id`.
   The feed's secondary line then says "from a suggestion"; a revalence that
-  kept the valence reads "Accepted a suggestion for …". The events and their
+  kept the valence reads "Accepted the suggested placement of …". The events and their
   rules are in
   [person-development-aggregate.md](../../architecture/person-development-aggregate.md).
 - **Who decides: `EvidencePolicy#add_link?`** — the recipient, their manager

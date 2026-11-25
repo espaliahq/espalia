@@ -207,7 +207,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_linked"       then evidence_link_summary("Linked")
     when "evidence_unlinked"     then evidence_link_summary("Unlinked", preposition: "from")
     when "evidence_revalenced"   then evidence_link_summary("Reclassified", preposition: "on")
-    when "evidence_suggestion_accepted" then evidence_link_summary("Accepted a suggestion for", preposition: "on")
+    when "evidence_suggestion_accepted" then evidence_link_summary("Accepted the suggested placement of", preposition: "on")
     when "evidence_withdrawn"    then evidence_withdrawn_summary
     when "alignment_started"     then "Manager started alignment#{role_suffix}"
     when "alignment_completed"   then "Marked alignment#{role_suffix} complete"
