@@ -54,6 +54,20 @@ class PersonDevelopment::SuggestionReconciliationTest < ActiveSupport::TestCase
     assert_no_difference(-> { event_store.read.stream(stream).count }) { assert_equal 0, reconcile.recorded }
   end
 
+  should "leave a forgotten person's rows out of their stream" do
+    ActsAsTenant.with_tenant(@tenant) { @alex.update_columns(forgotten_at: Time.current, name: "Former member", email: nil) }
+
+    assert_equal 0, reconcile.added
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.migrate_framework_version(@alex.id, @framework_id, 1, 2, [
+        { from_stable_id: @collaboration.stable_id, to_stable_id: @ownership.stable_id, mapping_type: "evolved" }
+      ])
+    end
+
+    assert_empty event_store.read.stream(stream).of_type([ PersonDevelopment::Events::EvidencePlacementSuggested,
+                                                           PersonDevelopment::Events::EvidencePlacementSuggestionDismissed ]).to_a
+  end
+
   should "follow a row the release before reopened with a later run" do
     reconcile
     @pending.update!(status: "superseded")

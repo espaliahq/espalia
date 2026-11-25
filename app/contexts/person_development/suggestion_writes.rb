@@ -30,6 +30,8 @@ module PersonDevelopment::SuggestionWrites
         attempts += 1
         EvidencePlacementSuggestion.transaction(requires_new: true) do
           rows = EvidencePlacementSuggestion.where(person_id:, framework_id:).order(:id).lock.to_a
+          # A rationale quotes the feedback, which a forgotten person's stream must never hold.
+          rows = [] if Person.forgotten.exists?(id: person_id)
           result = nil
           PersonDevelopment::Repository.new.with_person_development(person_id, framework_id) do |aggregate|
             caught_up = aggregate.catch_up_suggestions(rows.map(&:attributes))

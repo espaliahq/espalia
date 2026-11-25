@@ -6,8 +6,8 @@
 # ([#539](https://github.com/espaliahq/espalia/issues/539) c3).
 #
 # The table is the truth, as for every reconciler, but nothing is ever
-# removed: a forgotten person's rows are deleted along with their stream.
-# Each stream is caught up under the locks a command takes, so the release
+# removed, and a forgotten person's rows are left alone: their rationale
+# quotes the feedback, which must not reach a permanent event. Each stream is caught up under the locks a command takes, so the release
 # still serving can't write between the read and the record.
 #
 # @example
@@ -32,7 +32,8 @@ class PersonDevelopment::SuggestionReconciliation
   private
 
   def streams
-    EvidencePlacementSuggestion.distinct.pluck(:person_id, :framework_id, :evidence_id)
+    EvidencePlacementSuggestion.where.not(person_id: Person.forgotten.select(:id))
+      .distinct.pluck(:person_id, :framework_id, :evidence_id)
       .group_by { it.first(2) }.transform_values { it.map(&:last) }
   end
 end
