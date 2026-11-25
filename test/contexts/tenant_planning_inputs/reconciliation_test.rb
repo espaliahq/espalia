@@ -102,6 +102,15 @@ class TenantPlanningInputs::ReconciliationTest < ActiveSupport::TestCase
     should "leave reconcile nothing to record" do
       assert_equal [ 0, 0, 0 ], reconcile.to_h.values_at(:added, :removed, :changed)
     end
+
+    should "let a band be added after it, placed by a matcher that reads the column's default" do
+      remove_planning_inputs!(PayBand.find_by!(location: "Fixtureland"))
+
+      assert_difference -> { PayBand.where(tenant_id: @tenant.id).count }, 1 do
+        add_pay_band!(location: "Elsewhere", currency: "AUD", period: "year", minimum: 1, midpoint: 2, maximum: 3,
+                      role_name: "Every role", level_name: "Every level")
+      end
+    end
   end
 
   should "take the band list's lock before the stream's, as a command does, so the previous release's band writes wait" do

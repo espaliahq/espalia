@@ -145,7 +145,7 @@ class TenantPlanningInputs::Aggregate
       on(event_class) do |event|
         data = event.data
         prior = entries(table)[data[:id]]
-        row = data[:row].deep_stringify_keys
+        row = TenantPlanningInputs::Rows.complete(table, data[:row].deep_stringify_keys)
         entries(table)[data[:id]] = Entry.new(
           row:, created_at: data[:created_at] || prior&.created_at || data[:at], updated_at: data[:at],
           updated_by_person_id: data[:changed_by_id] || data[:last_changed_by_id]
