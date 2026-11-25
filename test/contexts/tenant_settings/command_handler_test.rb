@@ -13,7 +13,7 @@ class TenantSettings::CommandHandlerTest < ActiveSupport::TestCase
   def row = TenantRetentionSetting.for(@tenant)
   def stream = Rails.configuration.event_store.read.stream(EventStreamNaming.tenant_settings_stream(tenant: @tenant)).to_a
 
-  # The previous release, still serving during a deploy, writes the JSON alone.
+  # Writes the JSON alone, as a release before the stream could have.
   def previous_release_writes(**settings)
     Tenant.find(@tenant.id).tap { it.org_graph_config.assign_attributes(settings) }.save!
   end
@@ -75,78 +75,28 @@ class TenantSettings::CommandHandlerTest < ActiveSupport::TestCase
     assert_equal @admin.person_id, row.enabled_by_id
   end
 
-  context "after the previous release wrote the JSON alone" do
-    should "record what it wrote before acting, so a shorter period still turns the schedule off" do
-      previous_release_writes(scheduled_forgetting: true, scheduled_forgetting_enabled_at: 1.day.ago,
-                              scheduled_forgetting_enabled_by_id: @admin.id)
+  context "when the JSON disagrees with the stream" do
+    should "act on the stream alone, and write the JSON to match it" do
+      previous_release_writes(retention_years: 30, scheduled_forgetting: true, scheduled_forgetting_enabled_at: 1.day.ago)
+      before = stream.size
 
-      assert handler.set_retention_period(2).scheduled_forgetting_stopped
+      assert_not handler.set_retention_period(2).scheduled_forgetting_stopped
 
-      held = stream.find { it.is_a?(TenantSettings::Events::ScheduledForgettingEnabled) }
-      assert held.data[:already_held]
-      assert_equal @admin.person_id, held.data[:enabled_by_id]
+      assert_equal before + 1, stream.size
+      assert_equal [ 2, 2 ], [ config.retention_years, row.retention_years ]
       assert_equal [ false, false ], [ config.scheduled_forgetting, row.scheduled_forgetting ]
     end
 
-    should "count under the period it wrote, not the one the stream held" do
-      previous_release_writes(retention_years: 30)
-
-      handler.enable_scheduled_forgetting { |settings| assert_equal 30, settings.retention_years; 0 }
-      assert_equal 30, row.retention_years
-    end
-
-    should "keep what it recorded when the command is refused, so the next dry run counts by it" do
+    should "record nothing when the command is refused" do
       previous_release_writes(retention_years: 3)
+      before = stream.size
 
-      assert_raises(ArgumentError) { handler.enable_scheduled_forgetting { raise ArgumentError, "the count moved" } }
-
-      assert_equal 3, row.retention_years
-      assert_equal 3, TenantRetentionSetting.longer_period(Tenant.find(@tenant.id))
-      assert_not row.scheduled_forgetting
-    end
-
-    should "keep what it wrote between the two settlings when the command is refused" do
-      reads = 0
-      held = TenantSettings::Held.method(:from)
-      written_late = ->(config) { held.call(config).merge(retention_years: (reads += 1) == 1 ? 7 : 3) }
-
-      TenantSettings::Held.stub(:from, written_late) do
-        assert_raises(ArgumentError) { handler.enable_scheduled_forgetting { raise ArgumentError, "the count moved" } }
+      assert_raises(TenantSettings::Aggregate::Refused) do
+        handler.enable_scheduled_forgetting { raise TenantSettings::Aggregate::Refused, "the count moved" }
       end
 
-      assert_equal 3, row.retention_years
-    end
-
-    should "record what it wrote as the system, while the command itself names the admin" do
-      previous_release_writes(retention_years: 3)
-
-      AuditMetadata.with(acting_via: :web, actor_id: @admin.person_id, correlation_id: "request-1") do
-        AuditMetadata.wrap_event_store { handler.set_retention_period(5, set_by: @admin) }
-      end
-
-      held, set = stream.last(2)
-      assert_equal [ 3, true ], [ held.data[:retention_years], held.data[:already_held] ]
-      assert_equal [ "system", nil, "request-1" ], held.metadata.to_h.values_at(:acting_via, :actor_id, :correlation_id)
-      assert_equal [ "web", @admin.person_id ], set.metadata.to_h.values_at(:acting_via, :actor_id)
-    end
-
-    should "keep the time and account it recorded when the schedule stays on" do
-      at = 2.days.ago.round
-      previous_release_writes(scheduled_forgetting: true, scheduled_forgetting_enabled_at: at, scheduled_forgetting_enabled_by_id: @admin.id)
-
-      handler.set_retention_period(10)
-
-      assert_equal [ at, @admin.id ], [ config.scheduled_forgetting_enabled_at, config.scheduled_forgetting_enabled_by_id ]
-      assert_equal at, row.enabled_at
-    end
-
-    should "turn the schedule off that it turned off" do
-      handler.enable_scheduled_forgetting { 0 }
-      previous_release_writes(scheduled_forgetting: false, scheduled_forgetting_enabled_at: nil, scheduled_forgetting_enabled_by_id: nil)
-
-      handler.set_retention_period(10)
-
-      assert_not row.scheduled_forgetting
+      assert_equal before, stream.size
+      assert_equal 7, row.retention_years
     end
   end
 end

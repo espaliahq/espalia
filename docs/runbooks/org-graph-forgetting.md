@@ -47,9 +47,15 @@ The schedule ships off for every tenant. `OrgGraph::ForgetDueLeaversJob` runs da
 
 ### Where the settings live
 
-The period and the schedule are events on the tenant's `TenantSettings` stream, projected to `tenant_retention_settings`. Each change also writes the old keys of `tenants.org_graph_config`, because the release before this one reads and writes only those during a deploy. A command first records whatever that release wrote there alone, then makes its change in both places. Each deploy's `events:reconcile` records it too.
+The period and the schedule are events on the tenant's `TenantSettings` stream, projected to `tenant_retention_settings`, and that row is all a run reads. A tenant with no row reads as seven years, off. The panel shows who turned the schedule on and when, and "a former member" once that admin is forgotten too.
 
-Until [#539](https://github.com/espaliahq/espalia/issues/539) Track C drops those keys, a run asks both places. A run of this release schedules a tenant only when both say so, and the longer of the two periods decides who is due, so it never forgets someone the previous release would keep. The previous release's own daily run reads the JSON alone, so until it stops serving it can still forget a leaver this release would keep: one whose admin shortened the period there and turned the schedule back on. A tenant with no row reads as seven years, off. The panel shows who turned the schedule on and when, and "a former member" once that admin is forgotten too.
+Each change still writes the old keys of `tenants.org_graph_config` as well, though nothing in this release reads them. The release before it, which runs during a deploy, reads that JSON and records what it holds before each of its own commands. A JSON left behind the stream would be written back over it, and could turn back on a schedule an admin had just turned off. Each deploy's `events:reconcile` still records anything a release from before the stream wrote to the JSON alone.
+
+[#539](https://github.com/espaliahq/espalia/issues/539) Track C moves off the JSON in two deploys, each gated on the one before:
+
+- **c2** stops reading the JSON and keeps writing it. Deploy it only once c1, which put the settings on the stream, serves on every web and worker instance.
+- **c2b** stops writing the JSON, removes the reconciler and deletes the keys. Deploy it only once c2 serves everywhere.
+- **Once c2b is deployed, don't roll back to c1.** c1's commands would record the missing keys as the defaults: seven years, off, with any "never" lost. Roll back to c2 instead. Its reconciler records nothing from a JSON holding none of the keys, and its commands write them all back.
 
 A run holds the stream's lock shared, then the tenant row, for each person. A change from either release waits for that person to finish, or the run sees it before the next one.
 
