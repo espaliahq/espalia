@@ -101,7 +101,7 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 No rebuild and no `CODE_VERSION` bump. a4 changes what commands do, not what the projection writes from an event.
 
-**a4** removes the catch-up a command ran before it decided, and the `pay_bands:<tenant>` lock. The models ignore `updated_by_id`. Deploy it only onto a release that holds a1, which went live at 03:27Z on 2026-11-25. While the previous release still serves, it takes the list lock and then the stream lock; a4 takes the stream lock alone, so neither waits on the other in a cycle. The reconciler still runs at steps 2b and 6. A row that still names an account in `updated_by_id` is recorded under that account's person, and the projection then clears the column.
+**a4** removes the catch-up a command ran before it decided, and the `pay_bands:<tenant>` lock. The models ignore `updated_by_id`. Deploy it only onto a release that holds a1, which went live at 03:27Z on 2026-11-25. While the previous release still serves, it takes the list lock and then the stream lock; a4 takes the stream lock alone, so neither waits on the other in a cycle. The reconciler still runs at steps 2b and 6. A row that still names an account in `updated_by_id` is recorded under that account's person, and the reconciler then clears the column. Only `events:reconcile` names the column, so a4 keeps serving once a4b drops it.
 
 **Before a4b**, once a4 is live, confirm no row still names an account. This prints one count per table and nothing else:
 
@@ -111,7 +111,7 @@ bin/rails runner 'TenantPlanningInputs::Rows::TABLES.each_key { |t| puts "#{t}: 
 
 Every count should be 0. If one isn't, run `bin/rails events:reconcile` and count again: it records each such row under its account's person and clears the column. Go ahead only when every count is 0.
 
-**a4b** drops `updated_by_id`, its foreign keys and its indexes from the five tables. Deploy it only once a4 is live. It also removes the work a4 keeps only for legacy rows: the projection's UPDATE that clears the column, and the reconciler's SELECT for rows that still name an account.
+**a4b** drops `updated_by_id`, its foreign keys and its indexes from the five tables. Deploy it only once a4 is live. It also removes the reconciler's read and clearing of the column, the one thing a4 keeps for legacy rows.
 
 **After a4b deploys, never roll back to a release before a4.** Those releases name `updated_by_id`, and the column is gone.
 

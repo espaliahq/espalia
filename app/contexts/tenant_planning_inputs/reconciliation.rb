@@ -21,6 +21,13 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
   # @return [TenantPlanningInputs::Repository]
   def self.repository = TenantPlanningInputs::Repository.new
 
+  # Records what the tables hold, then clears `updated_by_id` on each row that
+  # still named an account, now that the row is recorded under its person.
+  #
+  # @param aggregate [TenantPlanningInputs::Aggregate]
+  # @return [TenantStreams::Reconciliation::Report]
+  def reconcile(aggregate) = super.tap { clear_legacy_accounts }
+
   private
 
   # Locks the rows it reads, so the projection cannot change one between this
@@ -35,8 +42,15 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
   end
 
   # A release before a4 named the account that last changed a row in
-  # `updated_by_id`, which the models now ignore; a4b drops it.
+  # `updated_by_id`, which the models now ignore. Only this deploy-time run
+  # names the column, so a serving release never does when a4b drops it.
   def legacy_accounts(rows) = rows.where.not(updated_by_id: nil).pluck(:id, :updated_by_id).to_h
+
+  def clear_legacy_accounts
+    @legacy_editors.keys.group_by(&:first).each do |table, keys|
+      Rows.model(table).where(id: keys.map(&:last)).update_all(updated_by_id: nil)
+    end
+  end
 
   def held_in_stream(aggregate)
     Rows::TABLES.each_key.with_object({}) do |table, held|
@@ -49,7 +63,7 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
   # Both sides are read as the table types read them, so a figure the stream
   # holds as "120000.0" equals the table's 120000.00. A comparison of the raw
   # values would record a change on every run. A row that still names an
-  # account counts as changed, so the projection clears it before a4b.
+  # account counts as changed, so its editor is recorded before the column goes.
   def changed?(record, entry)
     table = table_of(record)
     Rows.cast(table, Rows.dump(table, record)) != Rows.cast(table, Rows.complete(table, entry.row)) ||
@@ -73,8 +87,8 @@ class TenantPlanningInputs::Reconciliation < TenantStreams::Reconciliation
     { updated_at: Rows.time(record.updated_at), last_changed_by_id: editor(record), **band_stamp(table) }
   end
 
-  # Only a release before a4 wrote `updated_by_id`, and the projection clears
-  # it, so a row that still holds one was last changed through that release.
+  # Only a release before a4 wrote `updated_by_id`, and each run clears it, so
+  # a row that still holds one was last changed through that release.
   def editor(record)
     account = @legacy_editors[[ table_of(record), record.id ]] or return record.updated_by_person_id
 

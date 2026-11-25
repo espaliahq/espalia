@@ -112,15 +112,9 @@ class TenantPlanningInputs::Projections::Tables
       updated_by_person_id: data[:changed_by_id] || data[:last_changed_by_id]
     )
     row = self.class.row_for(tenant, table, data[:id], entry)
-    model = TenantPlanningInputs::Rows.model(table)
-    model.upsert_all([ row ], unique_by: :id, record_timestamps: false, update_only: row.keys - %w[id tenant_id created_at])
-    clear_legacy_editor(model, data[:id])
+    TenantPlanningInputs::Rows.model(table).upsert_all([ row ], unique_by: :id, record_timestamps: false,
+                              update_only: row.keys - %w[id tenant_id created_at])
   end
-
-  # A release before a4 named its editor's account in `updated_by_id`, which
-  # the models ignore until a4b drops it. Every write here names its editor by
-  # person, so the account is no longer needed.
-  def clear_legacy_editor(model, id) = model.where(id:).where.not(updated_by_id: nil).update_all(updated_by_id: nil)
 
   def reorder(tenant, order)
     PayBand.where(tenant_id: tenant.id, id: order)
