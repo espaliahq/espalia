@@ -10,7 +10,7 @@ class Operations::Tenants::ForgettingDryRun < Operations::Base
   REASONS = ::OrgGraph::PersonAggregate::FORGETTING_REASONS
 
   description "Count the leavers the active tenant would forget today, after checking the HRIS, " \
-              "and list their person ids. Erases nothing. reason, why you ask, is recorded and doesn't change the answer."
+              "and list their person ids. held_back counts those due but kept because they hold the only admin account. Erases nothing. reason, why you ask, is recorded and doesn't change the answer."
   category :read
 
   parameter :reason, String, allowed: REASONS
@@ -20,14 +20,15 @@ class Operations::Tenants::ForgettingDryRun < Operations::Base
     authorize ActsAsTenant.current_tenant, :forget_person?, policy_class: TenantPolicy
   end
 
-  # @return [Hash] tenant_id, the retention_years that decide who is due, count and person_ids
+  # @return [Hash] tenant_id, the retention_years that decide who is due, count, held_back and person_ids
   # @raise [ParameterError] when the forgetting key is not set
   def perform
     tenant = ActsAsTenant.current_tenant
     report = self.class.report(tenant)
     Rails.logger.info("[OrgGraph::Forgetting] dry_run tenant=#{tenant.id} requested_by=#{context.tenant_user&.id} " \
-                      "reason=#{params[:reason] || 'retention'} count=#{report.count} person_ids=#{report.person_ids.join(',')}")
-    { tenant_id: tenant.id, retention_years: report.retention_years, count: report.count, person_ids: report.person_ids }
+                      "reason=#{params[:reason] || 'retention'} count=#{report.count} held_back=#{report.held_back} person_ids=#{report.person_ids.join(',')}")
+    { tenant_id: tenant.id, retention_years: report.retention_years, count: report.count, held_back: report.held_back,
+      person_ids: report.person_ids }
   end
 
   # @param tenant [Tenant]
