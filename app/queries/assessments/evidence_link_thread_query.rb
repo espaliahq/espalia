@@ -22,12 +22,14 @@ class Assessments::EvidenceLinkThreadQuery
     PersonDevelopment::Events::EvidenceLinkRemoved,
     PersonDevelopment::Events::EvidenceLinkRevalenced,
     PersonDevelopment::Events::EvidenceRelinked,
-    PersonDevelopment::Events::EvidenceWithdrawn
+    PersonDevelopment::Events::EvidenceWithdrawn,
+    PersonDevelopment::Events::EvidencePlacementSuggestionDismissed
   ].freeze
 
   # One lifecycle row. `kind` is :linked | :revalenced | :suggestion_kept |
-  # :removed | :withdrawn (:suggestion_kept is a suggestion accepted with the
-  # valence the link already had); `valence`/`previous_valence`/`reason` are kind-specific
+  # :suggestion_dismissed | :removed | :withdrawn (:suggestion_kept is a
+  # suggestion accepted with the valence the link already had);
+  # `valence`/`previous_valence`/`reason` are kind-specific
   # and nil otherwise. `actor_name` is resolved from the Person read
   # model and nil when the person no longer resolves.
   Entry = Data.define(:kind, :actor_name, :valence, :previous_valence, :reason, :at)
@@ -35,12 +37,16 @@ class Assessments::EvidenceLinkThreadQuery
   # @param item [EvidenceItem]
   # @param capability_stable_id [String]
   # @param level_ordinal [Integer]
+  # @param viewer_person_id [String, nil]
+  # @param viewer_sees_all [Boolean] decides, with the viewer, which dismissals show
   # @param event_store [RailsEventStore::Client] override for tests
-  def initialize(item:, capability_stable_id:, level_ordinal:,
+  def initialize(item:, capability_stable_id:, level_ordinal:, viewer_person_id: nil, viewer_sees_all: false,
                  event_store: Rails.configuration.event_store)
     @item = item
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
+    @viewer_person_id = viewer_person_id
+    @viewer_sees_all = viewer_sees_all
     @event_store = event_store
   end
 
@@ -132,7 +138,22 @@ class Assessments::EvidenceLinkThreadQuery
       # each thread regardless of cell.
       [ Entry.new(kind: :withdrawn, actor_name: nil, valence: nil,
                   previous_valence: nil, reason: data[:reason], at: at), data[:withdrawn_by_id] ]
+    when PersonDevelopment::Events::EvidencePlacementSuggestionDismissed
+      return nil unless dismissed_here.include?(data[:suggestion_id])
+      return nil unless Assessments::SuggestionDismissalVisibility.visible?(
+        dismissed_by_id: data[:dismissed_by_id], viewer_person_id: @viewer_person_id, viewer_sees_all: @viewer_sees_all
+      )
+
+      [ Entry.new(kind: :suggestion_dismissed, actor_name: nil, valence: nil,
+                  previous_valence: nil, reason: data[:reason], at: at), data[:dismissed_by_id] ]
     end
+  end
+
+  # The dismissal event names no cell; the suggestion's row does, and follows
+  # it through a framework migration.
+  def dismissed_here
+    @dismissed_here ||= EvidencePlacementSuggestion.for_evidence(@item.id)
+      .where(capability_stable_id: @capability_stable_id, level_ordinal: @level_ordinal).pluck(:id).to_set
   end
 
   def on_cell?(capability_stable_id, level_ordinal)
