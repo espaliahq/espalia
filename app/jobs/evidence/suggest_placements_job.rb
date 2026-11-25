@@ -106,7 +106,8 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   # Runs for one item are serialised (an edit and its original, or a double
   # "Suggest again", can overlap), and a run whose feedback was edited or
   # withdrawn while the model was answering stores nothing: the edit's own
-  # run is coming. So does one whose person was forgotten meanwhile.
+  # run is coming. A run whose person was forgotten meanwhile stores nothing
+  # too.
   #
   # @return [Boolean] whether a set was stored
   def store(item, proposals, model:, asked_about:)
