@@ -177,7 +177,7 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
     end
 
     should "answer a suggestion decided elsewhere with a 422 and the reason" do
-      ActsAsTenant.with_tenant(@tenant) { @ownership_suggestion.decide!(status: "dismissed", by: @alex) }
+      ActsAsTenant.with_tenant(@tenant) { @ownership_suggestion.update!(status: "dismissed", decided_by_id: @alex.id, decided_at: Time.current) }
       sign_in @alex_user
       stream_post accept_evidence_placement_suggestion_path(@ownership_suggestion)
 
@@ -305,7 +305,7 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       assert_equal [ @ownership_suggestion.id, "strongly_demonstrated" ], [ event.data[:via_suggestion_id], event.data[:valence] ]
     end
 
-    should "settle a kept suggestion on a cell someone linked meanwhile" do
+    should "settle a kept suggestion on a cell someone linked meanwhile, as accepted when it keeps its valence" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.add_evidence_link(@alex.id, @framework_id, @item.id,
           capability_stable_id: @ownership.stable_id, level_ordinal: 3, linked_by_id: @alex.id, valence: "growth_area")
@@ -314,7 +314,7 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       save_adjusted
 
       ActsAsTenant.with_tenant(@tenant) do
-        assert_equal "edited", @ownership_suggestion.reload.status
+        assert_equal "accepted", @ownership_suggestion.reload.status
         assert_equal "demonstrated", EvidenceLink.active.find_by(evidence_id: @item.id).valence
       end
     end

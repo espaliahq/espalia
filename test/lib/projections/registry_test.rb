@@ -14,6 +14,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           person_development/evidence_requests
           person_development/comment_thread
           person_development/assessment_authority
+          person_development/evidence_suggestions
           assessment_cycles/current_state
           assessment_cycles/calibration_sessions
           org_graph/structure

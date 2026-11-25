@@ -66,6 +66,11 @@ class Assessments::ActivityFeedQuery
   # `valence` + `previous_valence` for the summary/secondary lines.
   LINK_REVALENCED_KIND = "evidence_revalenced"
 
+  # Accepting a suggestion on a link that already holds its valence writes
+  # `EvidenceLinkRevalenced` with the valence unchanged. Nothing was
+  # reclassified, so it gets an entry of its own.
+  SUGGESTION_KEPT_KIND = "evidence_suggestion_accepted"
+
   # Per-capability re-keying entry — emitted for every mapping in a
   # `FrameworkVersionMigrated` event that has a survivor `to_stable_id`.
   # Anchored to the SURVIVOR's stable_id so the per-cap focus filter on
@@ -326,9 +331,14 @@ class Assessments::ActivityFeedQuery
       when PersonDevelopment::Events::EvidenceLinkRemoved
         build_link_entry(event, kind: LINK_REMOVED_KIND, actor_key: :removed_by_id)
       when PersonDevelopment::Events::EvidenceLinkRevalenced
-        build_link_entry(event, kind: LINK_REVALENCED_KIND, actor_key: :changed_by_id)
+        build_link_entry(event, kind: revalence_kind(event.data.with_indifferent_access), actor_key: :changed_by_id)
       end
     end
+  end
+
+  def revalence_kind(data)
+    kept = data[:via_suggestion_id].present? && data[:valence] == data[:previous_valence]
+    kept ? SUGGESTION_KEPT_KIND : LINK_REVALENCED_KIND
   end
 
   def build_link_entry(event, kind:, actor_key:)

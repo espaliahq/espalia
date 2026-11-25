@@ -164,7 +164,7 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
     click_selector_with_js_fallback("form[action='/evidence_items/#{@item.id}'] button[type='submit']",
                                     expect_text: "Feedback updated.")
     ActsAsTenant.with_tenant(@tenant) do
-      assert_equal "edited", @ownership_suggestion.reload.status
+      assert_equal "accepted", @ownership_suggestion.reload.status
       assert_equal "dismissed", @collaboration_suggestion.reload.status
     end
   end

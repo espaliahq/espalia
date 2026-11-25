@@ -27,9 +27,17 @@ class OrgGraph::ForgetDueLeaversJob < ApplicationJob
   def forget_in(tenant)
     report = OrgGraph::Forgetting.new(tenant).forget_due(scheduled: true)
     Rails.logger.info("[OrgGraph::Forgetting] scheduled tenant=#{tenant.id} reason=retention " \
-                      "count=#{report.count} person_ids=#{report.person_ids.join(',')}")
+                      "count=#{report.count} held_back=#{report.held_back} person_ids=#{report.person_ids.join(',')}")
+    report_held_back(tenant, report.held_back) if report.held_back.positive?
   rescue => e
     Rails.error.report(e, context: { tenant_id: tenant.id, job: self.class.name })
     Rails.logger.error("[OrgGraph::Forgetting] scheduled tenant=#{tenant.id} failed: #{e.class}")
+  end
+
+  # They stay due every day until someone else is made an admin, so someone
+  # has to hear about it.
+  def report_held_back(tenant, held_back)
+    Rails.error.report(OrgGraph::Forgetting::LastAdmin.new, handled: true, severity: :warning,
+                       context: { tenant_id: tenant.id, held_back:, job: self.class.name })
   end
 end

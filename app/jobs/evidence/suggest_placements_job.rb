@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Asks the model where a piece of feedback belongs and stores what it says as
-# pending {EvidencePlacementSuggestion} rows for a person to decide on.
+# Asks the model where a piece of feedback belongs and records what it says
+# on the person's development stream, as suggestions for a person to decide on.
 #
 # Enqueued by {PersonDevelopment::AsyncHandlers::PlacementSuggester} when
 # feedback is recorded or edited, and by the hub's "Suggest again". A no-op
@@ -92,7 +92,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   # place, however the run was asked for.
   def suggestable?(item)
     item.tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured?(item.tenant) &&
-      item.link_status == "active" &&
+      item.link_status == "active" && !Person.forgotten.exists?(id: item.person_id) &&
       !PersonDevelopment::AsyncHandlers::PlacementSuggester::NON_HUMAN_SURFACES.include?(item.recorded_via.to_s)
   end
 
@@ -104,41 +104,35 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   end
 
   # Runs for one item are serialised (an edit and its original, or a double
-  # "Suggest again", can overlap), and a run whose feedback was edited while
-  # the model was answering stores nothing: the edit's own run is coming.
+  # "Suggest again", can overlap), and a run whose feedback was edited or
+  # withdrawn while the model was answering stores nothing: the edit's own
+  # run is coming.
   #
   # @return [Boolean] whether a set was stored
   def store(item, proposals, model:, asked_about:)
-    now = Time.current
-    EvidencePlacementSuggestion.transaction do
-      lock_item(item)
-      next false if EvidenceItem.where(id: item.id).pick(:content) != asked_about
+    AuditMetadata.with(acting_via: :system, correlation_id: job_id) do
+      AuditMetadata.wrap_event_store do
+        PersonDevelopment::SuggestionWrites.with_caught_up(item.person_id, item.framework_id, evidence_ids: [ item.id ]) do |aggregate|
+          next false if EvidenceItem.where(id: item.id).pick(:content) != asked_about
+          # A rationale quotes the feedback, and the person may have been forgotten while the model answered.
+          next false if Person.forgotten.exists?(id: item.person_id)
 
-      EvidencePlacementSuggestion.for_evidence(item.id).pending.update_all(status: "superseded", updated_at: now)
-      proposals.each { |proposal| upsert(item, proposal, model: model, at: now) }
-      true
+          aggregate.suggest_placements(item.id, proposals: proposals.map { proposal_data(it) }, provider: model.provider,
+                                       model: model.model, prompt_version: model.prompt_version,
+                                       generated_at: Time.current.iso8601(6))
+          true
+        end
+      end
     end
+  rescue PersonDevelopment::Aggregate::CommandError
+    false
   end
 
-  def lock_item(item)
-    key = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "placement-suggestions:#{item.id}" ])
-    EvidencePlacementSuggestion.connection.execute(key)
-  end
-
-  # A superseded row for the same cell is reused (one row per cell); a cell
-  # someone decided on is never reopened.
-  def upsert(item, proposal, model:, at:)
-    row = EvidencePlacementSuggestion.find_or_initialize_by(
-      evidence_id: item.id, capability_stable_id: proposal.capability_stable_id, level_ordinal: proposal.level_ordinal
-    )
-    return if row.persisted? && row.status != "superseded"
-
-    row.update!(
-      person_id: item.person_id, framework_id: item.framework_id,
-      valence: proposal.valence, confidence: proposal.confidence.round(2),
-      rationale: proposal.rationale&.truncate(EvidencePlacementSuggestion::RATIONALE_MAX_LENGTH),
-      status: "pending", decided_by_id: nil, decided_at: nil, dismiss_reason: nil,
-      provider: model.provider, model: model.model, prompt_version: model.prompt_version, generated_at: at
-    )
+  def proposal_data(proposal)
+    {
+      capability_stable_id: proposal.capability_stable_id, level_ordinal: proposal.level_ordinal,
+      valence: proposal.valence, confidence: proposal.confidence.round(2).to_s,
+      rationale: proposal.rationale&.truncate(EvidencePlacementSuggestion::RATIONALE_MAX_LENGTH)
+    }
   end
 end

@@ -57,6 +57,12 @@ module ProjectionReplayHelpers
           manager_assessment_delegations: rows(ManagerAssessmentDelegation, stable_id: true)
         }
 
+      when "PersonDevelopment::Projections::EvidenceSuggestions"
+        {
+          # PK is the event-carried suggestion_id, which the hub and MCP clients hold.
+          evidence_placement_suggestions: rows(EvidencePlacementSuggestion, stable_id: true)
+        }
+
       when "Frameworks::Projections::PublishedState"
         {
           frameworks:               rows(FrameworkState::Framework),
