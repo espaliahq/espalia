@@ -36,7 +36,7 @@ class Operations::Tenants::EnableScheduledForgetting < Operations::Base
   # period the count was taken with is the one the schedule starts under.
   def confirm(tenant)
     count = Operations::Tenants::ForgettingDryRun.report(tenant).count
-    raise ParameterError, "#{count} leavers are due now, not #{params[:confirm_count]}: run the dry run again" unless
+    raise TenantSettings::Aggregate::Refused, "#{count} leavers are due now, not #{params[:confirm_count]}: run the dry run again" unless
       count == params[:confirm_count]
 
     count
