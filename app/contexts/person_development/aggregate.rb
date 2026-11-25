@@ -1488,8 +1488,9 @@ class PersonDevelopment::Aggregate
     via_suggestion_id.present? ? { via_suggestion_id: via_suggestion_id } : {}
   end
 
-  # An id the stream doesn't hold is let through: the projection decides the
-  # row the link names.
+  # An id the stream doesn't hold is let through: a row recorded before the
+  # table's direct writes stopped may still name one, and the projection
+  # decides the row the link names.
   def ensure_suggestion_open!(suggestion_id)
     status = suggestion_status(suggestion_id)
     return if status.nil? || status == "pending"
@@ -2000,9 +2001,9 @@ class PersonDevelopment::Aggregate
   end
 
   # A decision is final: once accepted or dismissed, no later event changes
-  # it. A link can name a suggestion before the suggestion is recorded, when
-  # the table's row reaches the stream after the accept, so an unknown id is
-  # held as accepted for when it arrives.
+  # it. A stream from before the table's direct writes stopped can name a
+  # suggestion in a link before it records the suggestion, so an unknown id
+  # is held as accepted for when it arrives.
   on PersonDevelopment::Events::EvidencePlacementSuggested do |event|
     id = event.data[:suggestion_id]
     status = @suggestions.dig(id, :status)
