@@ -40,6 +40,24 @@ class AccountGrants::CommandHandler
     end
   end
 
+  # Removes a grant from each account, under one lock and in one
+  # transaction, so it never clears one and fails on another.
+  #
+  # @param grant [Symbol] one of {AccountGrants::Aggregate::GRANTS}
+  # @param accounts [Array<TenantUser>]
+  # @param removed_by_id [String, nil] person_id of the actor
+  # @param effective_on [Date, nil]
+  # @return [AccountGrants::Aggregate]
+  def remove_from_each(grant, accounts, removed_by_id: nil, effective_on: nil)
+    @repository.with_grants do |grants|
+      accounts.each do |account|
+        settle(grants, grant, account.id, account.person_id, effective_on)
+        grants.remove(grant, tenant_user_id: account.id, person_id: account.person_id,
+                             effective_on: effective_on || today, removed_by_id:)
+      end
+    end
+  end
+
   # Sets an account's role, after recording every role the table holds that
   # the stream doesn't, so the last-admin check counts the admins there are.
   # The live accounts stay share-locked until it commits, so a forget can't

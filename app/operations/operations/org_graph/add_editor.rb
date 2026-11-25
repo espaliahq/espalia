@@ -9,16 +9,17 @@ class Operations::OrgGraph::AddEditor < Operations::Base
 
   description "Make an active person with an account in this organisation an Org Graph editor, so they may " \
               "change its providers, units and people's facts. Admins already may, and only admins may add " \
-              "or remove unit types or say where they can sit. Returns the list as org_graph_editors reads it."
+              "or remove unit types or say where they can sit. A person with more than one account is refused " \
+              "until the duplicate is settled. Returns the list as org_graph_editors reads it."
   category :write
   approval :in_app
 
   parameter :person_id, String, required: true, allow_blank: false
 
   # @return [Hash] editors and admins
-  # @raise [ParameterError] for a person with no account, an admin, or someone who has left
+  # @raise [ParameterError] for a person with no account or two, an admin, or someone who has left
   def perform
-    account = account!
+    account = sole_account!("the right to edit the Org Graph")
     raise ParameterError, "person_id: admins may already edit the Org Graph" if account.admin?
     raise ParameterError, "person_id: only someone still in the organisation can be an editor" unless account.person&.status == "active"
 

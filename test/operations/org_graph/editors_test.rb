@@ -139,4 +139,73 @@ class Operations::OrgGraph::EditorsTest < ActiveSupport::TestCase
 
     assert_equal [ "Eve Editor" ], names(call(:Editors)[:editors])
   end
+
+  context "a person with two accounts, as a link made before links were events can leave" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @twin = create(:tenant_user, tenant: @tenant, role: :member, org_graph_editor: true, person: @editor.person)
+        @lone = create(:tenant_user, tenant: @tenant, role: :member, person: @member.person)
+      end
+    end
+
+    should "refuse the grant and write no event" do
+      error = assert_raises(Operations::Base::ParameterError) { call(:AddEditor, person_id: @member.person_id) }
+
+      assert_match "more than one account", error.message
+      assert_not @member.reload.org_graph_editor?
+      assert_not @lone.reload.org_graph_editor?
+      assert_empty grant_events
+    end
+
+    should "take the right from both accounts" do
+      call(:RemoveEditor, person_id: @editor.person_id)
+
+      assert_not @editor.reload.org_graph_editor?
+      assert_not @twin.reload.org_graph_editor?
+    end
+
+    should "write nothing when neither account holds the right, as for a person with one" do
+      single = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)) }
+
+      assert_equal call(:RemoveEditor, person_id: single.person_id), call(:RemoveEditor, person_id: @member.person_id)
+      assert_empty grant_events
+    end
+
+    should "skip an admin account and take the right from the other" do
+      ActsAsTenant.with_tenant(@tenant) { @editor.update!(role: :admin) }
+
+      call(:RemoveEditor, person_id: @editor.person_id)
+
+      assert_not @twin.reload.org_graph_editor?
+    end
+
+    should "refuse when every account is an admin" do
+      ActsAsTenant.with_tenant(@tenant) { [ @member, @lone ].each { it.update!(role: :admin) } }
+
+      assert_raises(Operations::Base::ParameterError) { call(:RemoveEditor, person_id: @member.person_id) }
+      assert_empty grant_events
+    end
+
+    should "clear neither account when removing from the second fails" do
+      build = AccountGrants::Aggregate.method(:new)
+      failing = lambda do
+        build.call.tap do |grants|
+          removals = 0
+          grants.define_singleton_method(:remove) do |*args, **kwargs|
+            raise "second removal failed" if (removals += 1) == 2
+
+            super(*args, **kwargs)
+          end
+        end
+      end
+
+      AccountGrants::Aggregate.stub(:new, failing) do
+        assert_raises(RuntimeError) { call(:RemoveEditor, person_id: @editor.person_id) }
+      end
+
+      assert @editor.reload.org_graph_editor?
+      assert @twin.reload.org_graph_editor?
+      assert_empty grant_events
+    end
+  end
 end

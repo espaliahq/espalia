@@ -9,16 +9,17 @@ class Operations::TeamPlanning::AddPlanner < Operations::Base
 
   description "Make an active person with an account in this organisation a planner, so they may create " \
               "Team Planning plans. It opens no plan they aren't a member of. Admins already may create " \
-              "plans. Returns the list as team_planning_planners reads it."
+              "plans. A person with more than one account is refused until the duplicate is settled. Returns " \
+              "the list as team_planning_planners reads it."
   category :write
   approval :in_app
 
   parameter :person_id, String, required: true, allow_blank: false
 
   # @return [Hash] planners and admins
-  # @raise [ParameterError] for a person with no account, an admin, or someone who has left
+  # @raise [ParameterError] for a person with no account or two, an admin, or someone who has left
   def perform
-    account = account!
+    account = sole_account!("the right to create plans")
     raise ParameterError, "person_id: admins may already create plans" if account.admin?
     raise ParameterError, "person_id: only someone still in the organisation can be a planner" unless account.person&.status == "active"
 
