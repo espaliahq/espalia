@@ -16,10 +16,16 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
     @graph = Frameworks::ExplorerGraphBuilder.new(aggregate).build
   end
 
+  def store_current
+    Frameworks::ExplorerGraph.store(
+      @framework_id, @graph, last_event_id: Frameworks::ExplorerGraph.stream_head(@framework_id)
+    )
+  end
+
   context ".store + .load round-trip" do
     should "persist and deserialize identically" do
       loaded = ActsAsTenant.with_tenant(@tenant) do
-        Frameworks::ExplorerGraph.store(@framework_id, @graph)
+        store_current
         Frameworks::ExplorerGraph.load(@framework_id)
       end
       assert_equal @framework_id, loaded.framework_id
@@ -30,8 +36,8 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
 
     should "upsert rather than create duplicate rows" do
       ActsAsTenant.with_tenant(@tenant) do
-        Frameworks::ExplorerGraph.store(@framework_id, @graph)
-        Frameworks::ExplorerGraph.store(@framework_id, @graph)
+        store_current
+        store_current
       end
 
       assert_equal 1, FrameworkExplorerGraph.where(framework_id: @framework_id).count
@@ -39,7 +45,7 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
 
     should "scope rows by tenant so another tenant's load misses" do
       ActsAsTenant.with_tenant(@tenant) do
-        Frameworks::ExplorerGraph.store(@framework_id, @graph)
+        store_current
       end
 
       other_tenant = create(:tenant)
@@ -59,11 +65,45 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
 
     should "return nil on format_version mismatch (stale row)" do
       ActsAsTenant.with_tenant(@tenant) do
-        Frameworks::ExplorerGraph.store(@framework_id, @graph)
+        store_current
         FrameworkExplorerGraph.find_by(framework_id: @framework_id)
           .update_columns(format_version: Frameworks::ExplorerGraph::FORMAT_VERSION + 1)
 
         assert_nil Frameworks::ExplorerGraph.load(@framework_id)
+      end
+    end
+
+    should "return nil for a row that records no stream event" do
+      ActsAsTenant.with_tenant(@tenant) do
+        store_current.update_columns(last_event_id: nil)
+
+        assert_nil Frameworks::ExplorerGraph.load(@framework_id)
+      end
+    end
+
+    should "return nil for a row behind its stream" do
+      ActsAsTenant.with_tenant(@tenant) do
+        store_current
+        family_id = SecureRandom.uuid_v7
+        event_store = Rails.configuration.event_store
+        event_store.with_metadata(tenant_id: @tenant.id) do
+          event_store.publish(
+            Frameworks::Events::RoleFamilyAdded.new(
+              data: { framework_id: @framework_id, role_family_id: family_id, name: "Engineering" }
+            ),
+            stream_name: EventStreamNaming.framework_stream(@framework_id)
+          )
+        end
+      end
+
+      Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: Frameworks::Projections::PublishedState, tenant: @tenant)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_nil Frameworks::ExplorerGraph.load(@framework_id)
+        assert_equal %w[Engineering],
+                     Frameworks::ExplorerGraph.rebuild(@framework_id).role_families.map(&:name)
+        assert Frameworks::ExplorerGraph.load(@framework_id)
       end
     end
   end
@@ -74,6 +114,24 @@ class Frameworks::ExplorerGraphTest < ActiveSupport::TestCase
         handler = Frameworks::CommandHandler.new
         rfid = SecureRandom.uuid_v7
         handler.add_role_family(@framework_id, rfid, "Engineering")
+      end
+    end
+
+    should "leave the row behind its stream when a write lands during the rebuild" do
+      ActsAsTenant.with_tenant(@tenant) do
+        build = Frameworks::ExplorerGraphBuilder.method(:new)
+        landed = false
+        landing = lambda do |agg|
+          unless landed
+            landed = true
+            Frameworks::CommandHandler.new.add_role_family(@framework_id, SecureRandom.uuid_v7, "Product")
+          end
+          build.call(agg)
+        end
+
+        Frameworks::ExplorerGraphBuilder.stub(:new, landing) { Frameworks::ExplorerGraph.rebuild(@framework_id) }
+
+        assert_nil Frameworks::ExplorerGraph.load(@framework_id)
       end
     end
 

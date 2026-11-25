@@ -190,10 +190,19 @@ class Frameworks::Repository
   def snapshot_after(aggregate)
     events = aggregate.unpublished_events.to_a
     return if events.none?
+
+    last_event_id = events.last.event_id
     # ...and only when the mutation can affect what the graph renders.
-    return if events.all? { |e| GRAPH_IRRELEVANT_EVENTS.include?(e.class) }
+    if events.all? { |e| GRAPH_IRRELEVANT_EVENTS.include?(e.class) }
+      Frameworks::ExplorerGraph.advance(
+        aggregate.framework_id,
+        from: Frameworks::ExplorerGraph.stream_head(aggregate.framework_id),
+        to: last_event_id
+      )
+      return
+    end
 
     graph = Frameworks::ExplorerGraphBuilder.new(aggregate).build
-    Frameworks::ExplorerGraph.store(aggregate.framework_id, graph)
+    Frameworks::ExplorerGraph.store(aggregate.framework_id, graph, last_event_id: last_event_id)
   end
 end
