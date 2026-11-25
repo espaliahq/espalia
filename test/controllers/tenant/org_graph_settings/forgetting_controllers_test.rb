@@ -22,7 +22,7 @@ class Tenant::OrgGraphSettings::ForgettingControllersTest < ActionDispatch::Inte
     end
   end
 
-  def config = @tenant.reload.org_graph_config
+  def config = TenantRetentionSetting.for(@tenant)
   def settings = TenantSettings::CommandHandler.new(@tenant)
 
   context "as a tenant admin" do
@@ -67,7 +67,6 @@ class Tenant::OrgGraphSettings::ForgettingControllersTest < ActionDispatch::Inte
 
       get tenant_org_graph_settings_path
 
-      assert_equal 7, config.retention_years
       assert_select "#org-graph-forgetting", text: /nobody is forgotten while the period is never/
       assert_select "#org-graph-forgetting", text: /Each leaver is forgotten/, count: 0
     end
@@ -133,7 +132,7 @@ class Tenant::OrgGraphSettings::ForgettingControllersTest < ActionDispatch::Inte
       get tenant_org_graph_settings_forgetting_due_path
       assert_redirected_to root_path
 
-      assert_equal OrgGraphConfig::DEFAULT_RETENTION_YEARS, config.retention_years
+      assert_equal TenantSettings::Aggregate::DEFAULT_RETENTION_YEARS, config.retention_years
       assert_not config.scheduled_forgetting
     end
   end

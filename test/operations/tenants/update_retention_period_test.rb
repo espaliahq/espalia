@@ -21,10 +21,10 @@ class Operations::Tenants::UpdateRetentionPeriodTest < ActiveSupport::TestCase
     end
   end
 
-  # Both places, which must agree until c2b stops writing the JSON.
-  def retention_years = [ @tenant.reload.org_graph_config.retention_years, row.retention_years ].uniq.sole
-  def scheduled = [ @tenant.reload.org_graph_config.scheduled_forgetting, row.scheduled_forgetting ].uniq.sole
+  def retention_years = row.retention_years
+  def scheduled = row.scheduled_forgetting
   def row = TenantRetentionSetting.for(@tenant)
+  def stored_config = JSON.parse(Tenant.where(id: @tenant.id).pick(Arel.sql("org_graph_config::text")))
   def handler = TenantSettings::CommandHandler.new(Tenant.find(@tenant.id))
 
   context "as a tenant admin" do
@@ -43,7 +43,6 @@ class Operations::Tenants::UpdateRetentionPeriodTest < ActiveSupport::TestCase
       handler.enable_scheduled_forgetting { 0 }
       handler.set_retention_period(nil)
       assert call(retention_years: 20)[:scheduled_forgetting_stopped]
-      assert_nil @tenant.reload.org_graph_config.scheduled_forgetting_enabled_at
       assert_nil row.enabled_at
     end
 
@@ -64,15 +63,16 @@ class Operations::Tenants::UpdateRetentionPeriodTest < ActiveSupport::TestCase
       assert_equal 7, retention_years
     end
 
-    should "keep the tenant's other Org Graph settings" do
-      @tenant.update!(org_graph_config: { staleness_days: 30 })
+    should "keep the tenant's other Org Graph settings and remove the retired keys" do
+      Tenant.where(id: @tenant.id)
+            .update_all(%(org_graph_config = '{"staleness_days": 30, "retention_years": 4, "scheduled_forgetting": true}'))
       call(retention_years: 2)
 
-      assert_equal 30, @tenant.reload.org_graph_config.staleness_days
+      assert_equal({ "staleness_days" => 30 }, stored_config)
     end
 
     should "refuse a period that isn't a positive whole number of years" do
-      [ 0, -1, OrgGraphConfig::MAX_RETENTION_YEARS + 1 ].each do |years|
+      [ 0, -1, TenantSettings::Aggregate::MAX_RETENTION_YEARS + 1 ].each do |years|
         assert_raises(Operations::Base::ParameterError) { call(retention_years: years) }
       end
       assert_equal 7, retention_years

@@ -21,6 +21,7 @@ class TenantSettings::Aggregate
   # that never set a period records nothing, and a new default would move
   # them all without an event.
   DEFAULT_RETENTION_YEARS = 7
+  MAX_RETENTION_YEARS = 100
 
   # @return [Integer, nil] years after leaving that a person is forgotten, nil for never
   attr_reader :retention_years
