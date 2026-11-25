@@ -24,6 +24,7 @@ class PayBand < ApplicationRecord
   acts_as_tenant :tenant
 
   belongs_to :tenant
+  self.ignored_columns += %w[updated_by_id]
 
   normalizes :location, with: ->(location) { known_spelling(location.to_s.squish) }, apply_to_nil: true
   normalizes :currency, with: Currency::NORMALIZE
