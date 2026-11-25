@@ -35,6 +35,16 @@ class TenantSettings::ReconciliationTest < ActiveSupport::TestCase
     assert_equal [ 4, true, enabled_at, @admin.person_id ], row.slice(:retention_years, :scheduled_forgetting, :enabled_at, :enabled_by_id).values
   end
 
+  should "write nothing once commands have written the JSON and the stream alike" do
+    handler = TenantSettings::CommandHandler.new(Tenant.find(@tenant.id))
+    handler.set_retention_period(4, set_by: @admin)
+    handler.enable_scheduled_forgetting(enabled_by: @admin) { 0 }
+    before = stream.size
+
+    assert_equal 0, reconcile.recorded
+    assert_equal before, stream.size
+  end
+
   should "write nothing when run again" do
     previous_release_writes(retention_years: 4)
     reconcile
@@ -80,5 +90,34 @@ class TenantSettings::ReconciliationTest < ActiveSupport::TestCase
 
     assert_equal 0, reconcile.recorded
     assert row.scheduled_forgetting
+  end
+
+  def previous_release_left(sql) = Tenant.where(id: @tenant.id).update_all("org_graph_config = #{sql}")
+
+  def without_keys = "(org_graph_config - '{#{TenantSettings::Reconciliation::KEYS.join(",")}}'::text[])"
+
+  should "record a period the JSON holds as null as never" do
+    previous_release_left("jsonb_set(org_graph_config, '{retention_years}', 'null')")
+
+    assert_equal 1, reconcile.changed
+    assert_nil row.retention_years
+  end
+
+  should "read a missing period as the default while another key is present" do
+    previous_release_left(%(#{without_keys} || '{"scheduled_forgetting": true}'))
+
+    assert_equal 1, reconcile.changed
+    assert_instance_of TenantSettings::Events::ScheduledForgettingEnabled, stream.last
+    assert_equal [ 7, true ], row.slice(:retention_years, :scheduled_forgetting).values
+  end
+
+  should "leave the stream alone once the JSON holds none of the keys" do
+    TenantSettings::CommandHandler.new(Tenant.find(@tenant.id)).set_retention_period(nil, set_by: @admin)
+    previous_release_left(without_keys)
+    before = stream.size
+
+    assert_equal 0, reconcile.recorded
+    assert_equal before, stream.size
+    assert_nil row.retention_years
   end
 end
