@@ -4,8 +4,8 @@
 # defaults, newest first: the read behind each screen's history. Admins only,
 # as the tables are, and never shown inside a plan.
 #
-# A change shows its row before and after in the shape the table's own read
-# tool lists it, so a figure here reads as it does there.
+# A change shows its row before and after with the fields the table's own read
+# tool lists, so a figure here reads as it does there.
 class Operations::Tenants::PlanningInputsHistory < Operations::Base
   INPUTS = TenantPlanningInputs::History::INPUTS.keys.map(&:to_s).freeze
   POLICIES = { "pay_bands" => :manage_pay_bands?, "exchange_rates" => :manage_pay_bands?,
@@ -16,9 +16,11 @@ class Operations::Tenants::PlanningInputsHistory < Operations::Base
               "exchange_rates (the rates and the reference currency), budget_lines or planning_rules (the tenant's " \
               "rule defaults). Each change gives its table, what happened (added, changed, removed or, for pay " \
               "bands, reordered), the row's id, when, who made it (a person's name, \"Former member\" once " \
-              "forgotten, or null when no one is recorded), and the row before and after in the shape " \
-              "tenants_pay_bands, tenants_exchange_rates, tenants_budget_lines and tenants_planning_rules list " \
-              "it; null where there was no row. A reorder has neither: tenants_pay_bands gives the order now. " \
+              "forgotten, or null when no one is recorded), and the row before and after; null where there was " \
+              "no row. A row carries the fields tenants_pay_bands, tenants_exchange_rates, tenants_budget_lines " \
+              "and tenants_planning_rules give, with figures written the same way, less the row's id (it is the " \
+              "change's id), its position and who last changed it. Role and level names are as recorded then, " \
+              "not renamed since. A reorder has no row: tenants_pay_bands gives the order now. " \
               "already_held marks a row recorded as the table held it when this history began, or as an " \
               "earlier release changed it; its time and person are then the row's last change before that. " \
               "Refused unless the caller is a tenant admin."
