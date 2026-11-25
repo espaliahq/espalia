@@ -20,30 +20,29 @@ class TenantRetentionSettingTest < ActiveSupport::TestCase
     [ TenantRetentionSetting.scheduled?(@tenant.reload), TenantRetentionSetting.scheduled_tenants.include?(@tenant) ]
   end
 
-  context "a tenant is scheduled only when both places say so" do
-    should "say no for either alone, and yes for both" do
+  context "a tenant's schedule" do
+    should "follow the stream alone, whatever the JSON says" do
       json(scheduled_forgetting: true)
       assert_equal [ false, false ], scheduled
 
       json(scheduled_forgetting: false)
       stream(scheduled_forgetting: true)
-      assert_equal [ false, false ], scheduled
-
-      json(scheduled_forgetting: true)
       assert_equal [ true, true ], scheduled
     end
   end
 
   context "the period that decides who is due" do
-    should "be the longer of the two, and never when either is never" do
+    should "follow the stream alone, whatever the JSON says" do
       json(retention_years: 3)
-      assert_equal 7, TenantRetentionSetting.longer_period(@tenant.reload)
+      assert_equal 7, TenantRetentionSetting.period(@tenant.reload)
 
+      json(retention_years: nil)
       stream(retention_years: 2)
-      assert_equal 3, TenantRetentionSetting.longer_period(@tenant.reload)
+      assert_equal 2, TenantRetentionSetting.period(@tenant.reload)
+      assert_equal Date.new(2024, 6, 1), TenantRetentionSetting.forget_left_on_or_before(@tenant.reload, Date.new(2026, 6, 1))
 
       stream(retention_years: nil)
-      assert_nil TenantRetentionSetting.longer_period(@tenant.reload)
+      assert_nil TenantRetentionSetting.period(@tenant.reload)
       assert_nil TenantRetentionSetting.forget_left_on_or_before(@tenant.reload)
     end
   end
