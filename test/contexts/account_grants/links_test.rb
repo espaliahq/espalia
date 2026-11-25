@@ -134,6 +134,18 @@ class AccountGrants::LinksTest < ActiveSupport::TestCase
 
       assert_raises(AccountGrants::Aggregate::PersonForgotten) { as_tenant { @account.link_to!(@ada, match: :admin) } }
     end
+
+    should "refuse when the person's accounts hold every admin the tenant has, and unlink nothing" do
+      as_tenant { @account.link_to!(@ada, match: :sign_in) }
+      @account.update_columns(role: "admin")
+
+      assert_raises(AccountGrants::Aggregate::LastAdmin) { as_tenant { handler.unlink_forgotten(@ada.id) } }
+      assert_equal @ada.id, column(@account)
+      assert_instance_of AccountGrants::Events::AccountLinkedToPerson, link_events.last
+
+      @other.update_columns(role: "admin")
+      assert_equal [ @account.id ], as_tenant { handler.unlink_forgotten(@ada.id) }
+    end
   end
 
   context "the projection" do
