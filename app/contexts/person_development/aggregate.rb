@@ -1508,24 +1508,27 @@ class PersonDevelopment::Aggregate
     raise CommandError, "this suggestion was already #{status}"
   end
 
-  # The release before this one reopens a cell's superseded row in place, so
-  # a row held pending on both sides can still be a later run's.
+  # The release before this one reopens a cell's superseded row in place, and
+  # never moves a row when its own publish migrates the stream, so a row held
+  # with the same status can still be a later run's, or on another cell.
   def catch_up_suggestion(row)
     held = suggestion_status(row[:id])
     return false if DECIDED_SUGGESTION_STATUSES.include?(held)
-    return false if row[:status] == held && !(held == "pending" && regenerated?(row))
+
+    same = held && held_as_row?(row)
+    return false if row[:status] == held && same
 
     case row[:status]
     when "superseded"
-      if held.nil?
-        record_held_suggestion(row, status: "superseded")
-      else
+      if held == "pending" && same
         apply(PersonDevelopment::Events::EvidencePlacementSuggestionsSuperseded.new(
           data: { evidence_id: row[:evidence_id], suggestion_ids: [ row[:id] ] }
         ))
+      else
+        record_held_suggestion(row, status: "superseded")
       end
     when "dismissed"
-      record_held_suggestion(row, status: "pending") unless held == "pending"
+      record_held_suggestion(row, status: "pending") unless held == "pending" && same
       apply(PersonDevelopment::Events::EvidencePlacementSuggestionDismissed.new(data: {
         suggestion_id: row[:id], evidence_id: row[:evidence_id], dismissed_by_id: row[:decided_by_id],
         reason: row[:dismiss_reason].presence, dismissed_at: row[:decided_at]&.iso8601(6), already_held: true
@@ -1536,10 +1539,12 @@ class PersonDevelopment::Aggregate
     true
   end
 
-  def regenerated?(row)
-    held_at = @suggestions.dig(row[:id].to_s, :generated_at)
+  def held_as_row?(row)
+    held = @suggestions[row[:id].to_s]
+    held_at = held[:generated_at]
     held_at = Time.zone.parse(held_at) if held_at.is_a?(String)
-    held_at.nil? || held_at.floor(6) != row[:generated_at]&.floor(6)
+    held[:cell] == [ row[:capability_stable_id], row[:level_ordinal] ] &&
+      held_at.present? && held_at.floor(6) == row[:generated_at]&.floor(6)
   end
 
   def record_held_suggestion(row, status:)

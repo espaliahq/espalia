@@ -192,6 +192,36 @@ class PersonDevelopment::SuggestionCommandsTest < ActiveSupport::TestCase
       assert_equal [ suggestion.id ] * 2, suggestion_ids
     end
 
+    should "follow a row the old release left on its cell when it migrated the stream" do
+      suggest(proposal(@collaboration, 3))
+      suggestion = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find(suggestion_ids.first) }
+      event_store.append(
+        PersonDevelopment::Events::FrameworkVersionMigrated.new(
+          data: { framework_id: @framework_id, old_version: 1, new_version: 2,
+                  mappings: [ { from_stable_id: @collaboration.stable_id, to_stable_id: @ownership.stable_id, mapping_type: "evolved" } ] },
+          metadata: { tenant_id: @tenant.id, person_id: @alex.id, framework_id: @framework_id }
+        ), stream_name: stream
+      )
+
+      assert_equal 1, catch_up(suggestion)
+      assert_equal [ @collaboration.stable_id ] * 2,
+                   events_of(PersonDevelopment::Events::EvidencePlacementSuggested).map { it.data[:capability_stable_id] }
+      assert_equal 0, catch_up(suggestion)
+    end
+
+    should "follow a row the old release reopened and superseded again" do
+      suggest(proposal(@ownership, 3))
+      suggestion = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find(suggestion_ids.first) }
+      suggestion.update!(status: "superseded")
+      catch_up(suggestion)
+      suggestion.update!(status: "superseded", valence: "growth_area", generated_at: 1.minute.from_now)
+
+      assert_equal 1, catch_up(suggestion)
+      latest = events_of(PersonDevelopment::Events::EvidencePlacementSuggested).last.data
+      assert_equal %w[growth_area superseded], latest.values_at(:valence, :status)
+      assert_equal 0, catch_up(suggestion)
+    end
+
     should "write nothing when the stream already agrees, or has decided" do
       held = row("pending")
       catch_up(held)
