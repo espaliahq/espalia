@@ -52,6 +52,8 @@ class Tenant::PlanningInputsHistorySystemTest < ApplicationSystemTestCase
         end
 
         visit tenant_pay_bands_path
+        assert_selector "h1", text: "Pay bands"
+
         click_link_with_js_fallback("Rate history", expect_text: "Set the reference currency to USD")
 
         within "#planning-inputs-history li:first-child" do
