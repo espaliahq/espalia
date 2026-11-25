@@ -87,7 +87,8 @@ class Assessments::EvidenceLinkThreadQuery
   def lifecycle_entries
     @lifecycle_entries ||= begin
       entries = stream_events.filter_map { |event| build_entry(event) }
-      resolve_actor_names(entries)
+      # A dismissal recorded from a table row is dated before the events around it.
+      resolve_actor_names(entries).each_with_index.sort_by { |entry, i| [ entry.at || Time.at(0), i ] }.map(&:first)
     end
   end
 

@@ -129,6 +129,7 @@ class SuggestionDismissalVisibilityTest < ActionDispatch::IntegrationTest
         held = feed.find { it.kind == Assessments::ActivityFeedQuery::SUGGESTION_DISMISSED_KIND && it.capability_stable_id == @ownership.stable_id }
         assert_equal @first_made, held.occurred_at
         assert_equal [ @first_made ], thread.select { it.kind == :suggestion_dismissed }.map(&:at)
+        assert_equal :suggestion_dismissed, thread.first.kind, "the September dismissal comes before the November link"
       end
     end
 
