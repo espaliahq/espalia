@@ -10,6 +10,14 @@
 # Under them the table can't move, so what the catch-up records and what the
 # command then decides agree.
 #
+# Before those, it holds the person's row FOR KEY SHARE to the commit. An
+# erase takes that row FOR UPDATE before it writes `forgotten_at`, so it
+# either commits first and the forgotten check sees it, or waits until this
+# command's events are stored. Key share doesn't block an ordinary update
+# of the row, so a sync carries on. The row comes first so a command
+# waiting behind an erase holds nothing the job wants. It is taken outside
+# the savepoint, whose rollback would release it.
+#
 # Two commands for one person write one stream, so the later one to store
 # can lose the race even on another evidence item. It retries inside a
 # savepoint, keeping the locks it holds.
@@ -25,6 +33,7 @@ module PersonDevelopment::SuggestionWrites
   def self.with_caught_up(person_id, framework_id, evidence_ids:)
     attempts = 0
     EvidencePlacementSuggestion.transaction do
+      Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:id)
       evidence_ids.uniq.sort.each { lock_item(it) }
       begin
         attempts += 1

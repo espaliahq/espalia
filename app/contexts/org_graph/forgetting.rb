@@ -282,6 +282,8 @@ class OrgGraph::Forgetting
   # role change and a sign-in take the grants lock before any tenant_users
   # row, so none waits on an erase in a cycle. The grants lock comes last, so
   # an erase holds it only for the unlink and the commit.
+  # A suggestion write holds the person's row key-share before its own locks
+  # (PersonDevelopment::SuggestionWrites), none of which an erase takes.
   def erase(person_id, on:, reason:, requested_by_id: nil, scheduled: false)
     within_tenant do
       Person.transaction do
