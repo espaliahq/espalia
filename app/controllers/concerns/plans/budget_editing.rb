@@ -33,6 +33,8 @@ module Plans::BudgetEditing
     return redirect_to budget_plan_path(plan[:plan_id], scenario: line_scenario_id), alert: TeamPlanning::LineMoney::REFUSAL, status: :see_other if priced_line_held_back?
 
     render budget_line_page(plan, values:, budget_line_id: budget_line_id)
+  rescue ProjectionVersion::Rebuilding => e
+    redirect_to budget_plan_path(plan[:plan_id], scenario: line_scenario_id), alert: e.message, status: :see_other
   end
 
   # PATCH /planning/:id/budget/lines/:budget_line_id

@@ -18,8 +18,10 @@ class Operations::Tenants::AddExchangeRate < Operations::Base
 
   # @return [Hash] the rate, as tenants_exchange_rates lists it
   def perform
-    rate = ExchangeRate.new(from_currency: params[:from_currency], to_currency: params[:to_currency],
-                            rate: rate_value, applies_from: parse_date(:applies_from))
-    rate_payload(save_setting!(rate))
+    rate = save_setting!(:exchange_rates) do
+      ExchangeRate.new(from_currency: params[:from_currency], to_currency: params[:to_currency],
+                       rate: rate_value, applies_from: parse_date(:applies_from))
+    end
+    rate_payload(rate)
   end
 end

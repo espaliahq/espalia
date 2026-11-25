@@ -10,7 +10,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
     @bands = %w[Fixtureland Testonia Mu].map do |location|
-      PayBand.new(location:, currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2).tap { it.match_on }.tap(&:save!)
+      any_band(location)
     end
   end
 
@@ -18,11 +18,15 @@ class PayBandLockingTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
     ExchangeRate.where(tenant_id: @tenant.id).delete_all
     PayBand.where(tenant_id: @tenant.id).delete_all
+    linked = PayBand.sanitize_sql_array([ "stream LIKE ?", "tenant-#{@tenant.id}/%" ])
+    event_ids = PayBand.connection.select_values("SELECT event_id FROM event_store_events_in_streams WHERE #{linked}")
+    PayBand.connection.execute("DELETE FROM event_store_events_in_streams WHERE #{linked}")
+    PayBand.connection.execute(PayBand.sanitize_sql_array([ "DELETE FROM event_store_events WHERE event_id IN (?)", event_ids ])) if event_ids.any?
     @tenant.delete
   end
 
   should "let a reorder leave the tenant free for inserts that reference it" do
-    holding(-> { PayBand.reorder!(@bands.reverse.map(&:id)) }) do
+    holding(-> { reorder_pay_bands!(@bands.reverse.map(&:id)) }) do
       inserted = Thread.new do
         insert_rate
       rescue ActiveRecord::LockWaitTimeout
@@ -36,7 +40,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
   should "stamp the tenant in the same transaction as the new order" do
     statements = []
     record = ->(*, payload) { statements << payload[:sql] }
-    ActiveSupport::Notifications.subscribed(record, "sql.active_record") { assert_equal true, PayBand.reorder!(@bands.reverse.map(&:id)) }
+    ActiveSupport::Notifications.subscribed(record, "sql.active_record") { reorder_pay_bands!(@bands.reverse.map(&:id)) }
 
     stamped = statements.index { it.start_with?('UPDATE "tenants"') }
     assert_operator stamped, :<, statements.index { it.start_with?("COMMIT") }
@@ -48,8 +52,9 @@ class PayBandLockingTest < ActiveSupport::TestCase
     @tenant.update_column(:pay_bands_changed_at, before)
     ids = @bands.map(&:id)
 
-    assert_not PayBand.reorder!(ids.first(2))
-    assert_equal :stale, PayBand.reorder!(ids.reverse, from: ids.rotate)
+    assert_raises(TenantPlanningInputs::Refused) { reorder_pay_bands!(ids.first(2)) }
+    stale = assert_raises(TenantPlanningInputs::Refused) { reorder_pay_bands!(ids.reverse, from: ids.rotate) }
+    assert_match "has changed since you read it", stale.message
     assert_equal before, @tenant.reload.pay_bands_changed_at
   end
 
@@ -57,27 +62,32 @@ class PayBandLockingTest < ActiveSupport::TestCase
     read = @bands.map(&:id)
     second = nil
 
-    holding(-> { PayBand.reorder!(read.reverse, from: read) }) do
+    holding(-> { reorder_pay_bands!(read.reverse, from: read) }) do
       pids = Queue.new
       second = Thread.new do
-        on_another_connection { |connection| pids << connection.select_value("SELECT pg_backend_pid()"); PayBand.reorder!(read.rotate, from: read) }
+        on_another_connection do |connection|
+          pids << connection.select_value("SELECT pg_backend_pid()")
+          reorder_pay_bands!(read.rotate, from: read)
+        rescue TenantPlanningInputs::Refused => e
+          e.message
+        end
       end
       assert_waiting_for_list(pids, second)
     end
 
-    assert_equal :stale, second.value
+    assert_match "has changed since you read it", second.value
     assert_equal read.reverse, PayBand.order(:position).pluck(:id)
   end
 
   should "make a new band wait for a reorder and take a place of its own" do
     added = nil
 
-    holding(-> { PayBand.reorder!(@bands.reverse.map(&:id)) }) do
+    holding(-> { reorder_pay_bands!(@bands.reverse.map(&:id)) }) do
       pids = Queue.new
       added = Thread.new do
         on_another_connection do |connection|
           pids << connection.select_value("SELECT pg_backend_pid()")
-          PayBand.new(location: "Lemuria", currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2).tap { it.match_on }.tap(&:save!)
+          any_band("Lemuria")
         end
       end
       assert_waiting_for_list(pids, added)
@@ -88,6 +98,10 @@ class PayBandLockingTest < ActiveSupport::TestCase
   end
 
   private
+
+  def any_band(location)
+    save_planning_input!(:pay_bands, PayBand.new(location:, currency: "AUD", period: "year", minimum: 0, midpoint: 1, maximum: 2).tap { it.match_on })
+  end
 
   # Runs the write in a transaction on its own connection and holds it open
   # while the block runs, then commits.

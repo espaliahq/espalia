@@ -11,6 +11,7 @@ require_relative "support/org_graph_fixture"
 require_relative "support/feedback_exchange_producer_helpers"
 require_relative "support/offline_hibob"
 require_relative "support/pay_figure_assertions"
+require_relative "support/planning_inputs_helpers"
 require_relative "support/write_catalogue"
 require_relative "support/paused_run"
 require_relative "support/test_database_autovacuum"
@@ -30,6 +31,7 @@ module ActiveSupport
     parallelize_setup { TestDatabaseAutovacuum.turn_off }
 
     include FactoryBot::Syntax::Methods
+    include PlanningInputsHelpers
 
     teardown do
       OmniAuth.config.mock_auth.clear

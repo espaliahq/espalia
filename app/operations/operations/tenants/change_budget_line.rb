@@ -17,9 +17,6 @@ class Operations::Tenants::ChangeBudgetLine < Operations::Base
 
   # @return [Hash] the line, as tenants_budget_lines lists it
   def perform
-    line = find_line(params[:budget_line_id])
-    line.with_lock { line_payload(save_setting!(assign_line(line))) }
-  rescue ActiveRecord::RecordNotFound
-    raise Operations::Base::ParameterError, "There is no such budget line"
+    line_payload(save_setting!(:budget_lines) { assign_line(find_line(params[:budget_line_id])) })
   end
 end

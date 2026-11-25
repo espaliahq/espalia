@@ -85,20 +85,18 @@ class ExchangeRateTest < ActiveSupport::TestCase
   end
 
   should "keep one rate per pair and date" do
-    rate.save!
-    duplicate = rate(from: "nzd", rate: "0.7")
+    save_planning_input!(:exchange_rates, rate)
+    error = assert_raises(TenantPlanningInputs::Refused) { save_planning_input!(:exchange_rates, rate(from: "nzd", rate: "0.7")) }
 
-    assert_not duplicate.valid?
-    assert_includes duplicate.errors[:base], "There is already a rate between NZD and AUD applying from 2026-07-01"
+    assert_equal "There is already a rate between NZD and AUD applying from 2026-07-01", error.message
   end
 
   should "refuse the reverse pair on the same date, which would contradict the rate" do
-    rate.save!
-    reverse = rate(from: "AUD", to: "NZD", rate: "4")
+    save_planning_input!(:exchange_rates, rate)
+    error = assert_raises(TenantPlanningInputs::Refused) { save_planning_input!(:exchange_rates, rate(from: "AUD", to: "NZD", rate: "4")) }
 
-    assert_not reverse.valid?
-    assert_includes reverse.errors[:base], "There is already a rate between AUD and NZD applying from 2026-07-01"
-    assert rate(from: "AUD", to: "NZD", rate: "2", applies_from: JULY.next_day).valid?
+    assert_equal "There is already a rate between AUD and NZD applying from 2026-07-01", error.message
+    assert save_planning_input!(:exchange_rates, rate(from: "AUD", to: "NZD", rate: "2", applies_from: JULY.next_day))
   end
 
   should "refuse a rate that isn't positive, a currency ISO doesn't list, or one currency twice" do

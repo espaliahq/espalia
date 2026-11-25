@@ -64,7 +64,7 @@ class Operations::TeamPlanning::ForecastTest < ActiveSupport::TestCase
       family = create(:framework_role_family, name: "Engineering")
       role = create(:framework_role, code: "E", name: "Software Engineer", role_family_id: family.role_family_id)
       level = create(:framework_level, role_id: role.role_id, ordinal: 5, title: "Senior SWE")
-      PayBand.create!(level:, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
+      add_pay_band!(level:, currency: "EUR", period: "year", minimum: 0, midpoint: 100_000, maximum: 200_000)
       ada = create(:person, tenant: @tenant, name: "Ada Quill")
       people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       people.record_person(ada.id, provider: "espalia", effective_on: "2025-12-01", employment_status: "employed", title: "Software Engineer", level: "5")
