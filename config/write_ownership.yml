@@ -171,20 +171,17 @@ people:
     - status
   reason: >-
     The row holds a person's identifiers, which must be erasable. The HiBob adapter writes the
-    projection's columns only before a tenant is cut over. The seeds never cut the demo tenant over,
-    so the calibration history seed moves reporting lines on the row, which manager-rating authority
-    falls back to; it also records each move on the person's development stream (#572).
+    projection's columns only before a tenant is cut over. The seeds write rows before they cut a
+    tenant over, and change the columns with Org Graph commands after it.
   writers:
     - app/contexts/org_graph/forgetting.rb
     - app/integrations/hris/hibob/adapter.rb
     - app/models/tenant_user.rb
-    - lib/tasks/calibration_history_seed.rb
     - lib/tasks/evidence_suggestions_eval.rb
     - lib/tasks/example_seed.rb
     - lib/tasks/stress_seed.rb
   column_writers:
     - app/integrations/hris/hibob/adapter.rb
-    - lib/tasks/calibration_history_seed.rb
 tenant_users:
   owner: account_grants/account_flags
   columns:

@@ -33,6 +33,47 @@ class ExampleSeedTest < ActiveSupport::TestCase
     assert_equal counts, ActsAsTenant.with_tenant(rerun) { snapshot }, "a re-run converges"
   end
 
+  should "record everyone in the Org Graph and cut the demo tenant over" do
+    tenant = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
+
+    assert tenant.reload.org_graph_people_projected?
+    ActsAsTenant.with_tenant(tenant) do
+      assert_equal Person.pluck(:id).sort, OrgGraph::Projections::PeopleColumns.recorded_person_ids(tenant).sort
+      assert_equal Person.find_by!(email: "imogen@nullisland.example").id,
+                   Person.find_by!(email: "theo@nullisland.example").manager.manager_id
+    end
+  end
+
+  should "leave a reporting line the Org Graph moved on a re-run" do
+    tenant = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
+    theo, june = ActsAsTenant.with_tenant(tenant) do
+      %w[theo june].map { Person.find_by!(email: "#{it}@nullisland.example") }
+    end
+    ActsAsTenant.with_tenant(tenant) do
+      SeedOrgGraph.as_system do |org_graph|
+        org_graph.change_manager(theo.id, june.id, provider: OrgGraph::StructureAggregate::ESPALIA, effective_on: Date.current)
+      end
+    end
+
+    ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
+
+    assert_equal june.id, theo.reload.manager_id
+  end
+
+  should "record someone added to the seed after the cut-over in the Org Graph" do
+    tenant = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
+    with_people("wren" => [ "Wren Ashby", "Engineer", "Engineering", "marisol", nil, nil, false ]) do
+      ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
+    end
+
+    ActsAsTenant.with_tenant(tenant) do
+      wren = Person.find_by!(email: "wren@nullisland.example")
+      assert_includes OrgGraph::Projections::PeopleColumns.recorded_person_ids(tenant), wren.id
+      assert_equal [ "Engineer", Person.find_by!(email: "marisol@nullisland.example").id, "active" ],
+                   [ wren.job_title, wren.manager_id, wren.status ]
+    end
+  end
+
   should "leave the demo cycle alone once the calibration seed has closed it" do
     tenant = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
     ActsAsTenant.with_tenant(tenant) do
@@ -48,6 +89,16 @@ class ExampleSeedTest < ActiveSupport::TestCase
   end
 
   private
+
+  def with_people(extra)
+    original = ExampleSeed::PEOPLE
+    ExampleSeed.send(:remove_const, :PEOPLE)
+    ExampleSeed.const_set(:PEOPLE, original.merge(extra))
+    yield
+  ensure
+    ExampleSeed.send(:remove_const, :PEOPLE)
+    ExampleSeed.const_set(:PEOPLE, original)
+  end
 
   def snapshot
     framework = FrameworkState::Framework.first
