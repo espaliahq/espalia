@@ -294,7 +294,15 @@ jobs:
           RAILS_ENV: test
           DB_HOST: localhost
           SYSTEM_TEST_WORKERS: ${{ vars.CI_SYSTEM_TEST_WORKERS || '1' }}
+          # Records every write, for the next step to check (docs/architecture/direct-writes.md).
+          WRITE_CATALOGUE: "1"
         run: bin/rails db:test:prepare test:system
+
+      - name: Check every write against config/write_ownership.yml
+        env:
+          RAILS_ENV: test
+          DB_HOST: localhost
+        run: bin/rails write_ownership:check
 
       - name: Keep screenshots from failed system tests
         uses: actions/upload-artifact@v7
