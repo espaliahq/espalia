@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "yaml"
+require_relative "write_catalogue_report"
 
 # Reads config/write_ownership.yml, which says who may write each table, and
 # checks it against the schema and against what a WRITE_CATALOGUE=1 run recorded.
@@ -11,6 +12,13 @@ class WriteOwnership
   RAILS_TABLES = %w[ar_internal_metadata schema_migrations].freeze
   # The recorder keeps only sites under these.
   SOURCE_DIRS = %w[app/ lib/].freeze
+  # Library calls that write: Doorkeeper's token revocation and Noticed's delivery and read marks.
+  LIBRARY_WRITES = /revoke|mark_as_(?:un)?read|mark_as_(?:un)?seen|deliver(?:_later)?/
+  WRITE_NAME = /#{WriteCatalogueReport::PERSISTENCE_METHODS}|#{LIBRARY_WRITES}/
+  # A call with a receiver, or one without that names its arguments in brackets,
+  # so `only: %i[create update]` doesn't count.
+  WRITE_CALL = /(?:\.(?:#{WRITE_NAME})(?=[\s(!]|$)|(?:^|[^\w:.])(?:#{WRITE_NAME})\()/
+  DEFINITION = /\A\s*def\s+(?:self\.)?(\w+[!?]?)/
 
   # One table's declaration.
   Entry = Struct.new(:table, :owner, :columns, :reason, :writers, :column_writers, keyword_init: true) do
@@ -82,7 +90,26 @@ class WriteOwnership
   def file_problem(name, path)
     return "#{name}: writer #{path} is outside app/ and lib/" unless path.start_with?(*SOURCE_DIRS)
 
-    "#{name}: writer #{path} is no file" unless Rails.root.join(path).file?
+    file = Rails.root.join(path)
+    return "#{name}: writer #{path} is no file" unless file.file?
+
+    "#{name}: writer #{path} makes no persistence call. Remove it from the writers." unless writes?(file)
+  end
+
+  # A file writes if a line calls a write, or a method named after one calls
+  # super, as a controller does when a library's action makes the write.
+  def writes?(file)
+    method = nil
+    File.foreach(file).any? do |line|
+      next false if line.lstrip.start_with?("#") || WriteCatalogueReport::NOT_PERSISTENCE.match?(line)
+
+      if (defined = line[DEFINITION, 1])
+        method = defined
+        next false
+      end
+
+      WRITE_CALL.match?(line) || (/\A\s*super\b/.match?(line) && method&.match?(/\A(?:#{WRITE_NAME})\z/))
+    end
   end
 
   def needs_reason?(entry)
