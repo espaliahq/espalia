@@ -144,6 +144,20 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
       RUBY
     end
 
+    should "pass a command on an aggregate the repository yields as _1 or it" do
+      assert_empty offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb")
+        @repository.with_framework(framework_id) { _1.create(framework_id, name) }
+        @repository.with_framework(framework_id) { it.create(framework_id, name) }
+      RUBY
+    end
+
+    should "flag a record that a nearer _1 or it block yields" do
+      assert_equal 2, offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb").size
+        @repository.with_framework(framework_id) { |framework| records.each { _1.destroy! } }
+        @repository.with_framework(framework_id) { records.each { it.destroy! } }
+      RUBY
+    end
+
     should "pass the aggregate used inside a nested block that doesn't rebind it" do
       assert_empty offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb")
         @repository.with_framework(framework_id) do |framework|

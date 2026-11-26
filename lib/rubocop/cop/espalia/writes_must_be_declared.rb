@@ -124,7 +124,7 @@ module RuboCop
           return false unless node.receiver.lvar_type?
 
           name = node.receiver.children.first
-          binder = node.each_ancestor(:block).find { |block| block.argument_list.map(&:name).include?(name) }
+          binder = node.each_ancestor(:any_block).find { |block| block.argument_list.map(&:name).include?(name) }
           binder ? repository_yield?(binder.send_node) : false
         end
 
