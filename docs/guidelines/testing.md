@@ -584,6 +584,26 @@ window, so minimize after any resize. On CI, each worker prints its Chrome and
 ChromeDriver versions once (`[system test] Chrome …`), so a new failure family
 can be matched to a browser update.
 
+**Don't assert painting in a minimized window.** Emulation makes the page
+report itself visible and focused, but whether a hidden window paints is the
+browser's choice. Minimizing hides the tab's content window; frames keep
+coming only as a side effect of the capture emulation takes out, and the HTML
+spec promises no rendering opportunity for content the browser can't show. No
+Chrome flag guarantees them. A frame wait there passed nearly every run and
+then, deep into a long suite, never fired
+([espaliahq/espalia#591](https://github.com/espaliahq/espalia/issues/591)).
+Assert `document.visibilityState` instead: it reads `hidden` without emulation
+and `visible` with it, which is the promise emulation makes. A visible page
+still may get no frames while its window is minimized. This reading of
+Chromium is from `main` and may differ in detail from the pinned Chrome:
+`content/browser/devtools/protocol/emulation_handler.cc`
+(`SetFocusEmulationEnabled` takes a visible capture),
+`content/browser/web_contents/web_contents_impl.cc`
+(`CalculatePageVisibilityState` reports visible while one is held),
+`ui/ozone/platform/headless/headless_window.cc` (`Minimize`) and
+`ui/views/widget/desktop_aura/desktop_window_tree_host_platform.cc`
+(`OnWindowStateChanged` hides the content window).
+
 ## Chrome's Password Leak Check Is Off
 
 **`ApplicationSystemTestCase` turns off Chrome's password leak check
