@@ -31,14 +31,14 @@ hris_sync_issues:
 
 **A table moving onto a stream** changes its entry from `plain` to its projection. Leave the old writers listed, with the reason, until the PR that stops their writes removes them.
 
-**A new writer** is added to its table's `writers`. CI's test job runs the suite with `WRITE_CATALOGUE=1`, then `bin/rails write_ownership:check`, which fails on:
+**A new writer** is added to its table's `writers`. CI's `test` and `system-test` jobs each run their suite with `WRITE_CATALOGUE=1`, then `bin/rails write_ownership:check`, which fails on:
 
 - a write from a file the entry doesn't name;
 - a projection writing a table another projection owns;
 - a projection writing a column its entry doesn't give it, or deleting rows of a table where it owns only columns;
 - a writer updating a column a projection owns, unless the file is among `column_writers`.
 
-A write a test makes itself is never checked. The check matches files, not lines, so moving code within a file doesn't break it. It sees only what the unit tests write: a writer only a system test reaches still belongs in the entry, but CI won't fail without it. To check those too, run the whole suite with `WRITE_CATALOGUE=1 bin/rails test:all`, then the check.
+A write a test makes itself is never checked. The check matches files, not lines, so moving code within a file doesn't break it. The system tests' writes are recorded too, including those the app server makes while a browser drives it, as it runs in the same process. To check everything locally, run the whole suite with `WRITE_CATALOGUE=1 bin/rails test:all`, then the check.
 
 ## How the list was made
 
@@ -51,7 +51,7 @@ bin/rails development:write_catalogue
 
 `test/support/write_catalogue.rb` subscribes to `sql.active_record` and keeps each `INSERT`, `UPDATE` and `DELETE` with its table, its columns, the projection it ran inside (if any) and the nearest frame in `app/` or `lib/`. A write a test makes, even from a stub, has no site. A run first empties `tmp/write_catalogue/`, then each worker writes `<pid>.json` there. The rake task merges them into `tmp/write_catalogue/report.md` and prints the findings.
 
-It is off unless `WRITE_CATALOGUE=1`. CI's test job turns it on, which cost about 4% on the non-system suite (349s against 336s); the precommit leaves it off. The run behind this page covered every test, system tests included.
+It is off unless `WRITE_CATALOGUE=1`. CI's `test` and `system-test` jobs turn it on, which cost about 4% on the non-system suite (349s against 336s); the precommit leaves it off. The run behind this page covered every test, system tests included.
 
 **A finding** is a write from our code, outside a projection, to a table whose rows a projection writes, or an update to a column a projection writes. An upsert counts as an update to the columns its `ON CONFLICT … DO UPDATE` sets. The run checks that from what projections actually wrote, so it needs no list of owners. An insert names every column whether it sets it or not, so inserts into `people` and `tenant_users`, whose projections own only columns, are listed under their tables below rather than as findings.
 
