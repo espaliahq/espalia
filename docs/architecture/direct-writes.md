@@ -87,7 +87,7 @@ Each section names the writers the run saw and recommends one of two things: **k
 
 ### Event store
 
-`event_store_events` and `event_store_events_in_streams` are the events. RailsEventStore writes them. **Keep.** The one other writer is `app/contexts/team_planning/name_sealing.rb`, the sanctioned rewrite that seals plan names ([#209](https://github.com/espaliahq/espalia/issues/209)). The recorded check doesn't watch the event store's own tables, so that entry is held by the lint cop alone.
+`event_store_events` and `event_store_events_in_streams` are the events. RailsEventStore writes them. **Keep.** The one other writer is `app/contexts/team_planning/name_sealing.rb`, the sanctioned rewrite that seals plan names ([#209](https://github.com/espaliahq/espalia/issues/209)). The recorded check doesn't watch the event store's own tables, and the lint cop checks files, not tables: it passes a file any entry names, or one on a projection path, whatever that file writes. So nothing in CI holds `event_store_events` to this one writer; review does.
 
 ### `projection_versions`
 
