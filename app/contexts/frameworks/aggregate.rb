@@ -350,7 +350,8 @@ class Frameworks::Aggregate
   # @param category_id [String] UUID of the category
   # @param deficit_threshold [Numeric, String, nil] nil inherits the framework's
   # @raise [RuntimeError] if the category does not exist or is archived
-  # @raise [ArgumentError] if the threshold is not a non-negative number
+  # @raise [ArgumentError] if the threshold is negative, not a number, 1000 or
+  #   more, or has more than two decimal places
   def set_category_deficit_threshold(framework_id, category_id, deficit_threshold)
     ensure_created!
     raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
@@ -1308,7 +1309,7 @@ class Frameworks::Aggregate
       raise ArgumentError, "Deficit threshold must be below 1000 with at most two decimal places, got #{value.inspect}"
     end
 
-    decimal.to_s("F")
+    (decimal.zero? ? BigDecimal(0) : decimal).to_s("F")
   end
 
   # The performance-state machine walks underperforming → meeting → mastery

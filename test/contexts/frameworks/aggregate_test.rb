@@ -304,6 +304,12 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       assert_equal "999.99", @aggregate.capability_categories[@cat_id][:deficit_threshold]
     end
 
+    should "carry negative zero as zero, as the column stores it" do
+      @aggregate.set_category_deficit_threshold(@framework_id, @cat_id, "-0")
+
+      assert_equal "0.0", @aggregate.unpublished_events.to_a.last.data[:deficit_threshold]
+    end
+
     should "refuse an unknown or archived category" do
       err = assert_raises(RuntimeError) do
         @aggregate.set_category_deficit_threshold(@framework_id, SecureRandom.uuid_v7, 1)
