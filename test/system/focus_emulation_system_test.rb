@@ -30,14 +30,34 @@ class FocusEmulationSystemTest < ApplicationSystemTestCase
     assert state["hasFocus"], "the page lost focus with its window"
     assert state["focus"], "a script focus did not match :focus"
     assert state["focusVisible"], "a script focus did not match :focus-visible"
-    assert_selector "html[data-animation-frame='ran']", visible: :all
+    assert page.has_selector?("html[data-animation-frame='ran']", visible: :all),
+           -> { "no animation frame ran in the minimized window; the page reported #{page_state}" }
+  ensure
+    restore_window
   end
 
   private
 
-  def minimize_window
+  def minimize_window = set_window_state("minimized")
+
+  # A stalled minimized window paints nothing, so the failure screenshot
+  # times out unless the window is restored first (#591).
+  def restore_window
+    set_window_state("normal")
+  rescue Selenium::WebDriver::Error::WebDriverError => error
+    warn "[system test] Could not restore the window: #{error.message.lines.first}"
+  end
+
+  def set_window_state(state)
     browser = page.driver.browser
     window = browser.execute_cdp("Browser.getWindowForTarget")["windowId"]
-    browser.execute_cdp("Browser.setWindowBounds", windowId: window, bounds: { windowState: "minimized" })
+    browser.execute_cdp("Browser.setWindowBounds", windowId: window, bounds: { windowState: state })
+  end
+
+  def page_state
+    visibility, focused = page.evaluate_script("[document.visibilityState, document.hasFocus()]")
+    "visibilityState #{visibility.inspect}, hasFocus #{focused}"
+  rescue Selenium::WebDriver::Error::WebDriverError => error
+    "nothing: #{error.message.lines.first.strip}"
   end
 end
