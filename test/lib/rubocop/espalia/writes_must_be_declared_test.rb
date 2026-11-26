@@ -70,6 +70,15 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
       RUBY
     end
 
+    should "flag update on a record held in a local named like a request object" do
+      assert_equal 2, offenses_for(<<~RUBY).size
+        session = Tenant.find(id)
+        session.update(name: name)
+        params = Person.find(id)
+        params.update(name: name)
+      RUBY
+    end
+
     should "flag save with keyword options only" do
       assert_equal 2, offenses_for(<<~RUBY).size
         record.save
@@ -131,6 +140,22 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
       assert_empty offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb")
         @repository.with_framework(framework_id) do |framework|
           framework.create(framework_id, name)
+        end
+      RUBY
+    end
+
+    should "pass the aggregate used inside a nested block that doesn't rebind it" do
+      assert_empty offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb")
+        @repository.with_framework(framework_id) do |framework|
+          roles.each { |role| framework.create(framework_id, role) }
+        end
+      RUBY
+    end
+
+    should "flag a record in a nearer block that rebinds the aggregate's name" do
+      assert_equal 1, offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb").size
+        @repository.with_framework(framework_id) do |framework|
+          FrameworkState::Framework.all.each { |framework| framework.destroy! }
         end
       RUBY
     end

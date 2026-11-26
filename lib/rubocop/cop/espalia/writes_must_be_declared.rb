@@ -14,11 +14,12 @@ module RuboCop
       # The match is by method name, so it can't tell which table a call
       # writes, and a named file may write any table. The recorded check in
       # CI (`write_ownership:check`) holds each write to its own table.
-      # `update` counts on any receiver but the request's and the view's own
-      # objects (`session`, `turbo_stream` and the rest of NON_RECORDS) and a
-      # literal. `delete` and `insert` count only on a constant or a query
-      # built from one (`Person.where(...).delete`), as `ids.delete(id)` writes
-      # nothing; on an association they look like an array's, so they pass. A `save`
+      # `update` counts on any receiver but a literal and the request's and the
+      # view's own objects called by name (`session`, `turbo_stream` and the
+      # rest of NON_RECORDS); a local of the same name may hold a record.
+      # `delete` and `insert` count only on a constant or a query built from
+      # one (`Person.where(...).delete`), as `ids.delete(id)` writes nothing;
+      # on an association they look like an array's, so they pass. A `save`
       # given a positional argument isn't ActiveRecord's, which takes only
       # keyword options.
       #
@@ -26,7 +27,8 @@ module RuboCop
       # `projections/` directory or `app/read_models` passes by its path: the
       # recorded check holds it to its tables. A command on an aggregate the
       # repository yields (`@repository.with_plan(id) { |plan| plan.create }`)
-      # records an event, not a row, so it passes too.
+      # records an event, not a row, so it passes too, unless a nearer block
+      # rebinds the name.
       #
       # @example bad
       #   # in a file the declaration doesn't name
@@ -119,19 +121,22 @@ module RuboCop
         end
 
         def aggregate_command?(node)
-          name = node.receiver.lvar_type? && node.receiver.children.first
-          name && node.each_ancestor(:block).any? do |block|
-            yielder = block.send_node
-            yielder.receiver&.ivar_type? && yielder.receiver.children.first == :@repository &&
-              yielder.method_name.start_with?("with_") && block.argument_list.map(&:name).include?(name)
-          end
+          return false unless node.receiver.lvar_type?
+
+          name = node.receiver.children.first
+          binder = node.each_ancestor(:block).find { |block| block.argument_list.map(&:name).include?(name) }
+          binder ? repository_yield?(binder.send_node) : false
+        end
+
+        def repository_yield?(yielder)
+          yielder.receiver&.ivar_type? && yielder.receiver.children.first == :@repository &&
+            yielder.method_name.start_with?("with_")
         end
 
         def non_record?(receiver)
           return true if receiver.hash_type? || receiver.array_type?
 
-          name = receiver.lvar_type? ? receiver.children.first : (receiver.method_name if receiver.send_type? && receiver.receiver.nil?)
-          NON_RECORDS.include?(name)
+          receiver.send_type? && receiver.receiver.nil? && NON_RECORDS.include?(receiver.method_name)
         end
 
         def model_query?(receiver)
