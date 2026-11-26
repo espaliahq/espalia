@@ -882,6 +882,19 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       within_tenant { assert_equal %w[E1], FrameworkState::Level.where(role_id: role_id).pluck(:code) }
     end
 
+    should "reset! + replay leave the explorer graph snapshot alone" do
+      append_and_project(Frameworks::Events::FrameworkCreated,
+        framework_id: @framework_id, name: "me&u 2025")
+      within_tenant { Frameworks::ExplorerGraph.rebuild(@framework_id) }
+      stored = within_tenant { FrameworkExplorerGraph.find(@framework_id).attributes }
+
+      Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
+      within_tenant { assert_equal stored, FrameworkExplorerGraph.find(@framework_id).attributes }
+
+      Projections::Replayer.replay(projection_class: Frameworks::Projections::PublishedState, tenant: @tenant)
+      within_tenant { assert_equal stored, FrameworkExplorerGraph.find(@framework_id).attributes }
+    end
+
     should "reset! + replay produces identical read-model state" do
       rfid = SecureRandom.uuid_v7
       rid  = SecureRandom.uuid_v7

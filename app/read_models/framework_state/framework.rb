@@ -28,12 +28,10 @@ class FrameworkState::Framework < ApplicationRecord
   has_many :suggested_edits, class_name: "FrameworkState::SuggestedEdit",
            primary_key: :framework_id, foreign_key: :framework_id,
            dependent: :destroy
-  # ExplorerGraph is 1:1 with a framework — the JSON snapshot that powers
-  # the Framework Explorer matrix. Cascades on Framework destroy so tenant
-  # teardown leaves no dangling row blocking the tenant FK.
+  # ExplorerGraph owns this cache of the stream, so the projection's reset
+  # leaves it alone.
   has_one :explorer_graph, class_name: "FrameworkExplorerGraph",
-          primary_key: :framework_id, foreign_key: :framework_id,
-          dependent: :destroy
+          primary_key: :framework_id, foreign_key: :framework_id
 
   validates :framework_id, presence: true
   validates :name, presence: true

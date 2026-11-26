@@ -8,10 +8,6 @@
 # `via_suggestion_id` decides the row: `accepted`, or `edited` when the link's
 # valence differs from the one suggested. A decision is final, as on the
 # aggregate.
-#
-# Until [#539](https://github.com/espaliahq/espalia/issues/539) c5, the release
-# before this one may still write the table directly during a deploy; the
-# suggestion commands record what it wrote before they act.
 class PersonDevelopment::Projections::EvidenceSuggestions
   PROJECTION_NAME = "person_development/evidence_suggestions"
   CODE_VERSION = 1
