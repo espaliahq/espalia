@@ -40,6 +40,8 @@ hris_sync_issues:
 
 A write a test makes itself is never checked. The check matches files, not lines, so moving code within a file doesn't break it. It sees only what the unit tests write: a writer only a system test reaches still belongs in the entry, but CI won't fail without it. To check those too, run the whole suite with `WRITE_CATALOGUE=1 bin/rails test:all`, then the check.
 
+**A write on a path no test runs** is caught by `lint`. `Espalia/WritesMustBeDeclared`, a RuboCop cop, flags a persistence call such as `update!`, `create` or `delete_all` anywhere under `app/operations`, `app/controllers`, `app/jobs` or `app/integrations`, in a file no entry names among its `writers` or `column_writers`. It reads those names from `config/write_ownership.yml`, so there is no second list. It matches by method name, so it can't tell which table a call writes: a named file passes whatever it writes, and the recorded check holds each write to its own table. It also misses a write made by a library method (Noticed's `mark_as_read`, Doorkeeper's `revoke`) or through a record held in a variable (`current_user.update`), as `update` counts only on a constant; the recorded check covers those. A call it flags that writes no table, such as an API client's `messages.create`, takes an inline `# rubocop:disable Espalia/WritesMustBeDeclared -- <why>`, never an `Exclude:` entry.
+
 ## How the list was made
 
 A test run records every database write, then a rake task reports on them.
