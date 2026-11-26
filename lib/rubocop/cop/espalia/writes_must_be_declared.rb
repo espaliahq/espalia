@@ -14,10 +14,11 @@ module RuboCop
       # The match is by method name, so it can't tell which table a call
       # writes, and a named file may write any table. The recorded check in
       # CI (`write_ownership:check`) holds each write to its own table.
-      # `delete`, `insert` and `update` count only on a constant or a query
-      # built from one (`Person.where(...).update`), as `session.delete` and
-      # `turbo_stream.update` write nothing. On an association or a record in
-      # a variable they look like any other object's, so they pass. A `save`
+      # `update` counts on any receiver but the request's and the view's own
+      # objects (`session`, `turbo_stream` and the rest of NON_RECORDS) and a
+      # literal. `delete` and `insert` count only on a constant or a query
+      # built from one (`Person.where(...).delete`), as `ids.delete(id)` writes
+      # nothing; on an association they look like an array's, so they pass. A `save`
       # given a positional argument isn't ActiveRecord's, which takes only
       # keyword options.
       #
@@ -46,7 +47,8 @@ module RuboCop
           update_attribute! delete_by destroy_by first_or_create first_or_create!
           update_counters increment_counter decrement_counter reset_counters
         ].to_set.freeze
-        CONSTANT_ONLY = %i[delete insert update].to_set.freeze
+        CONSTANT_ONLY = %i[delete insert].to_set.freeze
+        NON_RECORDS = %i[turbo_stream session cookies flash params headers].to_set.freeze
         QUERIES = %i[
           all where not rewhere find find_by find_by! first last take sole find_sole_by
           joins left_joins left_outer_joins includes preload eager_load references
@@ -101,10 +103,18 @@ module RuboCop
 
         def write?(node)
           name = node.method_name
+          return !non_record?(node.receiver) if name == :update
           return model_query?(node.receiver) if CONSTANT_ONLY.include?(name)
           return false if KEYWORD_ONLY.include?(name) && positional_argument?(node)
 
           WRITES.include?(name)
+        end
+
+        def non_record?(receiver)
+          return true if receiver.hash_type? || receiver.array_type?
+
+          name = receiver.lvar_type? ? receiver.children.first : (receiver.method_name if receiver.send_type? && receiver.receiver.nil?)
+          NON_RECORDS.include?(name)
         end
 
         def model_query?(receiver)

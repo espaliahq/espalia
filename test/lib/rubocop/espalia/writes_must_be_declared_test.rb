@@ -62,6 +62,14 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
       RUBY
     end
 
+    should "flag update on a record in a variable or an association" do
+      assert_equal 3, offenses_for(<<~RUBY).size
+        current_user.update(color_scheme: scheme)
+        @tenant.update(name: name)
+        tenant.people.update(manager_id: nil)
+      RUBY
+    end
+
     should "flag save with keyword options only" do
       assert_equal 2, offenses_for(<<~RUBY).size
         record.save
@@ -77,6 +85,18 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
         ids.insert(0, id)
         turbo_stream.update("flash", partial)
         Rails.cache.delete(key)
+        tenant.people.delete(person)
+      RUBY
+    end
+
+    should "accept update on the request's own objects and on a literal" do
+      assert_empty offenses_for(<<~RUBY)
+        session.update(return_to: path)
+        params.update(page: 1)
+        cookies.update(scheme: scheme)
+        flash.update(notice: text)
+        headers.update("X-Id" => id)
+        { a: 1 }.update(b: 2)
       RUBY
     end
 
