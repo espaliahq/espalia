@@ -76,6 +76,27 @@ class WriteOwnershipTest < ActiveSupport::TestCase
     ], problems
   end
 
+  should "count a write made through super, a bare bang or raw SQL, and not a look-alike" do
+    files = {
+      "def destroy = super\n" => true,
+      "def create\n  result = super\nend\n" => true,
+      "def persist = save!\n" => true,
+      "def go\n  connection.execute(sql)\nend\n" => true,
+      "def go\n  render turbo_stream.update(x) if @r.save\nend\n" => true,
+      "def create\n  1\nend\nincluded do\n  super\nend\n" => false,
+      "before_action :x, only: %i[create update]\ndef create(params)\n  params.update(a: 1)\nend\n" => false
+    }
+
+    files.each do |source, writes|
+      file = Tempfile.new([ "writer", ".rb" ])
+      file.write(source)
+      file.close
+      assert_equal writes, WriteOwnership.new({}).send(:writes?, Pathname(file.path)), source
+    ensure
+      file&.unlink
+    end
+  end
+
   context "checking a run's writes" do
     setup do
       @data = {

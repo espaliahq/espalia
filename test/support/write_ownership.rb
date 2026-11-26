@@ -14,10 +14,13 @@ class WriteOwnership
   SOURCE_DIRS = %w[app/ lib/].freeze
   # Library calls that write: Doorkeeper's token revocation and Noticed's delivery and read marks.
   LIBRARY_WRITES = /revoke|mark_as_(?:un)?read|mark_as_(?:un)?seen|deliver(?:_later)?/
-  WRITE_NAME = /#{WriteCatalogueReport::PERSISTENCE_METHODS}|#{LIBRARY_WRITES}/
-  # A call with a receiver, or one without that names its arguments in brackets,
-  # so `only: %i[create update]` doesn't count.
-  WRITE_CALL = /(?:\.(?:#{WRITE_NAME})(?=[\s(!]|$)|(?:^|[^\w:.])(?:#{WRITE_NAME})\()/
+  # Writes the report leaves out because ordinary code shares their names, such
+  # as Hash#delete. Counting one too many only lets a dead entry slip through.
+  OTHER_WRITES = /delete|insert!?|upsert!|execute|exec_(?:insert|update|delete)/
+  WRITE_NAME = /#{WriteCatalogueReport::PERSISTENCE_METHODS}|#{LIBRARY_WRITES}|#{OTHER_WRITES}/
+  # A call with a receiver, or one without that takes bracketed arguments or ends
+  # in a bang, so `only: %i[create update]` doesn't count.
+  WRITE_CALL = /(?:\.(?:#{WRITE_NAME})(?=[\s(!]|$)|(?:^|[^\w:.])(?:#{WRITE_NAME})(?:\(|(?<=!)))/
   DEFINITION = /\A\s*def\s+(?:self\.)?(\w+[!?]?)/
 
   # One table's declaration.
@@ -101,14 +104,21 @@ class WriteOwnership
   def writes?(file)
     method = nil
     File.foreach(file).any? do |line|
-      next false if line.lstrip.start_with?("#") || WriteCatalogueReport::NOT_PERSISTENCE.match?(line)
+      next false if line.lstrip.start_with?("#")
 
-      if (defined = line[DEFINITION, 1])
-        method = defined
+      code = line.gsub(WriteCatalogueReport::NOT_PERSISTENCE, "")
+      if (head = DEFINITION.match(code))
+        method = { name: head[1], indent: head[0][/\A\s*/] }
+        code = head.post_match
+        endless = code.match?(/\A\s*(?:\([^)]*\))?\s*=[^=~>]/)
+      elsif method && code.match?(/\A#{method[:indent]}end\b/)
+        method = nil
         next false
       end
 
-      WRITE_CALL.match?(line) || (/\A\s*super\b/.match?(line) && method&.match?(/\A(?:#{WRITE_NAME})\z/))
+      writes = WRITE_CALL.match?(code) || (code.match?(/\bsuper\b/) && method&.dig(:name)&.match?(/\A(?:#{WRITE_NAME})\z/))
+      method = nil if endless
+      writes
     end
   end
 
