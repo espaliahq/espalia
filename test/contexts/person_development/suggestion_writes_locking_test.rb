@@ -59,13 +59,17 @@ class PersonDevelopment::SuggestionWritesLockingTest < ActiveSupport::TestCase
 
   def wait_until_waiting(command, behind:)
     erase_pid = behind.exec("SELECT pg_backend_pid()").getvalue(0, 0).to_i
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 20
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 10
     while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
       flunk "the command finished without waiting: #{command.value.inspect}" unless command.alive?
+      # Inside the erase's transaction pg_stat_activity is a snapshot taken at
+      # the first read, so a command that connects later never shows without this.
+      behind.exec("SELECT pg_stat_clear_snapshot()")
       return if behind.exec_params("SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))", [ erase_pid ]).ntuples.positive?
 
       sleep 0.1
     end
+    behind.exec("SELECT pg_stat_clear_snapshot()")
     sessions = behind.exec("SELECT pid, state, wait_event_type, wait_event FROM pg_stat_activity WHERE datname = current_database()")
     flunk "the command never waited on the erase (pid #{erase_pid}): #{sessions.values.inspect}"
   end
