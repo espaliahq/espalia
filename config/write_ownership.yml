@@ -60,13 +60,9 @@ framework_capabilities:
     - lib/tasks/evidence_suggestions_eval.rb
 framework_capability_categories:
   owner: frameworks/published_state
-  reason: >-
-    The evidence evaluation builds a throwaway tenant and rolls it back. No command carries a
-    category's threshold yet, so the framework seed sets it on the row after publishing, and a
-    rebuild loses it (#571).
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
   writers:
     - lib/tasks/evidence_suggestions_eval.rb
-    - lib/tasks/seed_framework.rake
 framework_capability_role_bindings:
   owner: frameworks/published_state
   reason: The evidence evaluation builds a throwaway tenant and rolls it back.
