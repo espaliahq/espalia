@@ -1303,6 +1303,10 @@ class Frameworks::Aggregate
     unless decimal&.finite? && !decimal.negative?
       raise ArgumentError, "Deficit threshold must be a non-negative number, got #{value.inspect}"
     end
+    # The category column is numeric(5, 2): refuse what it would round or overflow.
+    unless decimal.round(2) == decimal && decimal < 1000
+      raise ArgumentError, "Deficit threshold must be below 1000 with at most two decimal places, got #{value.inspect}"
+    end
 
     decimal.to_s("F")
   end

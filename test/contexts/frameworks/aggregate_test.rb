@@ -296,6 +296,14 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse a threshold the category column would round or overflow" do
+      [ "0.005", 1000 ].each do |value|
+        assert_raises(ArgumentError) { @aggregate.set_category_deficit_threshold(@framework_id, @cat_id, value) }
+      end
+      @aggregate.set_category_deficit_threshold(@framework_id, @cat_id, "999.99")
+      assert_equal "999.99", @aggregate.capability_categories[@cat_id][:deficit_threshold]
+    end
+
     should "refuse an unknown or archived category" do
       err = assert_raises(RuntimeError) do
         @aggregate.set_category_deficit_threshold(@framework_id, SecureRandom.uuid_v7, 1)
