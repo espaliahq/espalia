@@ -11,10 +11,11 @@ class WriteCatalogueReport
   ROW_WRITES = %w[insert upsert delete].freeze
   # A text search for persistence calls. It over-matches (Hash#update), and a
   # line it finds may be reached and still write nothing, when a save has no changes.
-  PERSISTENCE_CALL = /\.(save!?|update!?|update_all|update_columns?|update_attribute|create!?|insert_all!?|
-                       upsert_all|upsert|delete_all|delete_by|destroy!?|destroy_all|destroy_by|touch|touch_all|
-                       increment!|decrement!|toggle!|find_or_create_by!?|create_or_find_by!?|first_or_create!?|
-                       update_counters|increment_counter)(?=[\s(!]|$)/x
+  PERSISTENCE_METHODS = /save!?|update!?|update_all|update_columns?|update_attribute|create!?|insert_all!?|
+                         upsert_all|upsert|delete_all|delete_by|destroy!?|destroy_all|destroy_by|touch|touch_all|
+                         increment!|decrement!|toggle!|find_or_create_by!?|create_or_find_by!?|first_or_create!?|
+                         update_counters|increment_counter/x
+  PERSISTENCE_CALL = /\.(#{PERSISTENCE_METHODS})(?=[\s(!]|$)/
   # Calls that share a name with a persistence call and write nothing.
   NOT_PERSISTENCE = /turbo_stream\.update|messages\.create|params\.update/
   SEARCHED = %w[app lib].freeze

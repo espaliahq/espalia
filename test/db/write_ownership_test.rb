@@ -47,7 +47,7 @@ class WriteOwnershipTest < ActiveSupport::TestCase
     file&.unlink
   end
 
-  should "refuse an entry with no reason, an unknown owner or column, or a writer that is no file of ours" do
+  should "refuse an entry with no reason, an unknown owner or column, or a writer that is no file of ours or writes nothing" do
     data = {
       "a" => { "owner" => "plain" },
       "b" => { "owner" => "frameworks/nope" },
@@ -55,7 +55,8 @@ class WriteOwnershipTest < ActiveSupport::TestCase
       "d" => { "owner" => "event_store", "columns" => [ "x" ] },
       "e" => { "owner" => "plain", "reason" => "r", "writer" => [] },
       "f" => { "owner" => "org_graph/people_columns", "columns" => %w[manger_id], "reason" => "r" },
-      "g" => { "owner" => "plain", "reason" => "r", "column_writers" => [ "app/models/person.rb" ] }
+      "g" => { "owner" => "plain", "reason" => "r", "column_writers" => [ "app/models/person.rb" ] },
+      "h" => { "owner" => "plain", "reason" => "r", "writers" => [ "app/policies/application_policy.rb" ] }
     }
     tables = data.keys.index_with { %w[x manager_id] }
 
@@ -70,8 +71,30 @@ class WriteOwnershipTest < ActiveSupport::TestCase
       "d: say in reason why it is plain, or why the writers write it",
       "e: unknown key writer",
       "f: no column manger_id",
-      "g: column_writers need the columns a projection owns"
+      "g: column_writers need the columns a projection owns",
+      "h: writer app/policies/application_policy.rb makes no persistence call. Remove it from the writers."
     ], problems
+  end
+
+  should "count a write made through super, a bare bang or raw SQL, and not a look-alike" do
+    files = {
+      "def destroy = super\n" => true,
+      "def create\n  result = super\nend\n" => true,
+      "def persist = save!\n" => true,
+      "def go\n  connection.execute(sql)\nend\n" => true,
+      "def go\n  render turbo_stream.update(x) if @r.save\nend\n" => true,
+      "def create\n  1\nend\nincluded do\n  super\nend\n" => false,
+      "before_action :x, only: %i[create update]\ndef create(params)\n  params.update(a: 1)\nend\n" => false
+    }
+
+    files.each do |source, writes|
+      file = Tempfile.new([ "writer", ".rb" ])
+      file.write(source)
+      file.close
+      assert_equal writes, WriteOwnership.new({}).send(:writes?, Pathname(file.path)), source
+    ensure
+      file&.unlink
+    end
   end
 
   context "checking a run's writes" do

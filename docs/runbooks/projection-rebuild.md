@@ -115,6 +115,8 @@ Every count should be 0. If one isn't, run `bin/rails events:reconcile`: it reco
 
 **After a4b deploys, never roll back to a4 or a release before it.** Releases before a4 name `updated_by_id` while they serve, and the column is gone. a4 itself serves without it, but its predeploy `events:reconcile` reads the column, so a redeploy of a4 stops at predeploy with a4b still serving. To undo a4b, roll forward with a fix.
 
+**The release after a4b** ([#583](https://github.com/espaliahq/espalia/issues/583)) stops the models ignoring `updated_by_id`. Deploy a4b first and confirm its migration ran; do not skip to this release. A deployment that jumps from before a4b straight to it can have the migration refuse while its worker goes live without the ignore, which is the hazard the ignore was kept for.
+
 #### Recorded: suggestions stop the catch-up ([#539](https://github.com/espaliahq/espalia/issues/539) c5), with no bump
 
 No rebuild and no `CODE_VERSION` bump. c5 removes the catch-up a suggestion command and a framework migration ran before they decided, and the `evidence_suggestions` reconciler leaves `events:reconcile`. Deploy it only onto a release that holds c3's writes, where nothing writes `evidence_placement_suggestions` outside its projection.
