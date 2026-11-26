@@ -72,13 +72,13 @@ The unreached file is a benchmark. 1,075 files ran no write at all; most are vie
 
 ## Findings
 
-These are writes around a projection. None are fixed here.
+These are writes around a projection. None were fixed in this run; the table marks those fixed since.
 
 | Table or column | Written from | Why it matters | Suggested for 2b |
 |---|---|---|---|
 | `framework_capability_categories.deficit_threshold` | `lib/tasks/seed_framework.rake:166` | Sets a category's threshold on the read model after the framework is published. A rebuild of `frameworks/published_state` loses it. | Dispatch the command that sets it, or set it before publishing. Looks like a real bug in the seed. |
 | `people.manager_id`, `job_title`, `status` | HiBob adapter: `sync_people_with_org_graph` (line 169), `save_person` (507), `deactivate_removed` (678) | `org_graph/people_columns` owns these once a tenant is cut over. The adapter writes them only before cut-over, by design. | Remove the pre-cut-over path once every tenant is cut over. |
-| `people.manager_id` | `lib/tasks/calibration_history_seed.rb:197` | A development seed moves reporting lines on the row and records the reporting manager beside it. | Done ([#572](https://github.com/espaliahq/espalia/issues/572)): the seeds cut the demo tenant over, and the seed moves lines with `change_manager`. |
+| `people.manager_id` | `lib/tasks/calibration_history_seed.rb`, when this ran | A development seed moves reporting lines on the row and records the reporting manager beside it. | Done ([#572](https://github.com/espaliahq/espalia/issues/572)): the seeds cut the demo tenant over, and the seed moves lines with `change_manager`. |
 | Framework, evidence and assignment read models | `lib/tasks/evidence_suggestions_eval.rb` (lines 99 to 134) | The evaluation builds a throwaway tenant by inserting read-model rows, then rolls the transaction back. Nothing persists. | Keep. Say in the file that it never commits. |
 
 ## Plain tables
