@@ -66,16 +66,29 @@ module RuboCop
           end.to_set
         end
 
+        # Read once per lint run, and again only if the file changes during it.
+        # @return [Set<String>] the declared writers
+        def self.current_writers
+          stamp = File.mtime(DECLARATION)
+          @current_writers = nil unless @stamp == stamp
+          @stamp = stamp
+          @current_writers ||= declared_writers
+        end
+
         # A file's cached result must go when the declaration changes, or a
         # file dropped from it keeps passing.
+        # @return [String] the declaration's digest
         def external_dependency_checksum
           Digest::SHA256.file(DECLARATION).hexdigest
         end
 
+        # @return [void]
         def on_new_investigation
-          @declared = self.class.declared_writers.include?(relative_path)
+          @declared = self.class.current_writers.include?(relative_path)
         end
 
+        # @param node [RuboCop::AST::SendNode]
+        # @return [void]
         def on_send(node)
           return if @declared || node.receiver.nil?
           return unless write?(node)
