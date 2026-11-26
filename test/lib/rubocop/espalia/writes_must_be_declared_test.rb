@@ -109,6 +109,39 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
     end
   end
 
+  context "the wider scope" do
+    should "flag a write in a query file" do
+      assert_equal 1, offenses_for("Person.where(id: ids).update_all(state: \"left\")\n", path: "app/queries/example_query.rb").size
+    end
+
+    should "include every directory the rule covers" do
+      config = YAML.safe_load_file(Rails.root.join(".rubocop.yml"), aliases: true)
+      included = config.fetch("Espalia/WritesMustBeDeclared").fetch("Include")
+      %w[operations controllers jobs integrations contexts queries policies views components].each do |dir|
+        assert_includes included, "app/#{dir}/**/*.rb"
+      end
+    end
+
+    should "pass a write under a projections directory or app/read_models" do
+      assert_empty offenses_for("Person.where(id: id).update_all(state: state)\n", path: "app/contexts/org_graph/projections/members.rb")
+      assert_empty offenses_for("record.update!(state: state)\n", path: "app/read_models/example.rb")
+    end
+
+    should "pass a command on an aggregate the repository yields" do
+      assert_empty offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb")
+        @repository.with_framework(framework_id) do |framework|
+          framework.create(framework_id, name)
+        end
+      RUBY
+    end
+
+    should "flag the same call on a block argument of anything else" do
+      assert_equal 1, offenses_for(<<~RUBY, path: "app/contexts/frameworks/example.rb").size
+        tenants.each { |tenant| tenant.update(name: name) }
+      RUBY
+    end
+  end
+
   context "a file the declaration names" do
     should "accept every persistence call" do
       assert_empty offenses_for("tenant.update!(time_zone: zone)\n", path: NAMED)

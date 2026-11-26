@@ -55,8 +55,9 @@ Espalia/RatingsMustBeRoleScoped:
     - "lib/rubocop/**/*"
 
 # Its allowed files are the writers config/write_ownership.yml names; there is
-# no Exclude list. app/models and lib/ write by design, and the recorded check
-# covers them.
+# no Exclude list. Projections and app/read_models pass by path convention, in
+# the cop. app/models and lib/ write by design, and the recorded check covers
+# them.
 Espalia/WritesMustBeDeclared:
   Enabled: true
   Include:
@@ -64,6 +65,11 @@ Espalia/WritesMustBeDeclared:
     - "app/controllers/**/*.rb"
     - "app/jobs/**/*.rb"
     - "app/integrations/**/*.rb"
+    - "app/contexts/**/*.rb"
+    - "app/queries/**/*.rb"
+    - "app/policies/**/*.rb"
+    - "app/views/**/*.rb"
+    - "app/components/**/*.rb"
 
 # Overwrite or add rules to create your own house style
 #

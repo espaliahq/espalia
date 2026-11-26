@@ -22,6 +22,12 @@ module RuboCop
       # given a positional argument isn't ActiveRecord's, which takes only
       # keyword options.
       #
+      # A projection writes only its own tables, so a file under a
+      # `projections/` directory or `app/read_models` passes by its path: the
+      # recorded check holds it to its tables. A command on an aggregate the
+      # repository yields (`@repository.with_plan(id) { |plan| plan.create }`)
+      # records an event, not a row, so it passes too.
+      #
       # @example bad
       #   # in a file the declaration doesn't name
       #   tenant.update!(time_zone: zone)
@@ -56,6 +62,7 @@ module RuboCop
         ].to_set.freeze
         KEYWORD_ONLY = %i[save save!].to_set.freeze
 
+        BY_CONVENTION = %r{\A(app/read_models/|.*/projections/)}
         ROOT = File.expand_path("../../../..", __dir__)
         DECLARATION = File.join(ROOT, "config/write_ownership.yml")
 
@@ -86,7 +93,7 @@ module RuboCop
 
         # @return [void]
         def on_new_investigation
-          @declared = self.class.current_writers.include?(relative_path)
+          @declared = relative_path.match?(BY_CONVENTION) || self.class.current_writers.include?(relative_path)
         end
 
         # @param node [RuboCop::AST::SendNode]
@@ -94,6 +101,7 @@ module RuboCop
         def on_send(node)
           return if @declared || node.receiver.nil?
           return unless write?(node)
+          return if aggregate_command?(node)
 
           add_offense(node.loc.selector, message: format(MSG, method: node.method_name))
         end
@@ -108,6 +116,15 @@ module RuboCop
           return false if KEYWORD_ONLY.include?(name) && positional_argument?(node)
 
           WRITES.include?(name)
+        end
+
+        def aggregate_command?(node)
+          name = node.receiver.lvar_type? && node.receiver.children.first
+          name && node.each_ancestor(:block).any? do |block|
+            yielder = block.send_node
+            yielder.receiver&.ivar_type? && yielder.receiver.children.first == :@repository &&
+              yielder.method_name.start_with?("with_") && block.argument_list.map(&:name).include?(name)
+          end
         end
 
         def non_record?(receiver)
