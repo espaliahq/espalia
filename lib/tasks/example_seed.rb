@@ -126,18 +126,19 @@ class ExampleSeed
 
   # Once the tenant is cut over, the Org Graph owns each person's title,
   # manager and status: a re-run leaves them as their streams hold them, and
-  # records anyone new there instead of on the row.
+  # records anyone without a stream there instead of on the row, including
+  # someone whose recording failed on an earlier run.
   def upsert_people(tenant)
     @people = {}
     projected = tenant.org_graph_people_projected?
+    recorded = projected ? OrgGraph::Projections::PeopleColumns.recorded_person_ids(tenant).to_set : Set.new
     PEOPLE.each do |key, (name, title, department, manager_key, _role, _ordinal, _login)|
       person = Person.find_or_initialize_by(email: "#{key}@nullisland.example")
       manager_id = manager_key && @people.fetch(manager_key).id
       person.assign_attributes(name: name, department: department)
       person.assign_attributes(job_title: title, manager_id: manager_id, status: "active") unless projected
-      newcomer = projected && person.new_record?
       person.save!
-      record_newcomer(person, title:, manager_id:) if newcomer
+      record_newcomer(person, title:, manager_id:) if projected && !recorded.include?(person.id)
       @people[key] = person
     end
     SeedOrgGraph.cut_over!(tenant)
@@ -173,15 +174,14 @@ class ExampleSeed
     assigned = PersonFrameworkAssignment.where(framework_id: @framework.framework_id).pluck(:person_id).to_set
     roles = FrameworkState::Role.all.index_by(&:code)
     levels = FrameworkState::Level.all.index_by { |l| [ l.role_id, l.ordinal ] }
-    PEOPLE.each do |key, (_name, _title, _dept, manager_key, role_code, ordinal, _login)|
+    PEOPLE.each do |key, (_name, _title, _dept, _manager_key, role_code, ordinal, _login)|
       next if role_code.nil? || assigned.include?(person(key).id)
 
       role = roles.fetch(role_code)
       level = levels.fetch([ role.role_id, ordinal ])
       @development.assign_to_framework(person(key).id, @framework.framework_id, role.role_id, level.level_id)
-      if manager_key
-        @development.record_reporting_manager(person(key).id, @framework.framework_id,
-          person(manager_key).id, source: "backfill")
+      if (manager_id = person(key).manager_id)
+        @development.record_reporting_manager(person(key).id, @framework.framework_id, manager_id, source: "backfill")
       end
     end
   end
