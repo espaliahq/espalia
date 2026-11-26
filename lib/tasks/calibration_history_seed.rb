@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "seed_org_graph"
+
 # Advances a dev tenant through a sequence of assessment cycles so the
 # calibration surfaces have a HISTORY, not a single snapshot.
 #
