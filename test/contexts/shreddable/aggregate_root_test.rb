@@ -78,7 +78,7 @@ class Shreddable::AggregateRootTest < ActiveSupport::TestCase
   should "be the base of every aggregate in the app" do
     Rails.application.eager_load!
     aggregates = ObjectSpace.each_object(Class).select do |klass|
-      klass < AggregateRoot::AggregateMethods && Object.const_source_location(klass.name)&.first&.start_with?(Rails.root.join("app").to_s)
+      klass < AggregateRoot::AggregateMethods && klass.name && Object.const_source_location(klass.name)&.first&.start_with?(Rails.root.join("app").to_s)
     end
 
     assert_operator aggregates.size, :>=, 7
