@@ -27,7 +27,9 @@ hris_sync_issues:
     - app/models/hris_sync_issue.rb
 ```
 
-**A new table** gets an entry in the same PR as its migration, or `test/db/write_ownership_test.rb` fails. The test also fails on a table declared twice, an entry whose table is gone, an owner that is no projection, a column the table doesn't have, a missing reason, or a writer that is no file in `app/` or `lib/`.
+**A new table** gets an entry in the same PR as its migration, or `test/db/write_ownership_test.rb` fails. The test also fails on a table declared twice, an entry whose table is gone, an owner that is no projection, a column the table doesn't have, a missing reason, a writer that is no file in `app/` or `lib/`, or a writer that makes no persistence call.
+
+That last check keeps a dead entry from holding a hole open. It is a text search: a file counts as a writer when a line makes a persistence call, a raw SQL call such as `execute`, or one of the library writes in `WriteOwnership::LIBRARY_WRITES`, such as Noticed's `deliver`. A call needs a receiver, bracketed arguments or a bang, so `only: %i[create update]` doesn't count. A file also counts when a method named after a write calls `super`, as a controller does when its library's action makes the write. A file that stops writing fails the test, so the PR that stops it also removes it from the entry.
 
 **A table moving onto a stream** changes its entry from `plain` to its projection. Leave the old writers listed, with the reason, until the PR that stops their writes removes them.
 
