@@ -286,6 +286,40 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_not HrisUnitParentProposal.exists?
     end
 
+    should "drop a proposed parent when its people next disagree" do
+      mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d1", team: "t1" })
+      mirror(@staff[0] => { division: "d2", team: "t1" }, @staff[1] => { division: "d2", team: "t1" })
+      assert HrisUnitParentProposal.exists?
+
+      mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2", team: "t1" })
+
+      assert_equal unit("work.division/d1").id, unit("work.department/t1").parent_id
+      assert_not HrisUnitParentProposal.exists?
+    end
+
+    should "drop a proposed parent when the next sync reads the parent it has" do
+      mirror(@staff[0] => { division: "d1", team: "t1" })
+      mirror(@staff[0] => { division: "d2", team: "t1" })
+      assert HrisUnitParentProposal.exists?
+
+      mirror(@staff[0] => { division: "d1", team: "t1" })
+
+      assert_equal unit("work.division/d1").id, unit("work.department/t1").parent_id
+      assert_not HrisUnitParentProposal.exists?
+    end
+
+    should "leave no proposed parent behind a retiring unit" do
+      @catalogue[0] = division_field(%w[d1 Product], %w[d2 Platform], %w[d3 Data])
+      mirror(@staff[0] => { division: "d1", team: "t1" })
+      mirror(@staff[0] => { division: "d2", team: "t1" })
+      @catalogue[1] = team_field(%w[t2 Search])
+
+      mirror(@staff[0] => { division: "d3", team: "t1" })
+
+      assert_not OrgUnit.live.exists?(external_ref: "work.department/t1")
+      assert_not HrisUnitParentProposal.exists?
+    end
+
     should "read the parent from the type its kind states, not from the level above" do
       @structure.set_kind_parents(@team, parent_ids: [], top: true, effective_on: "2026-01-01")
       mirror(@staff[0] => { division: "d1", team: "t1" })
