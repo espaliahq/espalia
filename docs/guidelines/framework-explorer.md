@@ -212,8 +212,8 @@ PageLayout
 ```
 Controller
   → explorer_matrix_etag → fresh_when → 304?              # four cheap reads, before any of the below
-  → Frameworks::ExplorerGraph.load(framework_id)          # single indexed jsonb fetch
-      (falls back to .rebuild on miss / format bump)
+  → Frameworks::ExplorerGraph.load(framework_id)          # indexed jsonb fetch + the stream's last event
+      (falls back to .rebuild on miss, format bump, or a row behind its stream)
   → MatrixDataBuilder(framework: graph, mode: :view|:edit) # in-memory filter + structure
       — view mode: filter out added_in_draft entities, drop pending-suggestion maps
       — edit mode: include everything, wire pending decorations

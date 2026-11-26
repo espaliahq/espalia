@@ -8,9 +8,10 @@
 # with each framework event (see {Frameworks::Repository#with_framework});
 # read by `FrameworksController` for both view and edit modes.
 #
-# The serialized payload's shape is tagged with {FORMAT_VERSION}; rows
-# carrying an older format are treated as missing on read, causing the
-# controller to lazily rebuild from the aggregate.
+# The serialized payload's shape is tagged with {FORMAT_VERSION}, and each
+# row records the last stream event it has seen. A row in an older format, or
+# one behind its stream, is treated as missing on read, so the controller
+# lazily rebuilds it from the aggregate.
 #
 module Frameworks::ExplorerGraph
   # Bump whenever the serialized graph shape changes in a
@@ -29,24 +30,50 @@ module Frameworks::ExplorerGraph
   #
   # @param framework_id [String]
   # @param graph [Frameworks::ExplorerGraph::Framework]
+  # @param last_event_id [String] the stream's last event once this write lands
   # @return [FrameworkExplorerGraph]
-  def store(framework_id, graph)
+  def store(framework_id, graph, last_event_id:)
     row = FrameworkExplorerGraph.find_or_initialize_by(framework_id: framework_id)
     row.graph_data = graph.to_hash_tree
     row.format_version = FORMAT_VERSION
+    row.last_event_id = last_event_id
     row.save!
     row
   end
 
+  # Moves a current row past events that change nothing it renders. Leaves
+  # `updated_at`, and so the explorer's ETag, alone. A row that was already
+  # behind stays behind, and the next load rebuilds it.
+  #
   # @param framework_id [String]
-  # @return [Frameworks::ExplorerGraph::Framework, nil] nil if missing or
-  #   stored under an older format version
+  # @param from [String, nil] the stream's last event before this write
+  # @param to [String] the stream's last event once this write lands
+  def advance(framework_id, from:, to:)
+    return if from.nil?
+
+    FrameworkExplorerGraph.where(framework_id: framework_id, last_event_id: from)
+                          .update_all(last_event_id: to)
+  end
+
+  # @param framework_id [String]
+  # @return [Frameworks::ExplorerGraph::Framework, nil] nil if missing, stored
+  #   under an older format version, or behind its stream
   def load(framework_id)
     row = FrameworkExplorerGraph.find_by(framework_id: framework_id)
     return nil if row.nil?
     return nil if row.format_version != FORMAT_VERSION
+    return nil if row.last_event_id.nil?
+    return nil if row.last_event_id != stream_head(framework_id, tenant: ActsAsTenant.current_tenant || row.tenant)
 
     Frameworks::ExplorerGraph::Framework.from_hash_tree(row.graph_data)
+  end
+
+  # @param framework_id [String]
+  # @param tenant [Tenant] the framework's tenant
+  # @return [String, nil] the id of the framework stream's last event
+  def stream_head(framework_id, tenant: ActsAsTenant.current_tenant)
+    Rails.configuration.event_store
+         .read.stream(EventStreamNaming.framework_stream(framework_id, tenant: tenant)).last&.event_id
   end
 
   # Loads the aggregate, builds a fresh graph, stores it. Used as a lazy
@@ -63,12 +90,17 @@ module Frameworks::ExplorerGraph
   # @return [Frameworks::ExplorerGraph::Framework]
   def rebuild(framework_id)
     graph = nil
+    # Read before the aggregate loads: a write landing in between then leaves
+    # the row behind its stream, so the next load rebuilds instead of trusting it.
+    head = stream_head(framework_id)
     Frameworks::Repository.new.with_framework(framework_id) do |agg|
-      graph = Frameworks::ExplorerGraphBuilder.new(agg).build if agg.framework_id
+      next unless agg.framework_id
+
+      graph = Frameworks::ExplorerGraphBuilder.new(agg).build
     end
 
     if graph
-      store(framework_id, graph)
+      store(framework_id, graph, last_event_id: head)
       return graph
     end
 

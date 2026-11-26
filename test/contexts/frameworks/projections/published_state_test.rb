@@ -128,6 +128,19 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "LevelOrdinalChanged" do
+    should "renumber the level" do
+      lid = SecureRandom.uuid_v7
+      emit(Frameworks::Events::LevelAdded,
+        framework_id: @framework_id, level_id: lid, role_id: SecureRandom.uuid_v7,
+        ordinal: 3, title: "Senior Engineer", code: "E3", is_entry: false)
+      emit(Frameworks::Events::LevelOrdinalChanged,
+        framework_id: @framework_id, level_id: lid, new_ordinal: 4, previous_ordinal: 3, reason: "Make room for a new level")
+
+      within_tenant { assert_equal 4, FrameworkState::Level.find_by!(level_id: lid).ordinal }
+    end
+  end
+
   context "CapabilityCategoryAdded" do
     should "create a CapabilityCategory read model" do
       cid = SecureRandom.uuid_v7
@@ -867,6 +880,19 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
 
       assert_equal live, snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
       within_tenant { assert_equal %w[E1], FrameworkState::Level.where(role_id: role_id).pluck(:code) }
+    end
+
+    should "reset! + replay leave the explorer graph snapshot alone" do
+      append_and_project(Frameworks::Events::FrameworkCreated,
+        framework_id: @framework_id, name: "me&u 2025")
+      within_tenant { Frameworks::ExplorerGraph.rebuild(@framework_id) }
+      stored = within_tenant { FrameworkExplorerGraph.find(@framework_id).attributes }
+
+      Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
+      within_tenant { assert_equal stored, FrameworkExplorerGraph.find(@framework_id).attributes }
+
+      Projections::Replayer.replay(projection_class: Frameworks::Projections::PublishedState, tenant: @tenant)
+      within_tenant { assert_equal stored, FrameworkExplorerGraph.find(@framework_id).attributes }
     end
 
     should "reset! + replay produces identical read-model state" do

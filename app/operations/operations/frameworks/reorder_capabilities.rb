@@ -47,7 +47,8 @@ class Operations::Frameworks::ReorderCapabilities < Operations::Base
   end
 
   def graph
-    @graph ||= Frameworks::ExplorerGraph.load(framework.framework_id)
+    @graph ||= Frameworks::ExplorerGraph.load(framework.framework_id) ||
+               Frameworks::ExplorerGraph.rebuild(framework.framework_id)
   end
 
   # Graph resolution scopes the category to the authorized framework (the

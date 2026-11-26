@@ -62,11 +62,11 @@ It is off unless `WRITE_CATALOGUE=1`. CI's test job turns it on, which cost abou
 | Ruby files in `app/` and `lib/` | 1,507 |
 | Files a recorded write ran through | 432 |
 | Files with a persistence call | 80 |
-| Of those, files the run wrote through nowhere | 2 (`lib/tasks/admin.rake`, `lib/tasks/bench.rake`) |
+| Of those, files the run wrote through nowhere | 1 (`lib/tasks/bench.rake`) |
 | Persistence calls found by text search | 368 |
-| Of those, with no recorded write beneath them | 10 |
+| Of those, with no recorded write beneath them | 4 |
 
-The two unreached files are a console task that creates an admin and a benchmark. 1,075 files ran no write at all; most are views, components, policies and queries, which have nothing to write.
+The unreached file is a benchmark. 1,075 files ran no write at all; most are views, components, policies and queries, which have nothing to write.
 
 ## Findings
 
@@ -75,7 +75,6 @@ These are writes around a projection. None are fixed here.
 | Table or column | Written from | Why it matters | Suggested for 2b |
 |---|---|---|---|
 | `framework_capability_categories.deficit_threshold` | `lib/tasks/seed_framework.rake:166` | Sets a category's threshold on the read model after the framework is published. A rebuild of `frameworks/published_state` loses it. | Dispatch the command that sets it, or set it before publishing. Looks like a real bug in the seed. |
-| `framework_explorer_graphs` | `Frameworks::ExplorerGraph#store` (`app/contexts/frameworks/explorer_graph.rb:37`), on every load that finds no row | The repository writes the snapshot, and `PublishedState.reset!` deletes it. A missing row is rebuilt from the stream on the next load, so nothing is lost, but the table has two writers. | Declare it a repository cache owned by `ExplorerGraph`, and leave it out of `PublishedState.reset!`, or keep the delete and say why. |
 | `people.manager_id`, `job_title`, `status` | HiBob adapter: `sync_people_with_org_graph` (line 169), `save_person` (507), `deactivate_removed` (678) | `org_graph/people_columns` owns these once a tenant is cut over. The adapter writes them only before cut-over, by design. | Remove the pre-cut-over path once every tenant is cut over. |
 | `people.manager_id` | `lib/tasks/calibration_history_seed.rb:197` | A development seed moves reporting lines on the row and records the reporting manager beside it. | Move the seed to the Org Graph command, so a cut-over tenant's seed survives a rebuild. |
 | Framework, evidence and assignment read models | `lib/tasks/evidence_suggestions_eval.rb` (lines 99 to 134) | The evaluation builds a throwaway tenant by inserting read-model rows, then rolls the transaction back. Nothing persists. | Keep. Say in the file that it never commits. |
@@ -96,7 +95,7 @@ Each section names the writers the run saw and recommends one of two things: **k
 
 | Table | Writers |
 |---|---|
-| `users` | Devise; `User.from_google_omniauth`, `update_notification_preference`, `provision_from_person!`; `Person#ensure_user!`; `Settings::ColorSchemesController#update`; `SlackDeliveryMethod#mark_preferences_disclosed`; `SeedAdmin.bootstrap!`; the example and stress seeds; `admin.rake` (*unreached*, lines 15 and 20) |
+| `users` | Devise; `User.from_google_omniauth`, `update_notification_preference`, `provision_from_person!`; `Person#ensure_user!`; `Settings::ColorSchemesController#update`; `SlackDeliveryMethod#mark_preferences_disclosed`; `SeedAdmin.bootstrap!`; the example and stress seeds; `admin.rake` |
 | `oauth_applications` | `Mcp::ClientRegistrationsController#create`; `Mcp::PruneStaleClientsJob` |
 | `oauth_access_grants` | `Oauth::AuthorizationsController#create`; `Mcp::PruneStaleClientsJob` |
 | `oauth_access_tokens` | Doorkeeper; `Settings::ConnectedClientsController#destroy`; `Mcp::PruneStaleClientsJob` |
@@ -156,7 +155,7 @@ Each section names the writers the run saw and recommends one of two things: **k
 | Table | Writers |
 |---|---|
 | `hris_sync_issues` | `HrisSyncIssue.replace_in_structure`; `Hris::LevelHandover#hand_back!` |
-| `hris_unit_parent_proposals` | `Hris::LevelMirror#reparent`, `#forget_unread_parents`, `#forget_parent_readings`, `#forget_every_parent_reading`; three `destroy!` calls with no recorded write (*unreached*, lines 239, 242 and 327) |
+| `hris_unit_parent_proposals` | `Hris::LevelMirror#reparent`, `#forget_unread_parents`, `#forget_parent_readings`, `#forget_every_parent_reading`; one `destroy!` with no recorded write (*unreached*, line 327) |
 
 **Keep.** Each sync rebuilds them from what the HRIS reports; they are a to-do list, not a record. What an admin does about an issue already goes through Org Graph commands.
 
@@ -175,6 +174,10 @@ Each section names the writers the run saw and recommends one of two things: **k
 ### Level comparison groups and snapshots
 
 `LevelComparisonSnapshot.take!` writes both `level_comparison_snapshots` and `level_comparison_groups`, deleting the day's earlier take first. **Keep:** each snapshot is derived from ratings at the moment it is taken, so it can be taken again, and it holds no decision.
+
+### `framework_explorer_graphs`
+
+`Frameworks::ExplorerGraph#store` writes the snapshot, from the repository after each framework write and from `#rebuild` on a load that finds no current row. **Keep:** it is a cache of the framework's stream, so a missing or stale row costs one rebuild and loses nothing. Each row records the last stream event it has seen (`last_event_id`), and `#load` treats a row behind its stream as missing. `PublishedState.reset!` once deleted it through the framework's cascade, which made each rebuild of that projection throw away every snapshot ([#539](https://github.com/espaliahq/espalia/issues/539) c7).
 
 ### `framework_publications`
 
@@ -195,14 +198,11 @@ Each section names the writers the run saw and recommends one of two things: **k
 
 ## Unreached persistence calls
 
-Beyond those named above, the text search found these lines with no recorded write beneath them:
+The text search found these lines with no recorded write beneath them:
 
 | Line | What it is |
 |---|---|
 | `app/contexts/frameworks/command_handler.rb:42` | An aggregate's `create`, which publishes an event. Not a database write. |
 | `app/contexts/team_planning/command_handler.rb:36` | The same. |
 | `lib/tasks/bench.rake:119` | The same, in a benchmark. |
-| `app/contexts/frameworks/projections/published_state.rb:434` | `PublishedState` writing a level's new ordinal. |
-| `app/contexts/person_development/projections/current_assessment.rb:296` | `CurrentAssessment` flagging ratings on a split capability. |
-
-The last two are projections' own writes, so they are not direct writes, but no test recorded a write through them.
+| `app/integrations/hris/level_mirror.rb:327` | `Hris::LevelMirror#retire_units` dropping a retiring unit's proposed parent. A retiring unit is never read in that sync, so `#forget_unread_parents` has already dropped it. |

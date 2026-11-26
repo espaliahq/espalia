@@ -51,7 +51,8 @@ class Frameworks::CapabilityReordersController < ApplicationController
   end
 
   def graph
-    @graph ||= Frameworks::ExplorerGraph.load(@framework.framework_id)
+    @graph ||= Frameworks::ExplorerGraph.load(@framework.framework_id) ||
+               Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
   end
 
   # The category owning the moving capability, resolved from the graph (per-
