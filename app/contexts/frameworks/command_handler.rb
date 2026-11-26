@@ -179,6 +179,17 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Sets a capability category's deficit threshold. Applies live.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param category_id [String] UUID of the category
+  # @param deficit_threshold [Numeric, String, nil] nil inherits the framework's
+  def set_category_deficit_threshold(framework_id, category_id, deficit_threshold)
+    @repository.with_framework(framework_id) do |framework|
+      framework.set_category_deficit_threshold(framework_id, category_id, deficit_threshold)
+    end
+  end
+
   # Archives a capability category. Shape-changing — requires a draft and
   # an empty category (no active capabilities remaining).
   #

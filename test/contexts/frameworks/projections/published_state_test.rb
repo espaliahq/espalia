@@ -157,6 +157,45 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "CapabilityCategoryDeficitThresholdSet" do
+    setup do
+      @cat_id = SecureRandom.uuid_v7
+      within_tenant do
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(@framework_id, "Test Framework")
+        handler.add_capability_category(@framework_id, @cat_id, "Craft")
+        handler.set_category_deficit_threshold(@framework_id, @cat_id, 1)
+      end
+    end
+
+    should "write the threshold live, while the v1 draft is still open" do
+      within_tenant do
+        assert FrameworkState::Framework.find_by!(framework_id: @framework_id).draft_in_progress
+        assert_equal BigDecimal("1"), FrameworkState::CapabilityCategory.find_by!(category_id: @cat_id).deficit_threshold
+      end
+    end
+
+    should "keep the threshold through publish and through reset! + replay" do
+      within_tenant { Frameworks::CommandHandler.new.publish_version(@framework_id, "user-1") }
+      live = snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
+
+      Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: Frameworks::Projections::PublishedState, tenant: @tenant)
+
+      assert_equal live, snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
+      within_tenant do
+        assert_equal BigDecimal("1"), FrameworkState::CapabilityCategory.find_by!(category_id: @cat_id).deficit_threshold
+      end
+    end
+
+    should "clear the threshold when the event carries nil" do
+      within_tenant do
+        Frameworks::CommandHandler.new.set_category_deficit_threshold(@framework_id, @cat_id, nil)
+        assert_nil FrameworkState::CapabilityCategory.find_by!(category_id: @cat_id).deficit_threshold
+      end
+    end
+  end
+
   context "CapabilityAdded" do
     should "create a Capability read model with active status" do
       cat_id = SecureRandom.uuid_v7

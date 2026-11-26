@@ -267,6 +267,47 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "#set_category_deficit_threshold" do
+    setup do
+      @cat_id = SecureRandom.uuid_v7
+      @aggregate.add_capability_category(@framework_id, @cat_id, "Craft")
+    end
+
+    should "apply the event with the threshold as a decimal string, and hold it" do
+      @aggregate.set_category_deficit_threshold(@framework_id, @cat_id, 1)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::CapabilityCategoryDeficitThresholdSet, event
+      assert_equal({ framework_id: @framework_id, category_id: @cat_id, deficit_threshold: "1.0" }, event.data)
+      assert_equal "1.0", @aggregate.capability_categories[@cat_id][:deficit_threshold]
+    end
+
+    should "carry nil, so the category inherits the framework's threshold again" do
+      @aggregate.set_category_deficit_threshold(@framework_id, @cat_id, "0.5")
+      @aggregate.set_category_deficit_threshold(@framework_id, @cat_id, nil)
+
+      assert_nil @aggregate.unpublished_events.to_a.last.data[:deficit_threshold]
+      assert_nil @aggregate.capability_categories[@cat_id][:deficit_threshold]
+    end
+
+    should "refuse a negative threshold or one that isn't a number" do
+      [ -1, "lots", Float::NAN ].each do |value|
+        assert_raises(ArgumentError) { @aggregate.set_category_deficit_threshold(@framework_id, @cat_id, value) }
+      end
+    end
+
+    should "refuse an unknown or archived category" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.set_category_deficit_threshold(@framework_id, SecureRandom.uuid_v7, 1)
+      end
+      assert_match /not found/, err.message
+
+      @aggregate.archive_capability_category(@framework_id, @cat_id, reason: "Merged")
+      err = assert_raises(RuntimeError) { @aggregate.set_category_deficit_threshold(@framework_id, @cat_id, 1) }
+      assert_match /archived/, err.message
+    end
+  end
+
   # ── Capabilities ──
 
   context "#add_capability" do
@@ -1013,6 +1054,11 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       assert_nothing_raised do
         @fresh.update_capability_category(@framework_id, @cat_id, name: "Updated")
       end
+    end
+
+    should "set_category_deficit_threshold succeeds without opening a draft" do
+      @fresh.set_category_deficit_threshold(@framework_id, @cat_id, 1)
+      assert_not @fresh.draft_in_progress
     end
 
     should "update_capability succeeds" do

@@ -343,6 +343,26 @@ class Frameworks::Aggregate
     }.compact))
   end
 
+  # Sets a capability category's deficit threshold. Shape-preserving: it
+  # tunes scoring and leaves the rating grid alone, so it applies live.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param category_id [String] UUID of the category
+  # @param deficit_threshold [Numeric, String, nil] nil inherits the framework's
+  # @raise [RuntimeError] if the category does not exist or is archived
+  # @raise [ArgumentError] if the threshold is not a non-negative number
+  def set_category_deficit_threshold(framework_id, category_id, deficit_threshold)
+    ensure_created!
+    raise "Category #{category_id} not found" unless @capability_categories.key?(category_id)
+    raise "Category #{category_id} is archived" if @capability_categories[category_id][:status] == :archived
+
+    apply(Frameworks::Events::CapabilityCategoryDeficitThresholdSet.new(data: {
+      framework_id: framework_id,
+      category_id: category_id,
+      deficit_threshold: decimal_string(deficit_threshold)
+    }))
+  end
+
   # Archives a capability category. Shape-changing — requires a draft.
   #
   # Refuses if the category still holds any active capabilities. Archive
@@ -1278,6 +1298,19 @@ class Frameworks::Aggregate
   # in a fixed order; an inverted configuration would silently produce
   # nonsense states. Same predicate as the Operation (nil = system default),
   # so a caller that bypasses the Operation cannot persist what it refuses.
+  # A threshold as the string the event carries, so a live event and its
+  # JSON replay hand the aggregate and the explorer graph the same value.
+  def decimal_string(value)
+    return if value.nil?
+
+    decimal = BigDecimal(value.to_s, exception: false)
+    unless decimal&.finite? && !decimal.negative?
+      raise ArgumentError, "Deficit threshold must be a non-negative number, got #{value.inspect}"
+    end
+
+    decimal.to_s("F")
+  end
+
   def ensure_thresholds_ordered!(underperforming, meeting, mastery)
     return if PersonDevelopment::Scoring.thresholds_ordered?(
       underperforming: underperforming, meeting: meeting, mastery: mastery
@@ -1450,6 +1483,10 @@ class Frameworks::Aggregate
     cat[:name] = event.data[:name] if event.data.key?(:name)
     cat[:description] = event.data[:description] if event.data.key?(:description)
     cat[:ordinal] = event.data[:ordinal] if event.data.key?(:ordinal)
+  end
+
+  on Frameworks::Events::CapabilityCategoryDeficitThresholdSet do |event|
+    @capability_categories[event.data[:category_id]][:deficit_threshold] = event.data[:deficit_threshold]
   end
 
   on Frameworks::Events::CapabilityCategoryArchived do |event|

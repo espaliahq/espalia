@@ -56,6 +56,7 @@ class Frameworks::Projections::PublishedState
       Frameworks::Events::LevelOrdinalChanged,
       Frameworks::Events::CapabilityCategoryAdded,
       Frameworks::Events::CapabilityCategoryUpdated,
+      Frameworks::Events::CapabilityCategoryDeficitThresholdSet,
       Frameworks::Events::CapabilityCategoryArchived,
       Frameworks::Events::CapabilityAdded,
       Frameworks::Events::CapabilityUpdated,
@@ -160,6 +161,7 @@ class Frameworks::Projections::PublishedState
     when Frameworks::Events::LevelUpdated then handle_level_updated(event)
     when Frameworks::Events::CapabilityCategoryAdded then handle_capability_category_added(event)
     when Frameworks::Events::CapabilityCategoryUpdated then handle_capability_category_updated(event)
+    when Frameworks::Events::CapabilityCategoryDeficitThresholdSet then handle_category_deficit_threshold_set(event)
     when Frameworks::Events::CapabilityUpdated then handle_capability_updated(event)
     when Frameworks::Events::CapabilityRoleBindingUpdated then handle_binding_updated(event)
     when Frameworks::Events::BehaviouralExpectationUpdated then handle_expectation_updated(event)
@@ -447,6 +449,11 @@ class Frameworks::Projections::PublishedState
     record = FrameworkState::CapabilityCategory.find_by!(category_id: event.data[:category_id])
     attrs = event.data.slice(:name, :description, :ordinal).compact
     record.update!(attrs) if attrs.any?
+  end
+
+  def handle_category_deficit_threshold_set(event)
+    FrameworkState::CapabilityCategory.find_by!(category_id: event.data[:category_id])
+      .update!(deficit_threshold: event.data[:deficit_threshold])
   end
 
   def handle_capability_category_archived(event)
