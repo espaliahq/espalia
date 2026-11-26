@@ -2,13 +2,14 @@
 
 # Runs a suggestion command on a person's development stream.
 #
-# It holds the person's row FOR KEY SHARE to the commit. An erase takes that
-# row FOR UPDATE before it writes `forgotten_at`, so it either commits first
-# and the command's own forgotten check sees it, or waits until this
-# command's events are stored. Key share doesn't block an ordinary update of
-# the row, so a sync carries on. The row comes first so a command waiting
-# behind an erase holds nothing the job wants. It is taken outside the
-# savepoint, whose rollback would release it.
+# It holds the person's row FOR KEY SHARE to the commit and refuses a
+# forgotten person: a rationale quotes the feedback, and a dismissal can
+# carry a typed reason. An erase takes that row FOR UPDATE before it writes
+# `forgotten_at`, so it either commits first and the refusal sees it, or
+# waits until this command's events are stored. Key share doesn't block an
+# ordinary update of the row, so a sync carries on. The row comes first so a
+# command waiting behind an erase holds nothing the job wants. It is taken
+# outside the savepoint, whose rollback would release it.
 #
 # Then an advisory lock per evidence item, so runs and decisions for one
 # item never overlap: an edit and its original, or a double "Suggest again".
@@ -19,6 +20,12 @@
 module PersonDevelopment::SuggestionWrites
   ATTEMPTS = 3
 
+  # The person was forgotten, so nothing more is written about them.
+  class Forgotten < PersonDevelopment::Aggregate::CommandError
+    # @param msg [String] what the hub and the MCP tools say; it names no one
+    def initialize(msg = "this person has been forgotten") = super
+  end
+
   # @param person_id [String]
   # @param framework_id [String]
   # @param evidence_ids [Array<String>] the items to lock
@@ -27,7 +34,7 @@ module PersonDevelopment::SuggestionWrites
   def self.with_aggregate(person_id, framework_id, evidence_ids:)
     attempts = 0
     EvidencePlacementSuggestion.transaction do
-      Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:id)
+      raise Forgotten if Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:forgotten_at)
       evidence_ids.uniq.sort.each { lock_item(it) }
       begin
         attempts += 1
