@@ -158,6 +158,20 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
       RUBY
     end
 
+    should "flag a record written in the repository call's own arguments" do
+      assert_equal 1, offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb").size
+        framework = FrameworkState::Framework.find(id)
+        @repository.with_framework(framework.update!(name: name) && framework.id) { |framework| framework.create(id, name) }
+      RUBY
+    end
+
+    should "flag only the argument when the same call is also the aggregate's command" do
+      assert_equal 1, offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb").size
+        framework = FrameworkState::Framework.find(id)
+        @repository.with_framework(framework.create(id, name)) { |framework| framework.create(id, name) }
+      RUBY
+    end
+
     should "pass the aggregate used inside a nested block that doesn't rebind it" do
       assert_empty offenses_for(<<~RUBY, path: "app/contexts/frameworks/example_handler.rb")
         @repository.with_framework(framework_id) do |framework|
