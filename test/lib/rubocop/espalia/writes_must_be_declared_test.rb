@@ -33,6 +33,16 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
       RUBY
     end
 
+    should "flag the counter, bulk and find-or-create writers" do
+      assert_equal 5, offenses_for(<<~RUBY).size
+        Tenant.update_counters(id, people_count: 1)
+        Person.where(tenant_id: id).delete_by(state: "left")
+        Person.where(tenant_id: id).touch_all
+        record.update_attribute!(:name, name)
+        Person.where(email: email).first_or_create!
+      RUBY
+    end
+
     should "flag a safe-navigation call" do
       assert_equal 1, offenses_for("proposal&.destroy!\n").size
     end

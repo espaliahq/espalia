@@ -40,7 +40,9 @@ module RuboCop
           create create! create_or_find_by create_or_find_by! find_or_create_by find_or_create_by!
           save save! update! update_attribute update_column update_columns update_all
           destroy destroy! destroy_all delete_all insert! insert_all insert_all!
-          upsert upsert! upsert_all touch increment! decrement! toggle!
+          upsert upsert! upsert_all touch touch_all increment! decrement! toggle!
+          update_attribute! delete_by destroy_by first_or_create first_or_create!
+          update_counters increment_counter decrement_counter reset_counters
         ].to_set.freeze
         CONSTANT_ONLY = %i[delete insert update].to_set.freeze
         KEYWORD_ONLY = %i[save save!].to_set.freeze
