@@ -1294,10 +1294,6 @@ class Frameworks::Aggregate
     raise "Framework not yet created" unless @status == :created
   end
 
-  # The performance-state machine walks underperforming → meeting → mastery
-  # in a fixed order; an inverted configuration would silently produce
-  # nonsense states. Same predicate as the Operation (nil = system default),
-  # so a caller that bypasses the Operation cannot persist what it refuses.
   # A threshold as the string the event carries, so a live event and its
   # JSON replay hand the aggregate and the explorer graph the same value.
   def decimal_string(value)
@@ -1311,6 +1307,10 @@ class Frameworks::Aggregate
     decimal.to_s("F")
   end
 
+  # The performance-state machine walks underperforming → meeting → mastery
+  # in a fixed order; an inverted configuration would silently produce
+  # nonsense states. Same predicate as the Operation (nil = system default),
+  # so a caller that bypasses the Operation cannot persist what it refuses.
   def ensure_thresholds_ordered!(underperforming, meeting, mastery)
     return if PersonDevelopment::Scoring.thresholds_ordered?(
       underperforming: underperforming, meeting: meeting, mastery: mastery
