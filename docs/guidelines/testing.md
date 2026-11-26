@@ -592,8 +592,9 @@ spec promises no rendering opportunity for content the browser can't show. No
 Chrome flag guarantees them. A frame wait there passed nearly every run and
 then, deep into a long suite, never fired
 ([espaliahq/espalia#591](https://github.com/espaliahq/espalia/issues/591)).
-Assert `document.visibilityState` instead: it reads `hidden` without emulation,
-and a hidden page is what pauses `requestAnimationFrame`. This reading of
+Assert `document.visibilityState` instead: it reads `hidden` without emulation
+and `visible` with it, which is the promise emulation makes. A visible page
+still may get no frames while its window is minimized. This reading of
 Chromium is from `main` and may differ in detail from the pinned Chrome:
 `content/browser/devtools/protocol/emulation_handler.cc`
 (`SetFocusEmulationEnabled` takes a visible capture),

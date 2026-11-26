@@ -4,8 +4,6 @@ require "application_system_test_case"
 
 # Pins keep_page_focused (testing.md → "Focus Needs a Focused Page"): with the
 # window minimized, the page must still take focus and report itself visible.
-# It doesn't wait for a frame there: whether a minimized window paints is
-# Chrome's choice, and it sometimes doesn't (#591).
 class FocusEmulationSystemTest < ApplicationSystemTestCase
   setup do
     tenant = FactoryBot.create(:tenant)
@@ -41,7 +39,8 @@ class FocusEmulationSystemTest < ApplicationSystemTestCase
   def minimize_window = set_window_state("minimized")
 
   # A stalled minimized window paints nothing, so the failure screenshot
-  # times out unless the window is restored first (#591).
+  # times out unless the window is restored first
+  # (https://github.com/espaliahq/espalia/issues/591).
   def restore_window
     set_window_state("normal")
   rescue Selenium::WebDriver::Error::WebDriverError => error
