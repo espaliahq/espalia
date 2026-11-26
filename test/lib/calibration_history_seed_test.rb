@@ -123,6 +123,9 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
       assert_equal row.manager_id, Person.find(row.person_id).manager_id,
         "the recorded fact and the live chart must agree right after a move"
     end
+    assert @tenant.reload.org_graph_people_projected?
+    assert_equal 4, Rails.configuration.event_store.read.of_type(OrgGraph::Events::ManagerChanged).count,
+      "each move goes through the Org Graph"
   end
 
   should "not grow a history seeded under older cycle names" do
@@ -162,6 +165,7 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
     mia, raj, = @ems
     mias = @reports.select { |person| person.manager_id == mia.id }
     mias.drop(1).each { |person| person.update!(manager: raj) }
+    SeedOrgGraph.cut_over!(@tenant)
     seed = CalibrationHistorySeed.new(tenant: @tenant, framework: @framework, io: StringIO.new)
     cycle = AssessmentCycle.find_by!(cycle_id: @cycle_id)
 
