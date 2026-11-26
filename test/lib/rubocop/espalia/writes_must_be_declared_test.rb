@@ -55,6 +55,13 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
       RUBY
     end
 
+    should "flag delete and update on a query built from a constant" do
+      assert_equal 2, offenses_for(<<~RUBY).size
+        Person.where(manager_id: id).update(manager_id: nil)
+        Person.find(id).delete
+      RUBY
+    end
+
     should "flag save with keyword options only" do
       assert_equal 2, offenses_for(<<~RUBY).size
         record.save
@@ -69,6 +76,7 @@ class RuboCop::Cop::Espalia::WritesMustBeDeclaredTest < ActiveSupport::TestCase
         session.delete(:return_to)
         ids.insert(0, id)
         turbo_stream.update("flash", partial)
+        Rails.cache.delete(key)
       RUBY
     end
 

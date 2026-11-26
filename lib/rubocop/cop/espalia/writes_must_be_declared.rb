@@ -14,8 +14,10 @@ module RuboCop
       # The match is by method name, so it can't tell which table a call
       # writes, and a named file may write any table. The recorded check in
       # CI (`write_ownership:check`) holds each write to its own table.
-      # `delete`, `insert` and `update` count only on a constant, as
-      # `session.delete` and `turbo_stream.update` write nothing. A `save`
+      # `delete`, `insert` and `update` count only on a constant or a query
+      # built from one (`Person.where(...).update`), as `session.delete` and
+      # `turbo_stream.update` write nothing. On an association or a record in
+      # a variable they look like any other object's, so they pass. A `save`
       # given a positional argument isn't ActiveRecord's, which takes only
       # keyword options.
       #
@@ -45,6 +47,11 @@ module RuboCop
           update_counters increment_counter decrement_counter reset_counters
         ].to_set.freeze
         CONSTANT_ONLY = %i[delete insert update].to_set.freeze
+        QUERIES = %i[
+          all where not rewhere find find_by find_by! first last take sole find_sole_by
+          joins left_joins left_outer_joins includes preload eager_load references
+          order reorder limit offset distinct lock readonly unscoped merge none
+        ].to_set.freeze
         KEYWORD_ONLY = %i[save save!].to_set.freeze
 
         ROOT = File.expand_path("../../../..", __dir__)
@@ -81,10 +88,15 @@ module RuboCop
 
         def write?(node)
           name = node.method_name
-          return node.receiver.const_type? if CONSTANT_ONLY.include?(name)
+          return model_query?(node.receiver) if CONSTANT_ONLY.include?(name)
           return false if KEYWORD_ONLY.include?(name) && positional_argument?(node)
 
           WRITES.include?(name)
+        end
+
+        def model_query?(receiver)
+          receiver = receiver.receiver while receiver&.send_type? && QUERIES.include?(receiver.method_name)
+          receiver&.const_type?
         end
 
         def positional_argument?(node)
