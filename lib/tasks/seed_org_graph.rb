@@ -17,8 +17,19 @@ module SeedOrgGraph
     report = OrgGraph::PeopleCutover.new(tenant).run(apply: true)
     return if report.applied
 
-    raise "The Org Graph cut-over refused: #{report.failed.size} people failed to record, " \
-          "and these columns differ: #{report.differences.keys.join(', ').presence || 'none'}"
+    failures = report.failed.first(3).map { |id, message| "#{id}: #{message}" }.join("; ").presence || "none"
+    raise "The Org Graph cut-over refused. People who failed to record: #{failures}. " \
+          "Columns that differ: #{report.differences.keys.join(', ').presence || 'none'}"
+  end
+
+  # Who may change the person's manager: their HRIS while it holds the
+  # manager fact and carries their external id, and otherwise Espalia.
+  #
+  # @param person [Person]
+  # @return [String]
+  def manager_provider_for(person)
+    holder = OrgGraph::Repository.new.fact_providers.fetch("manager", OrgGraph::StructureAggregate::ESPALIA)
+    holder == person.hris_source && person.external_id.present? ? holder : OrgGraph::StructureAggregate::ESPALIA
   end
 
   # Runs Org Graph commands as the system, as the cut-over records people.

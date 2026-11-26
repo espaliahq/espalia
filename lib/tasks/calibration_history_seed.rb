@@ -67,7 +67,6 @@ class CalibrationHistorySeed
 
   # @return [Hash] counters for the task's summary line
   def call
-    SeedOrgGraph.cut_over!(@tenant)
     FUTURE_CYCLES.each do |name|
       # Scoped to the framework, like every other cycle query here: a
       # same-named cycle on another of the tenant's frameworks is not this
@@ -183,6 +182,11 @@ class CalibrationHistorySeed
   # A rater keeps at least one report: one left with nobody enrolled drops
   # out of the demo session.
   def move_reporting_lines(cycle)
+    unless @tenant.org_graph_people_projected?
+      @io.puts "  #{@tenant.slug} is not cut over to the Org Graph — leaving reporting lines alone."
+      return
+    end
+
     people = population(cycle)
     return if people.empty?
 
@@ -208,7 +212,7 @@ class CalibrationHistorySeed
 
   def move(person, to:)
     SeedOrgGraph.as_system do |org_graph|
-      org_graph.change_manager(person.id, to.id, provider: OrgGraph::PeopleCutover.provider_for(person),
+      org_graph.change_manager(person.id, to.id, provider: SeedOrgGraph.manager_provider_for(person),
         effective_on: Date.current)
     end
     person.reload
