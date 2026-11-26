@@ -815,6 +815,27 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       end
     end
 
+    should "flag rating rows on a split capability without moving them" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_level_rating, tenant: @tenant,
+          person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
+          capability_stable_id: @from_stable_id, level_ordinal: 3,
+          self_rated_frequency: "consistent")
+      end
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "split", requires_reassessment: true } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        rating = AssessmentLevelRating.sole
+        assert_equal @from_stable_id, rating.capability_stable_id
+        assert_equal "flagged", rating.migration_status
+        assert_equal "capability_split", rating.reassessment_reason
+      end
+    end
+
     # Regression: an `evolved` mapping onto a capability that already existed in
     # the previous version. The person rated both at the same cycle/level, so a
     # plain re-key violates `idx_assessment_ratings_cycle_person_cap_level` and
