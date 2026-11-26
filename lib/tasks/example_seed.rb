@@ -173,15 +173,14 @@ class ExampleSeed
     assigned = PersonFrameworkAssignment.where(framework_id: @framework.framework_id).pluck(:person_id).to_set
     roles = FrameworkState::Role.all.index_by(&:code)
     levels = FrameworkState::Level.all.index_by { |l| [ l.role_id, l.ordinal ] }
-    PEOPLE.each do |key, (_name, _title, _dept, manager_key, role_code, ordinal, _login)|
+    PEOPLE.each do |key, (_name, _title, _dept, _manager_key, role_code, ordinal, _login)|
       next if role_code.nil? || assigned.include?(person(key).id)
 
       role = roles.fetch(role_code)
       level = levels.fetch([ role.role_id, ordinal ])
       @development.assign_to_framework(person(key).id, @framework.framework_id, role.role_id, level.level_id)
-      if manager_key
-        @development.record_reporting_manager(person(key).id, @framework.framework_id,
-          person(manager_key).id, source: "backfill")
+      if (manager_id = person(key).manager_id)
+        @development.record_reporting_manager(person(key).id, @framework.framework_id, manager_id, source: "backfill")
       end
     end
   end

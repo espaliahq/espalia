@@ -74,6 +74,29 @@ class ExampleSeedTest < ActiveSupport::TestCase
     end
   end
 
+  should "record the manager the Org Graph holds when someone is first assigned on a re-run" do
+    tenant = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
+    with_people("wren" => [ "Wren Ashby", "Engineer", "Engineering", "marisol", nil, nil, false ]) do
+      ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
+    end
+    wren, june = ActsAsTenant.with_tenant(tenant) do
+      %w[wren june].map { Person.find_by!(email: "#{it}@nullisland.example") }
+    end
+    ActsAsTenant.with_tenant(tenant) do
+      SeedOrgGraph.as_system do |org_graph|
+        org_graph.change_manager(wren.id, june.id, provider: OrgGraph::StructureAggregate::ESPALIA, effective_on: Date.current)
+      end
+    end
+
+    with_people("wren" => [ "Wren Ashby", "Engineer", "Engineering", "marisol", "E", 2, false ]) do
+      ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
+    end
+
+    ActsAsTenant.with_tenant(tenant) do
+      assert_equal june.id, RecordedReportingManager.find_by!(person_id: wren.id).manager_id
+    end
+  end
+
   should "leave the demo cycle alone once the calibration seed has closed it" do
     tenant = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
     ActsAsTenant.with_tenant(tenant) do
