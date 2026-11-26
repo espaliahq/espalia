@@ -61,7 +61,8 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
 
   teardown { ActsAsTenant.current_tenant = nil }
 
-  def run_seed
+  def run_seed(cut_over: true)
+    SeedOrgGraph.cut_over!(@tenant) if cut_over
     Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
       CalibrationHistorySeed.new(tenant: @tenant, framework: @framework, io: StringIO.new).call
     end
@@ -123,6 +124,19 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
       assert_equal row.manager_id, Person.find(row.person_id).manager_id,
         "the recorded fact and the live chart must agree right after a move"
     end
+    moves = Rails.configuration.event_store.read.of_type(OrgGraph::Events::ManagerChanged).to_a
+    assert_equal 4, moves.count { it.metadata[:tenant_id] == @tenant.id }, "each move goes through the Org Graph"
+  end
+
+  should "leave reporting lines alone on a tenant that is not cut over" do
+    managers = -> { @reports.map { it.reload.manager_id } }
+    before = managers.call
+
+    stats = run_seed(cut_over: false)
+
+    assert_equal 0, stats[:reporting_moves]
+    assert_equal before, managers.call
+    assert_not @tenant.reload.org_graph_people_projected?, "the history seed never cuts a tenant over"
   end
 
   should "not grow a history seeded under older cycle names" do
@@ -162,6 +176,7 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
     mia, raj, = @ems
     mias = @reports.select { |person| person.manager_id == mia.id }
     mias.drop(1).each { |person| person.update!(manager: raj) }
+    SeedOrgGraph.cut_over!(@tenant)
     seed = CalibrationHistorySeed.new(tenant: @tenant, framework: @framework, io: StringIO.new)
     cycle = AssessmentCycle.find_by!(cycle_id: @cycle_id)
 

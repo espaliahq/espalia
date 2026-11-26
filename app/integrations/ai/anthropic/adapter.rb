@@ -62,7 +62,7 @@ class Ai::Anthropic::Adapter
   # @raise [Ai::Errors::AuthenticationError, Ai::Errors::RateLimitError, Ai::Errors::ApiError]
   def suggest(system:, user:, schema:)
     message = request do
-      client.messages.create(
+      client.messages.create( # rubocop:disable Espalia/WritesMustBeDeclared -- the Anthropic API, not a table
         model: model,
         max_tokens: MAX_TOKENS,
         system_: [ { type: "text", text: system, cache_control: { type: "ephemeral" } } ],
@@ -79,7 +79,7 @@ class Ai::Anthropic::Adapter
   # @raise [Ai::Errors::RefusalError, Ai::Errors::AuthenticationError, Ai::Errors::RateLimitError, Ai::Errors::ApiError]
   def ping
     message = request do
-      client.messages.create(model: model, max_tokens: PING_MAX_TOKENS, output_config: output_config,
+      client.messages.create(model: model, max_tokens: PING_MAX_TOKENS, output_config: output_config, # rubocop:disable Espalia/WritesMustBeDeclared -- the Anthropic API, not a table
                              messages: [ { role: "user", content: PING_PROMPT } ])
     end
     raise Ai::Errors::RefusalError, "The model declined the test request" if message.stop_reason == :refusal

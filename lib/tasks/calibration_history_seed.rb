@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "seed_org_graph"
+
 # Advances a dev tenant through a sequence of assessment cycles so the
 # calibration surfaces have a HISTORY, not a single snapshot.
 #
@@ -173,13 +175,18 @@ class CalibrationHistorySeed
   # re-org that actually happens and keeps everyone inside the facilitator's
   # scope.
   #
-  # Both halves matter: the live org chart moves, and the fact is recorded
-  # on the person's stream, because manager-rating authority reads the
-  # recorded fact first (see authorization.md).
+  # Both halves matter: the Org Graph moves the live org chart, and the fact
+  # is recorded on the person's development stream, because manager-rating
+  # authority reads the recorded fact first (see authorization.md).
   #
   # A rater keeps at least one report: one left with nobody enrolled drops
   # out of the demo session.
   def move_reporting_lines(cycle)
+    unless @tenant.org_graph_people_projected?
+      @io.puts "  #{@tenant.slug} is not cut over to the Org Graph — leaving reporting lines alone."
+      return
+    end
+
     people = population(cycle)
     return if people.empty?
 
@@ -194,13 +201,21 @@ class CalibrationHistorySeed
 
       reports[person.manager_id] -= 1
       reports[sibling.id] = reports[sibling.id].to_i + 1
-      person.update!(manager_id: sibling.id)
+      move(person, to: sibling)
       @development.record_reporting_manager(
         person.id, @framework.framework_id, sibling.id, source: "hris"
       )
       @stats[:reporting_moves] += 1
       quota -= 1
     end
+  end
+
+  def move(person, to:)
+    SeedOrgGraph.as_system do |org_graph|
+      org_graph.change_manager(person.id, to.id, provider: SeedOrgGraph.manager_provider_for(person),
+        effective_on: Date.current)
+    end
+    person.reload
   end
 
   # Ranked by cycle name and email, because every seed run mints fresh ids.

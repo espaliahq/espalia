@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "seed_org_graph"
+
 # The Null Island Systems demo tenant db/seeds.rb builds outside production:
 # 21 people on @nullisland.example, the example framework (loaded from YAML
 # by frameworks:seed), an open cycle with ratings in every state a dashboard
@@ -82,7 +84,7 @@ class ExampleSeed
         Rake::TaskArguments.new(%i[file slug], [ "db/seeds/null_island_framework.yml", TENANT[:slug] ])
       )
       @framework = FrameworkState::Framework.first or raise "frameworks:seed left no framework"
-      upsert_people
+      upsert_people(tenant)
       upsert_logins(tenant)
       assign_people
       upsert_collaborators
@@ -122,15 +124,31 @@ class ExampleSeed
     tenant
   end
 
-  def upsert_people
+  # Once the tenant is cut over, the Org Graph owns each person's title,
+  # manager and status: a re-run leaves them as their streams hold them, and
+  # records anyone new there instead of on the row.
+  def upsert_people(tenant)
     @people = {}
+    projected = tenant.org_graph_people_projected?
     PEOPLE.each do |key, (name, title, department, manager_key, _role, _ordinal, _login)|
       person = Person.find_or_initialize_by(email: "#{key}@nullisland.example")
-      person.assign_attributes(name: name, job_title: title, department: department,
-        manager_id: manager_key && @people.fetch(manager_key).id, status: "active")
+      manager_id = manager_key && @people.fetch(manager_key).id
+      person.assign_attributes(name: name, department: department)
+      person.assign_attributes(job_title: title, manager_id: manager_id, status: "active") unless projected
+      newcomer = projected && person.new_record?
       person.save!
+      record_newcomer(person, title:, manager_id:) if newcomer
       @people[key] = person
     end
+    SeedOrgGraph.cut_over!(tenant)
+  end
+
+  def record_newcomer(person, title:, manager_id:)
+    SeedOrgGraph.as_system do |org_graph|
+      org_graph.record_person(person.id, provider: OrgGraph::StructureAggregate::ESPALIA, effective_on: Date.current,
+        employment_status: "employed", title:, manager_id:)
+    end
+    person.reload
   end
 
   def person(key) = @people.fetch(key)

@@ -60,13 +60,9 @@ framework_capabilities:
     - lib/tasks/evidence_suggestions_eval.rb
 framework_capability_categories:
   owner: frameworks/published_state
-  reason: >-
-    The evidence evaluation builds a throwaway tenant and rolls it back. No command carries a
-    category's threshold yet, so the framework seed sets it on the row after publishing, and a
-    rebuild loses it (#571).
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
   writers:
     - lib/tasks/evidence_suggestions_eval.rb
-    - lib/tasks/seed_framework.rake
 framework_capability_role_bindings:
   owner: frameworks/published_state
   reason: The evidence evaluation builds a throwaway tenant and rolls it back.
@@ -175,20 +171,17 @@ people:
     - status
   reason: >-
     The row holds a person's identifiers, which must be erasable. The HiBob adapter writes the
-    projection's columns only before a tenant is cut over. The seeds never cut the demo tenant over,
-    so the calibration history seed moves reporting lines on the row, which manager-rating authority
-    falls back to; it also records each move on the person's development stream (#572).
+    projection's columns only before a tenant is cut over. The seeds write rows before they cut a
+    tenant over, and change the columns with Org Graph commands after it.
   writers:
     - app/contexts/org_graph/forgetting.rb
     - app/integrations/hris/hibob/adapter.rb
     - app/models/tenant_user.rb
-    - lib/tasks/calibration_history_seed.rb
     - lib/tasks/evidence_suggestions_eval.rb
     - lib/tasks/example_seed.rb
     - lib/tasks/stress_seed.rb
   column_writers:
     - app/integrations/hris/hibob/adapter.rb
-    - lib/tasks/calibration_history_seed.rb
 tenant_users:
   owner: account_grants/account_flags
   columns:
@@ -352,6 +345,11 @@ noticed_notifications:
 
 event_store_events:
   owner: event_store
+  reason: >-
+    Sealing the names held in clear in plan events is the one sanctioned
+    rewrite of stored events. Nothing else may rewrite an event.
+  writers:
+    - app/contexts/team_planning/name_sealing.rb
 event_store_events_in_streams:
   owner: event_store
 projection_versions:

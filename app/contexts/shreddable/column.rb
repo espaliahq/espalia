@@ -163,7 +163,7 @@ module Shreddable::Column
     raise ArgumentError, "Seal a shreddable value inside a transaction" unless PlanEncryptionKey.connection.transaction_open?
 
     id = identifier.call
-    key = PlanKeyStore.new.create(id)
+    key = PlanKeyStore.new.create(id) # rubocop:disable Espalia/WritesMustBeDeclared -- the key store, plan_encryption_keys' declared writer
     sealed, sealed_by = value.sealed if value.is_a?(Shreddable::Value)
     # A publish that rolled back took its key with it.
     return sealed if sealed && sealed["identifier"] == id && sealed_by&.key == key.key

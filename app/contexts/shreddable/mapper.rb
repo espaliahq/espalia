@@ -61,7 +61,7 @@ class Shreddable::Mapper
     data = event.data.dup
     description = fields.to_h do |field|
       identifier = event.class.shreddable_identifier(tenant_id, data, field)
-      key = keys[identifier] ||= @key_store.create(identifier)
+      key = keys[identifier] ||= @key_store.create(identifier) # rubocop:disable Espalia/WritesMustBeDeclared -- the key store, plan_encryption_keys' declared writer
       sealed = Shreddable.encrypt(reveal(data[field]), identifier, key)
       # So a sync projection copies the bytes a rebuild will copy.
       data[field].sealed!(sealed, key) if data[field].is_a?(Shreddable::Value)
