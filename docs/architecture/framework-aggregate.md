@@ -108,6 +108,8 @@ Shape-changing — roles and levels (draft-gated):
 Shape-preserving — capabilities (editorial / live):
   CapabilityCategoryAdded { id, name, description }
   CapabilityCategoryUpdated { id, name?, description? }
+  CapabilityCategoryDeficitThresholdSet { framework_id, category_id, deficit_threshold }
+    deficit_threshold is a decimal string, or nil to inherit the framework's.
 
 Shape-changing — capabilities (draft-gated):
   CapabilityAdded { category_id, id, stable_id, name, description }

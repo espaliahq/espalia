@@ -28,13 +28,6 @@ namespace :frameworks do
 
       puts "Creating framework: #{framework_data['name']}"
 
-      # Collect post-publish read-model mutations (deficit_threshold) because the
-      # publish-time rebuild will wipe child read models and replay events from
-      # the stream — direct read-model writes made during the draft would be
-      # lost. Applied after publish. (Department is now event-sourced on
-      # add_role_family, so it needs no deferral.)
-      pending_category_threshold_updates = [] # [[category_id, deficit_threshold], ...]
-
       # ── Role Families, Roles, Levels ──
       role_code_to_id = {}   # "E" => uuid, "PD" => uuid
       role_name_to_id = {}   # "Product Designer" => uuid (scope resolution — read
@@ -99,10 +92,8 @@ namespace :frameworks do
           handler.add_capability_category(framework_id, cat_id, cat_data["name"],
             description: cat_data["description"], ordinal: cat_idx + 1)
 
-          # Defer: deficit_threshold lives on the read model only and the row
-          # doesn't exist yet during the draft phase.
           if cat_data.key?("deficit_threshold")
-            pending_category_threshold_updates << [ cat_id, cat_data["deficit_threshold"] ]
+            handler.set_category_deficit_threshold(framework_id, cat_id, cat_data["deficit_threshold"])
           end
 
           cat_data["capabilities"]&.each do |cap_data|
@@ -157,21 +148,6 @@ namespace :frameworks do
       # full seed (~1600 events) this takes a noticeable beat.
       puts "Publishing v1"
       handler.publish_version(framework_id, "seed")
-
-      # Apply deferred read-model mutations now that the rebuild has created
-      # the rows. find_by!/find_by raise/return nil if the rebuild didn't
-      # materialise something expected — that's a desired loud failure.
-      pending_category_threshold_updates.each do |cat_id, threshold|
-        FrameworkState::CapabilityCategory.find_by!(category_id: cat_id)
-          .update!(deficit_threshold: threshold)
-      end
-
-      # deficit_threshold was applied directly to the AR read model after
-      # publish — the aggregate-based snapshot written during publish doesn't
-      # see it. Rebuild the snapshot so the explorer graph reflects the final
-      # seeded state. (Department is event-sourced, so it's already in the
-      # snapshot from publish.)
-      Frameworks::ExplorerGraph.rebuild(framework_id)
 
       puts "\nSeed complete!"
       puts "  Framework: #{framework_data['name']}"

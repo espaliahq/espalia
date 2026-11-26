@@ -94,7 +94,7 @@ class FeedbackExchange::Client
     path_with_query = connection.build_exclusive_url(path, params).request_uri
 
     response = connection.run_request(method, path, body, headers(method:, path_with_query:, body:, timestamp:)) do |req|
-      req.params.update(params)
+      req.params.update(params) # rubocop:disable Espalia/WritesMustBeDeclared -- a Faraday request's query hash, not a record
     end
     parse(response)
   rescue Faraday::TimeoutError, Faraday::ConnectionFailed, Faraday::SSLError => e

@@ -603,9 +603,15 @@ Rules, all deliberate:
   included, runs in `PersonDevelopment::SuggestionWrites`: the person's
   row held `FOR KEY SHARE`, so an erase can't land mid-command, then a
   Postgres advisory lock on the item, then the command, retried in a
-  savepoint if another command for the person stored first. The job stores nothing if
-  the feedback was edited while the model answered; the edit's own run
-  follows.
+  savepoint if another command for the person stored first. The job stores
+  nothing if the feedback was edited while the model answered; the edit's
+  own run follows.
+- **Nothing more about a forgotten person.** Under that key share,
+  `SuggestionWrites` refuses a forgotten person: an accept or a dismissal
+  fails with "this person has been forgotten", on the hub and through MCP,
+  and the job stores nothing. A dismissal's reason is text someone wrote
+  about them. An erase that commits while a command waits is seen
+  ([#586](https://github.com/espaliahq/espalia/issues/586)).
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; a placement notifier would hook in
   there.

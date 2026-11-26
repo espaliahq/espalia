@@ -60,13 +60,9 @@ framework_capabilities:
     - lib/tasks/evidence_suggestions_eval.rb
 framework_capability_categories:
   owner: frameworks/published_state
-  reason: >-
-    The evidence evaluation builds a throwaway tenant and rolls it back. No command carries a
-    category's threshold yet, so the framework seed sets it on the row after publishing, and a
-    rebuild loses it (#571).
+  reason: The evidence evaluation builds a throwaway tenant and rolls it back.
   writers:
     - lib/tasks/evidence_suggestions_eval.rb
-    - lib/tasks/seed_framework.rake
 framework_capability_role_bindings:
   owner: frameworks/published_state
   reason: The evidence evaluation builds a throwaway tenant and rolls it back.
@@ -352,6 +348,11 @@ noticed_notifications:
 
 event_store_events:
   owner: event_store
+  reason: >-
+    Sealing the names held in clear in plan events is the one sanctioned
+    rewrite of stored events. Nothing else may rewrite an event.
+  writers:
+    - app/contexts/team_planning/name_sealing.rb
 event_store_events_in_streams:
   owner: event_store
 projection_versions:
