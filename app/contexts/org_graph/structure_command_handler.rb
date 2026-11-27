@@ -205,8 +205,10 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#change_unit_kind
   def change_unit_kind(unit_id, level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
-    authorize_unit_kind!
-    with_structure(plan) { |structure| structure.change_unit_kind(unit_id, level_id, **attributed(options, :kind_changed_by_id)) }
+    with_structure(plan) do |structure|
+      authorize_unit_kind!(unit_id, structure.structure_left_by(unit_id))
+      structure.change_unit_kind(unit_id, level_id, **attributed(options, :kind_changed_by_id))
+    end
   end
 
   # Runs in one transaction with {OrgGraph::SyncHandlers::RetiredUnitMemberships},

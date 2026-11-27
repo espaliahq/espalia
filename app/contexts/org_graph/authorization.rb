@@ -6,7 +6,7 @@
 # Every handler names its actor. A person's {AuthorizationContext} is checked
 # against every command. {SYSTEM} is the system's own work: the HRIS sync, a
 # retirement moving its members, a rake task. It is not checked, but it can't
-# change a unit's own structure, which only an admin may do. A handler
+# change a unit's own structure, which is always a person's call. A handler
 # with no actor raises, so a path that forgets one fails instead of skipping
 # the check.
 module OrgGraph::Authorization
@@ -15,6 +15,18 @@ module OrgGraph::Authorization
 
   # The actor for writes nobody makes in person.
   SYSTEM = Object.new.tap { |system| system.define_singleton_method(:inspect) { "OrgGraph::Authorization::SYSTEM" } }.freeze
+
+  # The refusal for a change to a structure, shared with the Operations that
+  # check before they read anything about it.
+  #
+  # @param unit [OrgUnit, nil] the declaring unit, nil for the organisation's
+  # @return [String]
+  def self.structure_refusal(unit)
+    return "Only a tenant admin or an Org Graph editor can change the organisation's structure" unless unit
+
+    "You can change #{unit.name}'s structure if you own #{unit.name} or a unit above it, " \
+      "report to someone who does, or are an Org Graph editor"
+  end
 
   private
 
@@ -28,16 +40,16 @@ module OrgGraph::Authorization
   def system? = @actor.equal?(SYSTEM)
 
   def authorize_taxonomy!
-    authorize!(:edit_taxonomy?) { "Only a tenant admin can change the taxonomy's levels" }
+    authorize!(:edit_taxonomy?) { OrgGraph::Authorization.structure_refusal(nil) }
   end
 
-  # @param unit_id [String, nil] the declaring unit, nil for the top structure
+  # @param unit_id [String, nil] the declaring unit, nil for the organisation's
   def authorize_structure_of!(unit_id)
     return authorize_taxonomy! unless unit_id
-    raise Refused, "Only a tenant admin can change a unit's structure" if system?
+    raise Refused, "The system cannot change a structure" if system?
 
     unit = unit_for(unit_id)
-    authorize!(:edit_structure_of?, unit) { "Only a tenant admin can change #{unit_name(unit)}'s structure" }
+    authorize!(:edit_structure_of?, unit) { OrgGraph::Authorization.structure_refusal(unit) }
   end
 
   def authorize_structure!
@@ -53,8 +65,21 @@ module OrgGraph::Authorization
     authorize!(:edit_unit?, unit) { "#{only_owners_of(unit)} can change #{unit_name(unit)}" }
   end
 
-  def authorize_unit_kind!
-    authorize!(:change_unit_kind?) { "Only a tenant admin or an Org Graph editor can change a unit's type" }
+  # The refusal names only the unit retyped, never the unit whose structure
+  # is in force there.
+  #
+  # @param unit_id [String] the unit retyped
+  # @param structure_unit_id [String, nil] the declaring unit of the structure
+  #   in force where it sits, nil for the organisation's
+  def authorize_unit_kind!(unit_id, structure_unit_id)
+    structure_unit = structure_unit_id && unit_for(structure_unit_id)
+    authorize!(:change_unit_kind?, structure_unit) do
+      name = unit_name(unit_for(unit_id))
+      next "Only a tenant admin or an Org Graph editor can change #{name}'s type" unless structure_unit_id
+
+      "You can change #{name}'s type if you own the unit whose structure it sits in or a unit above that, " \
+        "report to someone who does, or are an Org Graph editor"
+    end
   end
 
   def authorize_new_unit!(parent_id)
@@ -85,7 +110,7 @@ module OrgGraph::Authorization
   # @param from [String, nil] the structure the unit leaves, nil for the organisation's
   # @param into [String, nil] the structure it joins, nil for the organisation's
   def authorize_move_across!(from, into)
-    refusal = "Only a tenant admin can move a unit between structures"
+    refusal = "You need the right to change both structures to move a unit between them"
     raise Refused, refusal if system?
 
     [ from, into ].uniq.each do |structure_unit_id|
@@ -159,7 +184,7 @@ module OrgGraph::Authorization
   end
 
   def owners_of(unit)
-    "an owner of #{unit_name(unit)} or a unit above it"
+    "an owner of #{unit_name(unit)} or a unit above it, or someone they report to"
   end
 
   def only_managers_of(member)

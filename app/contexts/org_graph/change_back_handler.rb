@@ -90,7 +90,7 @@ class OrgGraph::ChangeBackHandler
     when "UnitMoved"
       authorize_move_unit!(entry.unit_id, entry.before["parent_id"])
       authorize_move_back_across!(entry) if across?(entry)
-    when "UnitKindChanged" then authorize_unit_kind!
+    when "UnitKindChanged" then authorize_unit_kind!(entry.unit_id, loaded_structure.structure_left_by(entry.unit_id))
     when "TaxonomyDefined" then authorize_structure_of!(entry.unit_id)
     else authorize_unit!(entry.unit_id)
     end
@@ -127,9 +127,11 @@ class OrgGraph::ChangeBackHandler
   # The rights the move back needs on the structure it leaves and the one it
   # joins, read without the lock; the write checks them again under it.
   def authorize_move_back_across!(entry)
-    structure = (@loaded_structure ||= @repository.load_structure)
-    authorize_move_across!(structure.structure_left_by(entry.unit_id), structure.structure_joined_beneath(entry.before["parent_id"]))
+    authorize_move_across!(loaded_structure.structure_left_by(entry.unit_id),
+                           loaded_structure.structure_joined_beneath(entry.before["parent_id"]))
   end
+
+  def loaded_structure = @loaded_structure ||= @repository.load_structure
 
   def build_handlers(cause_id:)
     @people = OrgGraph::CommandHandler.new(actor: @actor, cause_id:, repository: @repository)

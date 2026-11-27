@@ -1,6 +1,6 @@
 {
   "name": "org_graph_withdraw_structure",
-  "description": "Withdraw a unit's own structure from effective_on (today by default), so the structure above it governs the units beneath it again. Every unit beneath it changes type in the same change, by conversion. Refused, naming them, for units that wouldn't fit the structure above, and for a date after today or before the structure or a unit beneath last changed. Refused unless the caller is a tenant admin.",
+  "description": "Withdraw a unit's own structure from effective_on (today by default), so the structure above it governs the units beneath it again. Every unit beneath it changes type in the same change, by conversion. Refused, naming them, for units that wouldn't fit the structure above, and for a date after today or before the structure or a unit beneath last changed. Refused unless the caller is a tenant admin, an Org Graph editor, an owner of the unit or a unit above it, or someone such an owner reports to.",
   "inputSchema": {
     "type": "object",
     "properties": {

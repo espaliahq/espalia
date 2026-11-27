@@ -27,7 +27,10 @@ class OrgGraphPolicy::UnitRights
   def structure? = @policy.edit_structure_of?(@unit)
 
   # @return [Boolean]
-  def change_type? = @unit.held_by_espalia? && @policy.change_unit_kind? && type_choices.size > 1
+  def change_type?
+    structure_unit_id = @overview.structure_unit_of(@unit)
+    @unit.held_by_espalia? && @policy.change_unit_kind?(structure_unit_id && @overview.unit(structure_unit_id)) && type_choices.size > 1
+  end
 
   # The types the unit may take today, from the structure in force where it
   # sits: its own, and each type Espalia supplies that may sit there and that

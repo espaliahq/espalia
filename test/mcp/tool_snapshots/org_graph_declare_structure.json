@@ -1,6 +1,6 @@
 {
   "name": "org_graph_declare_structure",
-  "description": "Give a unit a structure of its own, from effective_on (today by default): unit types only the units beneath it use, while the unit itself keeps its type. Every unit beneath it changes type in the same change, by conversion, which names a new type for each type held there. copied_from is \"top\" or a unit with a structure of its own, when the types copy that structure's. Refused, naming them, for units that wouldn't fit, a unit an HRIS supplies beneath it, a unit that already has a structure, and a date after today or before a change beneath. org_graph_withdraw_structure undoes it. Refused unless the caller is a tenant admin.",
+  "description": "Give a unit a structure of its own, from effective_on (today by default): unit types only the units beneath it use, while the unit itself keeps its type. Every unit beneath it changes type in the same change, by conversion, which names a new type for each type held there. copied_from is \"top\" or a unit with a structure of its own, when the types copy that structure's. Refused, naming them, for units that wouldn't fit, a unit an HRIS supplies beneath it, a unit that already has a structure, and a date after today or before a change beneath. org_graph_withdraw_structure undoes it. Refused unless the caller is a tenant admin, an Org Graph editor, an owner of the unit or a unit above it, or someone such an owner reports to.",
   "inputSchema": {
     "type": "object",
     "properties": {
