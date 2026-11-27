@@ -40,13 +40,12 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
     end
   end
 
-  should "go with its tenant when the tenant is destroyed" do
+  should "stop its tenant being destroyed, rather than vanish with it" do
     tenant = create(:tenant)
-    tenant.update!(time_zone: "Europe/Paris")
 
-    tenant.destroy!
-
-    assert_empty TenantSettingChange.unscoped.where(tenant_id: tenant.id)
+    assert_raises(ActiveRecord::InvalidForeignKey) { tenant.destroy! }
+    assert Tenant.exists?(tenant.id)
+    assert_equal 2, TenantSettingChange.unscoped.where(tenant_id: tenant.id).count
   end
 
   should "keep a row unchanged once saved" do

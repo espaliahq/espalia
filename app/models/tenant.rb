@@ -21,7 +21,7 @@ class Tenant < ApplicationRecord
   has_many :tenant_users, -> { unscope(where: :forgotten_at) }, dependent: :destroy, inverse_of: :tenant
   has_many :users, through: :tenant_users
   has_many :people, dependent: :destroy
-  has_many :setting_changes, class_name: "TenantSettingChange", dependent: :delete_all, inverse_of: false
+  has_many :setting_changes, class_name: "TenantSettingChange", inverse_of: false
 
   # The HRIS integration. The config is plain settings; the credentials are
   # encrypted JSON: { service_user_id:, api_token:, webhook_secret: }.
