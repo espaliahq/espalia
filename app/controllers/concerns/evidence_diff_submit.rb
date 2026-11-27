@@ -88,8 +88,10 @@ module EvidenceDiffSubmit
     # missing valence on cell N would abort after cells 1..N-1 (and the
     # response itself) had already landed.
     ([ primary ] + extras).each { |cell| valence_for!(valences, cell) }
-    # The link commands refuse a forgotten person; failing on the first would
-    # leave the response stored.
+    # Best effort: stops the ordinary case before the response is stored. The
+    # lock ends with this check, so an erase that commits before the link
+    # commands still leaves the response stored and the links refused. The
+    # link commands hold the lock; they are what keeps a link from being written.
     PersonDevelopment::ForgottenSubject.refuse!(request.person_id) if extras.any?
 
     result = Operations::Assessments::RespondToEvidenceRequest.call(context: pundit_user, params: {
@@ -122,6 +124,8 @@ module EvidenceDiffSubmit
     new_cells.each { |cell| valence_for!(valences, cell) }
     kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
     ensure_staged_cells_exist!(item, kept_suggestions)
+    # Best effort, as in diff_respond: an erase that commits after this check
+    # still leaves the content edit stored and the link refused.
     PersonDevelopment::ForgottenSubject.refuse!(item.person_id) if links_change?(current_valences, desired, valences, p[:staged_suggestion_ids])
 
     if content_changed?(item, p)
