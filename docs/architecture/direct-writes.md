@@ -209,4 +209,3 @@ The text search found these lines with no recorded write beneath them:
 | `app/contexts/frameworks/command_handler.rb:42` | An aggregate's `create`, which publishes an event. Not a database write. |
 | `app/contexts/team_planning/command_handler.rb:36` | The same. |
 | `lib/tasks/bench.rake:119` | The same, in a benchmark. |
-| `app/integrations/hris/level_mirror.rb:327` | `Hris::LevelMirror#retire_units` dropping a retiring unit's proposed parent. A retiring unit is never read in that sync, so `#forget_unread_parents` has already dropped it. |
