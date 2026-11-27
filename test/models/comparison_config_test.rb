@@ -3,6 +3,11 @@
 require "test_helper"
 
 class ComparisonConfigTest < ActiveSupport::TestCase
+  should "apply the clamped size as its floor" do
+    assert_equal 6, ComparisonConfig.new(min_group_size: 6).floor
+    assert_equal ComparisonConfig::LOWEST_MIN_GROUP_SIZE, ComparisonConfig.new(min_group_size: "five").floor
+  end
+
   context ".floor_for" do
     should "keep a size an admin may set" do
       assert_equal 4, ComparisonConfig.floor_for(4)

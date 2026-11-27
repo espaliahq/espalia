@@ -114,7 +114,7 @@ class Reporting::CapabilityAttainment
 
   private
 
-  def floor = @floor ||= ComparisonConfig.floor_for(@cycle.tenant.comparison_config.min_group_size)
+  def floor = @floor ||= @cycle.tenant.comparison_config.floor
 
   # Enrollments without a snapshot role/level cannot be scored against a
   # capability bar — they are excluded from the aggregation entirely.
