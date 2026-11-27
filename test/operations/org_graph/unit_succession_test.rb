@@ -162,6 +162,14 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
   end
 
   context "SplitUnit" do
+    should "let an owner split a unit beneath theirs, naming the successors it has just created" do
+      result = call(Operations::OrgGraph::SplitUnit, as: @owner, unit_id: @org[:payments], successor_names: [ "Core", "Edge" ],
+                                                     placements: { @org[:dot].id => "Core" }, effective_on: Date.current.iso8601)
+
+      assert unit(@org[:payments]).retired?
+      assert_equal %w[Core Edge], result[:successors].map { unit(it[:unit_id]).name }
+    end
+
     should "create the successors beside the unit, move the placed, and leave the rest in no team" do
       with_leaver_in(:platform)
       result = call(Operations::OrgGraph::SplitUnit, unit_id: @org[:platform], successor_names: [ " Core ", "Edge" ],

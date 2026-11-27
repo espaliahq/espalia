@@ -183,8 +183,9 @@ reporting line; only the rights follow the line. Rights inherit downward:
 owning Payments gives rights over every squad beneath it, even one with owners
 of its own. A caller who has left reaches nothing, and an owner who has left
 drops out of their managers' reach. A manager in between who has left doesn't
-break the line. The reach is built once per policy, so a change to the
-reporting line counts from the next request or command. A unit or person the Org Graph
+break the line. A request builds the reach once; a command builds it for
+each check, so its check under the structure's lock sees the line as it
+stands. A unit or person the Org Graph
 doesn't hold is left to admins and editors, except that the manager chain can
 still end a membership of a unit that is gone.
 

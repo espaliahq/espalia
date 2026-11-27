@@ -202,7 +202,7 @@ class OrgGraph::ChangeMoveBackTest < ActiveSupport::TestCase
       assert_raises(OrgGraph::Authorization::Refused) { OrgGraph::ChangeBackHandler.new(actor: context).change_back_group(cause_id) }
 
       error = assert_raises(OrgGraph::Authorization::Refused) { OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back_group(cause_id) }
-      assert_equal "You need the right to change both structures to move a unit between them", error.message
+      assert_equal "The system cannot change a structure", error.message
     end
     assert_equal @platform, structure.unit(@payments).parent_id
   end

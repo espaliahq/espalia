@@ -5,8 +5,9 @@
 # every unit beneath those. A manager in between who has left doesn't break
 # the line, since {Person#all_reports} walks through them.
 #
-# Built once per policy, so one request or one command reads it once, and a
-# change to the reporting line counts from the next.
+# Built once per policy. A request reads it once; a command handler builds a
+# policy for each check, so a check under the structure's lock, or of a unit
+# the command just created, reads the line as it stands.
 #
 # @example
 #   OrgGraphPolicy::Reach.new(person).covers?(unit)

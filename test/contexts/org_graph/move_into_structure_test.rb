@@ -201,7 +201,7 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
     assert_equal "Moving Ledger out of the organisation's structure into Payments's structure changes its type, so say what each type it moves becomes", error.message
 
     error = assert_raises(OrgGraph::Authorization::Refused) { as_tenant { @system.move_unit(@ledger, @payments, effective_on: @today + 1, conversion: {}) } }
-    assert_equal "You need the right to change both structures to move a unit between them", error.message
+    assert_equal "The system cannot change a structure", error.message
   end
 
   should "refuse a move into a structure while the kinds are rebuilt, telling only a caller who may make it" do
@@ -228,7 +228,7 @@ class OrgGraph::MoveIntoStructureTest < ActiveSupport::TestCase
         error = assert_raises(RuntimeError) { OrgGraph::ChangeBackHandler.new(actor: admin_context).change_back(entry) }
         assert_equal OrgGraph::ChangeBackHandler::WHOLE_MOVE, error.message
       end
-      assert_equal "You need the right to change both structures to move a unit between them", change_back.group_refusal(cause_id)
+      assert_equal "The system cannot change a structure", change_back.group_refusal(cause_id)
       assert_nil OrgGraph::ChangeBackHandler.new(actor: admin_context).group_refusal(cause_id)
     end
   end

@@ -110,8 +110,9 @@ module OrgGraph::Authorization
   # @param from [String, nil] the structure the unit leaves, nil for the organisation's
   # @param into [String, nil] the structure it joins, nil for the organisation's
   def authorize_move_across!(from, into)
+    raise Refused, "The system cannot change a structure" if system?
+
     refusal = "You need the right to change both structures to move a unit between them"
-    raise Refused, refusal if system?
 
     [ from, into ].uniq.each do |structure_unit_id|
       next authorize!(:edit_taxonomy?) { refusal } unless structure_unit_id
@@ -165,9 +166,9 @@ module OrgGraph::Authorization
     actor_id ? { key => actor_id }.merge(options) : options
   end
 
-  def policy
-    @policy ||= OrgGraphPolicy.new(@actor, :org_graph)
-  end
+  # Built afresh for each check, never memoised: a command checks again under
+  # the structure's lock, and a split checks successors it has just created.
+  def policy = OrgGraphPolicy.new(@actor, :org_graph)
 
   def unit_for(unit_id)
     OrgUnit.find_by(id: unit_id.to_s.downcase)

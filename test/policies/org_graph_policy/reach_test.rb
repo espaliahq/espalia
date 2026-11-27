@@ -200,6 +200,14 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     assert policy_for(as(@org[:ezra])).edit_unit?(unit(@org[:payments]))
   end
 
+  should "check each command against the owners as they stand, though one handler runs it" do
+    handler = structure(as(@manager))
+    handler.rename_unit(@org[:payments], "Payments Core", **ON)
+    as_tenant { system.remove_unit_owner(@org[:payments], @owner.id, **ON) }
+
+    assert_raises(OrgGraph::Authorization::Refused) { handler.rename_unit(@org[:payments], "Payments", **ON) }
+  end
+
   should "A person who is an owner but inactive has no reach" do
     as_tenant { @owner.update!(status: "inactive") }
     context = as(@owner)
