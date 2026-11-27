@@ -72,7 +72,7 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
 
   should "give a unit new types, each able to sit anywhere in it, and then say so in its drawer" do
     get new_tenant_org_unit_structure_declaration_path(@org[:checkout], fresh: 1)
-    assert_equal "Every type can sit anywhere in it for now. Tighten that in Settings.",
+    assert_equal "Every type can sit anywhere in it for now. Narrow that on the next page.",
                  drawer.at_css("#org-unit-structure-permissive").text
 
     declare_fresh(:checkout, { @org[:squad] => "Group" })
