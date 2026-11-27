@@ -270,8 +270,9 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "unit", unit: @unit.id, effective_on: @effective_on })
   end
 
+  # Allocation is for admins and editors.
   def terms(membership)
-    allocation = "#{(membership.allocation * 100).round}%" if membership.allocation
+    allocation = "#{(membership.allocation * 100).round}%" if membership.allocation && @rights.people?
     [ membership.role, allocation ].compact_blank.join(" · ")
   end
 

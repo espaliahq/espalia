@@ -286,6 +286,12 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_includes frame.text, "Analyst"
       assert_not_includes frame.text, "Faye Lumen"
     end
+
+    should "show each member's role and allocation" do
+      get edit_tenant_org_unit_path(@org[:checkout])
+
+      assert_includes drawer.text, "Tech lead · 50%"
+    end
   end
 
   context "as the owner of Payments, who is neither an admin nor an editor" do
@@ -308,6 +314,16 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_includes frame.text, "Ezra Pell"
       assert_not_includes frame.text, "Analyst"
       assert_not_includes frame.text, "Engineer"
+    end
+
+    should "show each member's role, but not their allocation" do
+      get edit_tenant_org_unit_path(@org[:checkout])
+
+      assert_includes drawer.text, "Tech lead"
+      assert_not_includes drawer.text, "50%"
+      get edit_tenant_org_unit_path(@org[:payments])
+      assert_includes drawer.text, "Dot Fennick"
+      assert_not_includes drawer.text, "100%"
     end
   end
 
