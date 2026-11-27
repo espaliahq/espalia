@@ -25,6 +25,9 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
     ActsAsTenant.with_tenant(@tenant) { OrgMembership.find_by(person_id: @org[person].id, unit_id: @org[key]) }
   end
 
+  # What OrgGraph::Authorization says when reach refuses a write.
+  REFUSAL = /\AOnly a tenant admin|\AYou can change|\AYou need the right/
+
   def drawer = Nokogiri::HTML5(response.body).at_css("aside#org-graph-drawer")
 
   context "as a tenant admin" do
@@ -296,15 +299,15 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
 
   context "as the owner of Payments, who is neither an admin nor an editor" do
     setup do
-      owner_user = create(:user)
+      @owner_user = create(:user)
       ActsAsTenant.with_tenant(@tenant) do
         owner = create(:person, tenant: @tenant, name: "Gale Orrin")
-        create(:tenant_user, tenant: @tenant, user: owner_user, person: owner, role: :member)
+        create(:tenant_user, tenant: @tenant, user: @owner_user, person: owner, role: :member)
         structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
         structure.add_unit_owner(@org[:payments], owner.id, effective_on: "2026-01-01")
         structure.add_unit_owner(@org[:platform], @org[:ezra].id, effective_on: "2026-01-01")
       end
-      sign_in owner_user
+      sign_in @owner_user
     end
 
     should "find people by name and email, without their job titles" do
@@ -344,6 +347,10 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "change nothing outside Payments, through any write in the drawer" do
+      sign_in @admin_user
+      post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } }
+      assert_redirected_to edit_tenant_org_structure_path(@org[:checkout])
+      sign_in @owner_user
       writes = [
         -> { patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { name: "Core" } } },
         -> { patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { level_id: @org[:squad] } } },
@@ -357,8 +364,8 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
         -> { post tenant_org_unit_retirement_path(@org[:platform]) },
         -> { post tenant_org_unit_merge_path(@org[:platform]), params: { into_unit_id: @org[:checkout] } },
         -> { post tenant_org_unit_split_path(@org[:platform]), params: { names: %w[Core Edge], placements: { @org[:ada].id => "Core" } } },
-        -> { post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } } },
-        -> { post tenant_org_unit_structure_withdrawal_path(@org[:engineering]), params: { conversion: {} } },
+        -> { post tenant_org_unit_structure_declaration_path(@org[:platform]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } } },
+        -> { post tenant_org_unit_structure_withdrawal_path(@org[:checkout]), params: { conversion: { @org[:squad] => @org[:squad] } } },
         -> { post tenant_org_unit_structure_move_path(@org[:platform]), params: { parent_id: @org[:checkout], conversion: { @org[:team] => @org[:squad] } } }
       ]
       events = -> { Rails.configuration.event_store.read.count }
@@ -367,6 +374,7 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       writes.each_with_index do |write, index|
         write.call
         assert_response :redirect, "write #{index}"
+        assert_match REFUSAL, flash[:drawer_alert] || flash[:alert], "write #{index}"
       end
 
       assert_equal count, events.call
