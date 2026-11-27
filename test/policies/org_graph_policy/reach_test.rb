@@ -273,6 +273,21 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     end
   end
 
+  should "check a move between structures and a unit's retyping again under the lock against the caller as it stands" do
+    {
+      "an editor's grant removed" => [ editor, ->(tenant_user) { tenant_user.update!(org_graph_editor: false) },
+                                       ->(tenant_user) { tenant_user.update!(org_graph_editor: true) } ],
+      "an admin demoted" => [ admin, ->(tenant_user) { tenant_user.update!(role: :member) },
+                              ->(tenant_user) { tenant_user.update!(role: :admin) } ]
+    }.each do |revocation, (context, revoke, restore)|
+      cross_structure_changes.each do |change, command|
+        assert_refused_under_the_lock("#{change}, #{revocation}", command, context) { revoke.call(TenantUser.find(context.tenant_user.id)) }
+      ensure
+        as_tenant { restore.call(TenantUser.find(context.tenant_user.id)) }
+      end
+    end
+  end
+
   should "let the system change the organisation's types under the lock, with no person to read again" do
     level_id = SecureRandom.uuid_v7
     as_tenant { system.add_level(level_id, "Pod", **ON) }
@@ -358,6 +373,16 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
       "a withdrawal changed back" => lambda { |handler|
         handler.change_withdrawal_back(engineering, levels: [], kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON)
       }
+    }
+  end
+
+  def cross_structure_changes
+    {
+      "a move between structures" => ->(handler) { handler.move_unit(@org[:payments], nil, conversion: { @lane => @org[:squad] }, **ON) },
+      "a move between structures changed back" => lambda { |handler|
+        handler.change_move_back(@org[:payments], nil, kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON)
+      },
+      "a unit retyped" => ->(handler) { handler.change_unit_kind(@org[:checkout], @lane, **ON) }
     }
   end
 

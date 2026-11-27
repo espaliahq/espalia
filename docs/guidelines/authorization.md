@@ -185,9 +185,10 @@ of its own. A caller who has left reaches nothing, and an owner who has left
 drops out of their managers' reach. A manager in between who has left doesn't
 break the line. A request builds the reach once; a command builds it for
 each check, so its check under the structure's lock sees the line as it
-stands. The seven commands that change a structure itself (declare,
-withdraw, both change-backs, and adding, reparenting or removing a type) also
-read the caller again before that check. So a caller deactivated, demoted,
+stands. Every check under that lock also reads the caller again: the seven
+commands that change a structure itself (declare, withdraw, both change-backs,
+and adding, reparenting or removing a type), a move between structures and its
+change-back, and a unit's retyping. So a caller deactivated, demoted,
 unlinked from their person or stripped of the editor grant while the command
 waited is refused. A check builds one however many units it names, so a command builds at
 most three (a move between structures checks the move and each structure), and
