@@ -40,6 +40,11 @@ class User < ApplicationRecord
              "#{GlobalAdminChange::RECORDABLE_SOURCES.join(', ')} (console for a change made by hand)"
   }, if: :will_save_change_to_global_admin?
 
+  # A source applies only to the attempt it was named for: one that leaves the flag alone, or
+  # fails validation, uses it up, so a later change has to name its own.
+  before_validation -> { self.global_admin_source = nil }, unless: :will_save_change_to_global_admin?
+  after_validation -> { self.global_admin_source = nil }, if: -> { errors.any? }
+
   # `update_column`, `update_all` and raw SQL skip these; see docs/architecture/domain-models.md.
   before_save :require_global_admin_source, if: :will_save_change_to_global_admin?
   after_save :record_global_admin_change
