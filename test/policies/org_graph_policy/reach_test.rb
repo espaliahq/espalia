@@ -242,6 +242,25 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     assert_raises(OrgGraph::Authorization::Refused) { handler.rename_unit(@org[:payments], "Payments", **ON) }
   end
 
+  should "check a structure change again under the structure's lock, refusing an owner removed while it waited" do
+    {
+      "a new type" => ->(handler) { handler.add_level(SecureRandom.uuid_v7, "Pod", structure_unit_id: @org[:engineering], **ON) },
+      "a withdrawal" => ->(handler) { handler.withdraw_structure(@org[:engineering], **ON) }
+    }.each do |change, command|
+      as_tenant { system.add_unit_owner(@org[:engineering], @engineering_owner.id, **ON) } unless change == "a new type"
+      events_after_revoke = nil
+      revoke = lambda do
+        system.remove_unit_owner(@org[:engineering], @engineering_owner.id, **ON)
+        events_after_revoke = Rails.configuration.event_store.read.count
+      end
+      handler = OrgGraph::StructureCommandHandler.new(actor: as(@engineering_owner),
+                                                      repository: RevokingRepository.new(OrgGraph::Repository.new, revoke))
+
+      assert_raises(OrgGraph::Authorization::Refused, change) { StructureHandler.new(@tenant, handler).then { command.call(it) } }
+      assert_equal events_after_revoke, Rails.configuration.event_store.read.count, change
+    end
+  end
+
   should "A person who is an owner but inactive has no reach" do
     as_tenant { @owner.update!(status: "inactive") }
     context = as(@owner)
@@ -293,6 +312,19 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     def method_missing(name, ...) = ActsAsTenant.with_tenant(tenant) { handler.public_send(name, ...) }
 
     def respond_to_missing?(name, include_private = false) = handler.respond_to?(name, include_private) || super
+  end
+
+  # Takes a right away after the handler's first check and before it takes the structure's lock.
+  RevokingRepository = Struct.new(:repository, :revoke) do
+    def with_structure(...)
+      revoke&.call
+      self.revoke = nil
+      repository.with_structure(...)
+    end
+
+    def method_missing(name, ...) = repository.public_send(name, ...)
+
+    def respond_to_missing?(name, include_private = false) = repository.respond_to?(name, include_private) || super
   end
 
   def unit(id) = as_tenant { OrgUnit.find(id) }
