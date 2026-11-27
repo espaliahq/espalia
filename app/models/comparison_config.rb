@@ -34,6 +34,11 @@ class ComparisonConfig
   }
   validates :snapshot_every_months, inclusion: { in: SNAPSHOT_INTERVALS, message: "must be 1, 3 or 6" }
 
+  # The floor every comparison and report applies, whatever is stored.
+  #
+  # @return [Integer]
+  def floor = self.class.floor_for(min_group_size)
+
   # The 1st of the month the next snapshot is due on, counted from the month
   # of the last one, so a shorter interval can leave one overdue.
   #

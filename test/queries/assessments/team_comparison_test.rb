@@ -65,6 +65,28 @@ class Assessments::TeamComparisonTest < ActiveSupport::TestCase
     assert_empty result.medians
   end
 
+  should "hold a level under the smallest size an admin may set to too few, whatever is stored" do
+    Tenant.where(id: @tenant.id).update_all(%(comparison_config = '{"min_group_size": "five"}'::jsonb))
+    @tenant.reload
+
+    result = compare({ 2 => 1, 4 => 1 })
+
+    assert_equal :too_few, result.reason
+    assert_equal [ 4 ], result.short_ordinals
+    assert_equal ComparisonConfig::LOWEST_MIN_GROUP_SIZE, result.min_group_size
+  end
+
+  should "withhold a median fewer than the smallest size an admin may set were scored on, whatever is stored" do
+    @snapshot.groups.find_by!(level_ordinal: 2).update!(capability_counts: { "cap-a" => 6, "cap-b" => 3 })
+    Tenant.where(id: @tenant.id).update_all(%(comparison_config = '{"min_group_size": "five"}'::jsonb))
+    @tenant.reload
+
+    result = compare({ 2 => 1, 3 => 3 })
+
+    assert_nil result.medians["cap-b"]
+    assert_in_delta 0.55, result.medians["cap-a"], 0.001
+  end
+
   should "read the groups of the tenant it was given, whatever tenant is current" do
     ActsAsTenant.current_tenant = create(:tenant)
 

@@ -236,6 +236,16 @@ class Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
       assert res.roles.find { |g| g.key == @engineer.role_id }.cells[@cap1.stable_id].suppressed
     end
 
+    should "hold the floor to the smallest size an admin may set, whatever is stored" do
+      3.times { |i| enroll(create(:person, tenant: @tenant, name: "Eng #{i}"), @engineer) }
+      Tenant.where(id: @tenant.id).update_all(%(comparison_config = '{"min_group_size": "five"}'::jsonb))
+      @tenant.reload
+
+      res = result(suppress: true)
+      assert_equal ComparisonConfig::LOWEST_MIN_GROUP_SIZE, res.suppression_floor
+      assert res.roles.find { |g| g.key == @engineer.role_id }.cells[@cap1.stable_id].suppressed
+    end
+
     should "suppress buckets but keep coverage counts under the floor" do
       2.times { |i| enroll(create(:person, tenant: @tenant, name: "Eng #{i}"), @engineer) }
 

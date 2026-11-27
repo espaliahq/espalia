@@ -677,6 +677,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_082422) do
     t.index ["tenant_id"], name: "index_framework_suggestion_comments_on_tenant_id"
   end
 
+  create_table "global_admin_changes", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.boolean "global_admin", null: false
+    t.string "source", null: false
+    t.datetime "created_at", null: false
+    t.index ["user_id"], name: "index_global_admin_changes_on_user_id"
+    t.check_constraint "source::text = ANY (ARRAY['admin_task'::character varying, 'seed'::character varying, 'console'::character varying, 'baseline'::character varying]::text[])", name: "global_admin_changes_source"
+  end
+
   create_table "hris_sync_issues", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.string "provider", null: false

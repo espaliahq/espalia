@@ -137,6 +137,113 @@ class PersonDevelopment::Projections::EvidenceSuggestionsTest < ActiveSupport::T
     assert_equal before, snapshot
   end
 
+  def forget(person)
+    event_store.with_metadata(tenant_id: @tenant.id) do
+      event_store.publish(OrgGraph::Events::PersonForgotten.new(data: {
+        person_id: person.id, provider: "espalia", effective_on: "2026-11-27", reason: "retention", retention_years: 1,
+        requested_by_id: nil
+      }), stream_name: ActsAsTenant.with_tenant(@tenant) { EventStreamNaming.person_stream(person.id) })
+    end
+  end
+
+  should "close the pending rows of a forgotten person and leave the decided ones" do
+    suggest(proposal(@ownership, 3), proposal(@ownership, 4), proposal(@collaboration, 3))
+    link(row_at(@ownership, 3).id, valence: "demonstrated")
+    dismiss(row_at(@ownership, 4).id)
+
+    forget(@jordan)
+    assert_equal "pending", row_at(@collaboration, 3).status
+
+    forget(@alex)
+    assert_equal "accepted", row_at(@ownership, 3).status
+    assert_equal "dismissed", row_at(@ownership, 4).status
+    assert_equal "closed", row_at(@collaboration, 3).status
+  end
+
+  should "close them again on a rebuild, which reads both streams in the order they were written" do
+    suggest(proposal(@ownership, 3), proposal(@collaboration, 3))
+    dismiss(row_at(@ownership, 3).id)
+    forget(@alex)
+    before = snapshot
+
+    projection = PersonDevelopment::Projections::EvidenceSuggestions
+    projection.reset!(tenant: @tenant)
+    Projections::Replayer.replay(projection_class: projection, tenant: @tenant)
+
+    assert_equal before, snapshot
+    assert_equal %w[closed dismissed], rows.map(&:status).sort
+  end
+
+  # The forgetting as a release before #590 recorded it: the event is stored,
+  # the person erased, and no handler here ran.
+  def forget_before_this_projection_handled_it(person)
+    event_store.with_metadata(tenant_id: @tenant.id) do
+      event_store.append(OrgGraph::Events::PersonForgotten.new(data: {
+        person_id: person.id, provider: "espalia", effective_on: "2026-11-27", reason: "retention", retention_years: 1,
+        requested_by_id: nil
+      }), stream_name: ActsAsTenant.with_tenant(@tenant) { EventStreamNaming.person_stream(person.id) })
+    end
+    ActsAsTenant.with_tenant(@tenant) { person.update_columns(forgotten_at: Time.current, name: Person::FORMER_MEMBER, email: nil) }
+  end
+
+  def reconcile = PersonDevelopment::Projections::EvidenceSuggestions::ForgottenReconciliation.new(@tenant).call
+
+  should "close only the forgetting tenant's rows, and touch none when the event names no tenant" do
+    suggest(proposal)
+    elsewhere = create(:evidence_placement_suggestion, person_id: @alex.id)
+
+    assert_raises(ActiveRecord::RecordNotFound) do
+      PersonDevelopment::Projections::EvidenceSuggestions.new.call(
+        OrgGraph::Events::PersonForgotten.new(data: { person_id: @alex.id }, metadata: {})
+      )
+    end
+    assert_equal %w[pending], rows.map(&:status)
+
+    forget(@alex)
+    assert_equal %w[closed], rows.map(&:status)
+    assert_equal "pending", elsewhere.reload.status
+  end
+
+  context "the forgotten-suggestions reconcile" do
+    should "close the pending rows of people forgotten before, leave decided ones, and close nothing on a second run" do
+      suggest(proposal(@ownership, 3), proposal(@ownership, 4))
+      dismiss(row_at(@ownership, 4).id)
+      elsewhere = create(:evidence_placement_suggestion, person_id: @alex.id)
+      forget_before_this_projection_handled_it(@alex)
+
+      assert_equal 1, reconcile.changed
+      assert_equal %w[closed dismissed], rows.map(&:status)
+      assert_equal "pending", elsewhere.reload.status
+      assert_equal 0, reconcile.recorded
+    end
+
+    should "leave the table as a full rebuild with this code writes it" do
+      suggest(proposal(@ownership, 3), proposal(@ownership, 4), proposal(@collaboration, 3))
+      link(row_at(@ownership, 3).id, valence: "growth_area")
+      dismiss(row_at(@ownership, 4).id)
+      forget_before_this_projection_handled_it(@alex)
+      assert_includes rows.map(&:status), "pending"
+
+      reconcile
+      reconciled = snapshot
+
+      projection = PersonDevelopment::Projections::EvidenceSuggestions
+      projection.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: projection, tenant: @tenant)
+
+      assert_equal reconciled, snapshot
+      assert_equal %w[closed dismissed edited], rows.map(&:status).sort
+    end
+  end
+
+  should "keep a closed row closed when the same cell is suggested again" do
+    suggest(proposal(@ownership, 3))
+    forget(@alex)
+    suggest(proposal(@ownership, 3))
+
+    assert_equal [ "closed" ], rows.map(&:status)
+  end
+
   should "nudge the open assessment when a suggestion is dismissed, and not when one is made" do
     broadcasts = []
     Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **_kw) { broadcasts << args }) do

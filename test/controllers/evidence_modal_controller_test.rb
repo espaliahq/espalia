@@ -142,6 +142,22 @@ class EvidenceModalControllerTest < ActionDispatch::IntegrationTest
       assert_select "textarea[name='evidence[content]']:not([disabled])"
     end
 
+    should "say a forgotten peer's feedback came from a former member" do
+      peer_feedback_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        peer = create(:person, tenant: @tenant, name: "Pat Peer", manager: @manager)
+        PersonDevelopment::CommandHandler.new.record_evidence(@author.id, @framework_id, peer_feedback_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "peer", evidence_type: "peer_feedback",
+          content: "Ran the review well.", author_id: peer.id, valence: "demonstrated")
+        peer.update_columns(forgotten_at: Time.current, name: Person::FORMER_MEMBER, email: nil)
+      end
+      sign_in @author_user
+      get evidence_modal_path(mode: "edit", evidence_id: peer_feedback_id, return_to: "assessment:#{@assignment.id}")
+      assert_response :success
+      assert_select "p", text: /You're linking feedback from a former member/
+      assert_no_match "Former member's", response.body
+    end
+
     should "say where an imported item was given, with no reference fields to change it" do
       ActsAsTenant.with_tenant(@tenant) do
         EvidenceItem.find(@evidence_id).update_columns(external_reference: {

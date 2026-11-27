@@ -71,9 +71,12 @@ class Views::Evidence::NeedsYou < Views::Base
     li(class: "flex flex-wrap items-center gap-x-3 gap-y-1 py-2", data: { testid: "needs-you-place" }) do
       row_link(@needs[:paths][item.id], item.author) do
         about = item.person_id == @viewer_id ? "about you" : "about #{first_name(@needs[:people][item.person_id])}"
-        span(class: "block text-sm font-medium text-default") { "Place #{first_name(item.author)}'s feedback #{about}" }
+        removed = item.author&.forgotten?
+        span(class: "block text-sm font-medium text-default") do
+          removed ? "Place feedback #{about}" : "Place #{first_name(item.author)}'s feedback #{about}"
+        end
         span(class: "block text-xs text-muted") do
-          parts = [ "Given #{time_ago_in_words(item.recorded_at)} ago" ]
+          parts = [ *(Person::FORMER_MEMBER if removed), "Given #{time_ago_in_words(item.recorded_at)} ago" ]
           parts << "#{count} #{count == 1 ? "suggestion" : "suggestions"}" if count.positive?
           parts << "imported" if item.external_reference&.imported?
           parts.join(" · ")

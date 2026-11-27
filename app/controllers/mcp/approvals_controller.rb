@@ -42,6 +42,9 @@ class Mcp::ApprovalsController < ApplicationController
     end
 
     redirect_to mcp_approval_path(@approval), notice: "Operation approved and executed."
+  rescue OrgGraph::Authorization::Refused => e
+    # Says who may act and names only the unit acted on, so it is safe to show.
+    redirect_to mcp_approval_path(@approval), alert: e.message
   rescue Pundit::NotAuthorizedError
     redirect_to mcp_approval_path(@approval), alert: "You are not authorized to perform this operation."
   rescue Operations::Base::ParameterError => e

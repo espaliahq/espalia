@@ -16,6 +16,14 @@ Text people wrote stays, by design. Evidence, feedback, comments and alignment n
 
 The reason someone gives for dismissing an evidence suggestion follows the same rule as a comment. It is stored in clear in the dismissal event on the person's development stream, and the projection copies it to `evidence_placement_suggestions.dismiss_reason`.
 
+Forgetting also settles evidence placement suggestions ([#590](https://github.com/espaliahq/espalia/issues/590)):
+
+- **The person the feedback is about.** Their pending suggestions close inside the erase, through the `PersonForgotten` event, and leave every screen and MCP read. One already accepted or dismissed keeps its decision. No new suggestion is made for them, and every command on an old one is refused. The development stream still holds the closed ones as pending; the refusal keeps the two from drifting.
+- **Only the author.** The suggestion stays open, and the person it is about can still accept or dismiss it. Where the author's name was, the hub shows "Former member", the label used everywhere else.
+- **People forgotten before this release.** Predeploy's `events:reconcile` closes their pending suggestions too, and closes nothing once it has run. A rebuild of the projection drops the rows of people forgotten before the catch-up that put the table on the streams, since no event records them ([#608](https://github.com/espaliahq/espalia/issues/608)).
+
+A rationale or a dismissal reason is text someone wrote, so it stays, as above.
+
 One limit is known and accepted for now: when both people have been forgotten, the text stays in the events. The author's person id stays in each event and the subject's in the stream's name. Both ids now lead to a "Former member" row, but the words themselves can still name either person.
 
 Operational facts stay too: title, level, department, positions and dates. In a small team they can still point to one person.
