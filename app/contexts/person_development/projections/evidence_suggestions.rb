@@ -16,7 +16,8 @@
 # ([#590](https://github.com/espaliahq/espalia/issues/590)).
 class PersonDevelopment::Projections::EvidenceSuggestions
   PROJECTION_NAME = "person_development/evidence_suggestions"
-  # 2: closes a forgotten person's pending rows, including those forgotten before.
+  # 2: closes a forgotten person's pending rows, including those forgotten before,
+  # and keeps, closed, the rows of theirs that no event records.
   CODE_VERSION = 2
 
   # @return [Array<Class>] event classes this projection handles
