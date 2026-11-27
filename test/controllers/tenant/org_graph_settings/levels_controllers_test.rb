@@ -329,6 +329,35 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
 
+    should "refuse a type from the organisation's or another unit's structure, named under Payments, writing nothing" do
+      lane_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        identity_id = SecureRandom.uuid_v7
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .create_unit(identity_id, "Identity", level_id: @tribe_id, effective_on: Date.current)
+        admin = AuthorizationContext.new(user: @admin_user, tenant_user: TenantUser.find_by!(user: @admin_user), person: nil)
+        OrgGraph::StructureCommandHandler.new(actor: admin).declare_structure(
+          identity_id, levels: [ { level_id: lane_id, name: "Lane", parent_level_ids: [ lane_id ], top: true } ],
+                        conversion: {}, effective_on: Date.current
+        )
+      end
+      events = Rails.configuration.event_store.read.count
+      under_payments = { structure_unit_id: @payments_id }
+
+      [ @squad_id, lane_id ].each do |foreign|
+        [ -> { patch tenant_org_graph_settings_kind_parent_path(foreign), params: { parent_ids: [], top: "1", **under_payments } },
+          -> { patch tenant_org_graph_settings_kind_parent_path(@pod_id), params: { parent_ids: [ foreign ], top: "0", **under_payments } },
+          -> { delete tenant_org_graph_settings_level_path(foreign), params: under_payments } ].each do |request|
+          request.call
+          assert_match(/doesn't exist|this structure doesn't hold/, flash[:alert])
+          assert_nil flash[:notice]
+        end
+      end
+      assert_equal events, Rails.configuration.event_store.read.count
+      assert_equal %w[Tribe Squad Team], level_names
+      assert_equal %w[Pod], own_names
+    end
+
     should "refuse to change the organisation's structure" do
       [ -> { post tenant_org_graph_settings_levels_path, params: { name: "Guild" } },
         -> { patch tenant_org_graph_settings_kind_parent_path(@squad_id), params: { parent_ids: [], top: "1" } },
