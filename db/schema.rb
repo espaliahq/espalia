@@ -1457,6 +1457,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_082422) do
   add_foreign_key "team_planning_plans", "tenants"
   add_foreign_key "team_planning_scenarios", "tenants"
   add_foreign_key "tenant_retention_settings", "tenants"
+  add_foreign_key "tenant_setting_changes", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"
   add_foreign_key "tenant_users", "users"
