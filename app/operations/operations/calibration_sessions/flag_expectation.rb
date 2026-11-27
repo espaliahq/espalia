@@ -17,6 +17,7 @@
 # session's authority.
 class Operations::CalibrationSessions::FlagExpectation < Operations::Base
   include Operations::CalibrationSessions::ScopeChecks
+  include Operations::CapabilityGuard
 
   description "Flag a capability × level expectation as unclear from a live calibration session — raises a framework clarification."
   category :write
@@ -38,9 +39,9 @@ class Operations::CalibrationSessions::FlagExpectation < Operations::Base
     ensure_uuid!(:capability_stable_id, params[:capability_stable_id])
     ensure_session_started!
     require_author!
+    ensure_active_capability!(session.framework_id, params[:capability_stable_id])
     ensure_cell_unflagged!
     ensure_level_exists!
-    capability # 404s early when the stable_id isn't in the session's framework
 
     suggestion_id = SecureRandom.uuid_v7
     begin
