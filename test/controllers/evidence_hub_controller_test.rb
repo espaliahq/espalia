@@ -276,6 +276,7 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       forget!(@assessee)
       get evidence_conversation_path(@assessee.id)
       assert_select "[data-conversation-thread-target='composer']", text: /A former member takes no new feedback/
+      assert_select "[data-conversation-thread-target='composer']", text: /Not a private chat/, count: 0
       assert_select "[data-conversation-thread-target='composer'] button", count: 0
     end
 
