@@ -290,10 +290,11 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes frame.text, "Faye Lumen"
     end
 
-    should "show each member's role and allocation" do
+    should "show each member's role and allocation, and ask one of people added" do
       get edit_tenant_org_unit_path(@org[:checkout])
 
       assert_includes drawer.text, "Tech lead · 50%"
+      assert_select "input[name='allocation']", count: 1
     end
   end
 
@@ -327,6 +328,18 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       get edit_tenant_org_unit_path(@org[:payments])
       assert_includes drawer.text, "Dot Fennick"
       assert_not_includes drawer.text, "100%"
+    end
+
+    should "add people to Payments without asking an allocation, and store none sent by hand" do
+      get edit_tenant_org_unit_path(@org[:payments])
+      assert_select "input[name='role']"
+      assert_select "input[name='allocation']", count: 0
+
+      post tenant_org_unit_members_path(@org[:payments]), params: { person_ids: [ @org[:ezra].id ], role: "Analyst", allocation: "50" }
+
+      assert_nil flash[:drawer_alert]
+      membership = ActsAsTenant.with_tenant(@tenant) { OrgMembership.find_by!(unit_id: @org[:payments], person_id: @org[:ezra].id) }
+      assert_equal [ "Analyst", nil ], [ membership.role, membership.allocation ]
     end
 
     should "offer no form to retire, merge, split or move a unit out of reach" do

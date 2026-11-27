@@ -84,6 +84,12 @@ class Tenant::OrgGraphSystemTest < ApplicationSystemTestCase
       assert_no_selector "a", text: "Settings"
       within("#unit-#{@org[:platform]}") { assert_text "Ada Quill" }
       assert_no_selector "#org-graph-unit a[href*='/org_graph/people/']"
+
+      visit edit_tenant_org_unit_path(@org[:checkout])
+      within("#org-graph-drawer") do
+        assert_field "Role (optional)"
+        assert_no_field "Allocation %"
+      end
     end
 
     should "see the Units view stacked, with no sideways scroll, at phone width" do
@@ -95,6 +101,13 @@ class Tenant::OrgGraphSystemTest < ApplicationSystemTestCase
       screenshot("owner_units_view_phone")
       assert_no_text "Tenant administration"
       assert_no_sideways_overflow
+
+      visit edit_tenant_org_unit_path(@org[:checkout])
+      within("#org-graph-drawer") do
+        assert_field "Role (optional)"
+        assert_no_field "Allocation %"
+      end
+      screenshot("owner_add_people_phone")
     end
   end
 

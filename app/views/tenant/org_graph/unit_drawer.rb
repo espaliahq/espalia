@@ -300,16 +300,12 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   def add_member_form
     drawer_form(tenant_org_unit_members_path(@unit), class: "space-y-3") do
       picker(field: "person_ids[]", frame: "member-candidates", label: "Add people")
-      div(class: "grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8rem]") do
+      div(class: @rights.people? ? "grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8rem]" : "grid grid-cols-1 gap-3") do
         div do
           label(for: "org-unit-role", class: "block text-xs text-muted") { "Role (optional)" }
           input(type: "text", id: "org-unit-role", name: "role", class: "#{Components::Kit::Field::INPUT} mt-1")
         end
-        div do
-          label(for: "org-unit-allocation", class: "block text-xs text-muted") { "Allocation %" }
-          input(type: "number", id: "org-unit-allocation", name: "allocation", min: 1, max: 100, step: 1,
-                inputmode: "numeric", placeholder: "100", class: "#{Components::Kit::Field::INPUT} mt-1")
-        end
+        allocation_field if @rights.people?
       end
       unless @unit.held_by_espalia?
         p(class: "text-xs text-muted") do
@@ -317,6 +313,14 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
         end
       end
       submit("Add to #{@unit.name}", variant: :outline)
+    end
+  end
+
+  def allocation_field
+    div do
+      label(for: "org-unit-allocation", class: "block text-xs text-muted") { "Allocation %" }
+      input(type: "number", id: "org-unit-allocation", name: "allocation", min: 1, max: 100, step: 1,
+            inputmode: "numeric", placeholder: "100", class: "#{Components::Kit::Field::INPUT} mt-1")
     end
   end
 
