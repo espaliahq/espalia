@@ -54,6 +54,11 @@ class Person < ApplicationRecord
   # constraint holds every forgotten row to it, so a pluck reads it too.
   FORMER_MEMBER = "Former member"
 
+  # Where a forgotten person's name would sit beside work that stays, such as
+  # feedback they wrote about someone else
+  # ([#590](https://github.com/espaliahq/espalia/issues/590)).
+  REMOVED = "Person removed"
+
   # The stand-in stays whole, so a greeting never reads "Former".
   #
   # @param name [String, nil]

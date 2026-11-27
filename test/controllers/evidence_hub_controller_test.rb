@@ -84,6 +84,16 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "mark the author as removed once they are forgotten" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @peer.update_columns(forgotten_at: Time.current, name: Person::FORMER_MEMBER, email: nil)
+      end
+      sign_in @assessee_user
+      get evidence_hub_path
+      assert_select "#needs-you [data-testid='needs-you-place']", text: /Place feedback about you\s*#{Person::REMOVED} · Given/
+      assert_select "#needs-you", text: /Former/, count: 0
+    end
+
     should "ask the manager to place a report's feedback, linking to the report's thread" do
       sign_in @manager_user
       get evidence_hub_path

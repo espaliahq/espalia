@@ -95,6 +95,22 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
   end
 
   { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
+    should "mark a forgotten author as removed and keep their feedback decidable, on #{name}" do
+      page.driver.browser.manage.window.resize_to(*size)
+      ActsAsTenant.with_tenant(@tenant) do
+        @jordan.update_columns(forgotten_at: Time.current, name: Person::FORMER_MEMBER, email: nil)
+      end
+      open_hub
+
+      message = find("article[data-kind='feedback']", text: "Alex owned the outage follow-up")
+      within(message) { assert_text "#{Person::REMOVED} · " }
+      assert_no_text "Former"
+      accept_and_dismiss
+      assert_decided
+    end
+  end
+
+  { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
     should "show a decision model's suggestion as its confidence alone, on #{name}" do
       page.driver.browser.manage.window.resize_to(*size)
       ActsAsTenant.with_tenant(@tenant) do
