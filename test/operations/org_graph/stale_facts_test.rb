@@ -47,7 +47,11 @@ class Operations::OrgGraph::StaleFactsTest < ActiveSupport::TestCase
     assert_equal [ @org[:cyril].id ], call(person_ids: [ @org[:cyril].id ])[:stale].map { it[:person_id] }.uniq
   end
 
-  should "refuse a member while the Org Graph is admins only" do
+  should "read for an Org Graph editor, and refuse a member who holds no grant" do
+    ActsAsTenant.with_tenant(@tenant) { @member.update!(org_graph_editor: true) }
+    assert_equal({ stale: [] }, call(as: @member, person_ids: [ @org[:cyril].id ]))
+
+    ActsAsTenant.with_tenant(@tenant) { @member.update!(org_graph_editor: false) }
     assert_raises(Pundit::NotAuthorizedError) { call(as: @member, person_ids: [ @org[:cyril].id ]) }
   end
 end

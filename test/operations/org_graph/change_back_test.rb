@@ -58,7 +58,7 @@ class Operations::OrgGraph::ChangeBackTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { run_op(Operations::OrgGraph::ChangeBack, { entry_id: SecureRandom.uuid_v7 }) }
   end
 
-  should "refuse a member while the Org Graph is unfinished, and write nothing" do
+  should "refuse a member who is neither an admin nor an Org Graph editor, and write nothing" do
     entry = as_tenant { OrgUnitActivity.for_unit(@org[:platform]).first }
 
     assert_raises(Pundit::NotAuthorizedError) do

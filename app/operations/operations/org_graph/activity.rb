@@ -2,8 +2,9 @@
 
 # One unit's activity feed (#137), the read behind the Units view's sidebar,
 # or with no unit the organisation's own: who was made an Org Graph editor,
-# and who stopped being one. Both sit behind the same check. People are named
-# through {Person}, so a forgotten person reads as a former member.
+# and who stopped being one. The organisation's feed is for admins and
+# editors. People are named through {Person}, so a forgotten person reads as
+# a former member.
 class Operations::OrgGraph::Activity < Operations::Base
   description "Read one Org Graph unit's activity, newest first, 25 groups a page. Leave out unit_id to " \
               "read the organisation's own activity instead: who was made an Org Graph editor, and who " \
@@ -13,7 +14,8 @@ class Operations::OrgGraph::Activity < Operations::Base
               "when it took effect, when the Org Graph learned it, any plan reference, its parts and " \
               "whether the caller can change it back, with the reason when not. Each part has its own " \
               "id, description and change-back answer. Changing a group back reverses it in every unit " \
-              "it touched, and units_touched counts them. Admins only while the Org Graph is unfinished."
+              "it touched, and units_touched counts them. A unit's activity is for admins while the Org " \
+              "Graph is unfinished; the organisation's is for admins and Org Graph editors."
   category :read
   approval :none
 
@@ -21,7 +23,7 @@ class Operations::OrgGraph::Activity < Operations::Base
   parameter :page, Integer, required: false
 
   def policy_check
-    authorize :org_graph, :show_units?
+    authorize :org_graph, params[:unit_id].nil? ? :edit_structure? : :show_units?
   end
 
   # @return [Hash] `:unit_id` (nil for the organisation), `:page`, `:next_page` and `:groups`

@@ -27,7 +27,7 @@ class Tenant::OrgGraphsController < ApplicationController
 
   # POST /tenant/org_graph/change_back
   def change_back
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
     if params[:entry_id].present?
       Operations::OrgGraph::ChangeBack.call(context: pundit_user, params: { entry_id: params[:entry_id] })
     else

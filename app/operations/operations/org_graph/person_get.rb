@@ -12,14 +12,14 @@ class Operations::OrgGraph::PersonGet < Operations::Base
               "took effect, when the Org Graph learned it, its provider and who made it. A membership or fact " \
               "Espalia holds that nobody has changed or confirmed within the tenant's threshold carries " \
               "stale: when it was last checked and by whom. A forgotten person " \
-              "reads as \"Former member\". Admins only while the Org Graph is unfinished."
+              "reads as \"Former member\". Admins and Org Graph editors only."
   category :read
   approval :none
 
   parameter :person_id, String, required: true
 
   def policy_check
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
   end
 
   # The profile the read was built from, for the web drawer, which renders

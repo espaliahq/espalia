@@ -2,8 +2,8 @@
 
 require "test_helper"
 
-# The organisation's own activity, read over MCP by leaving out unit_id, sits
-# behind the same check as a unit's: admins only while the Org Graph is unfinished.
+# The organisation's own activity, read over MCP by leaving out unit_id, is for
+# admins and Org Graph editors.
 class OrgGraphOrganisationActivityMcpTest < ActionDispatch::IntegrationTest
   setup do
     @tenant = create(:tenant)
@@ -30,8 +30,10 @@ class OrgGraphOrganisationActivityMcpTest < ActionDispatch::IntegrationTest
     assert_refused call_tool(@member)
   end
 
-  should "refuse an Org Graph editor who isn't an admin" do
-    assert_refused call_tool(@editor)
+  should "give an Org Graph editor who isn't an admin the organisation's activity" do
+    payload = JSON.parse(call_tool(@editor).dig("result", "content", 0, "text"))
+
+    assert_equal [ "Made Brook Tamsin an Org Graph editor" ], payload["groups"].map { it["summary"] }
   end
 
   private

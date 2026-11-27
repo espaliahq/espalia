@@ -7,7 +7,7 @@ class Operations::OrgGraph::StaleFacts < Operations::Base
               "has changed or confirmed them within the tenant's threshold. Each row has the person id, the " \
               "fact (\"membership\", or a fact such as \"site\" or \"title\"), the unit id for a membership, the " \
               "day it was last checked and the id of whoever checked it. Oldest first. A fact an HRIS holds is " \
-              "never stale, since each sync confirms it. Admins only while the Org Graph is unfinished."
+              "never stale, since each sync confirms it. Admins and Org Graph editors only."
   category :read
   approval :none
 
@@ -18,7 +18,7 @@ class Operations::OrgGraph::StaleFacts < Operations::Base
   attr_reader :stale
 
   def policy_check
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
   end
 
   # @return [Hash] `{ stale: [...] }`
