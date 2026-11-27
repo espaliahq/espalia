@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 class CreateTenantSettingChanges < ActiveRecord::Migration[8.1]
-  # ComparisonConfig::DEFAULT_MIN_GROUP_SIZE when this ran; a migration doesn't read app constants.
+  # ComparisonConfig's DEFAULT_ and LOWEST_MIN_GROUP_SIZE when this ran; a migration doesn't read app constants.
   DEFAULT_MIN_GROUP_SIZE = 5
+  LOWEST_MIN_GROUP_SIZE = 4
 
   def up
     create_table :tenant_setting_changes, id: :uuid, default: nil do |t|
@@ -21,21 +22,27 @@ class CreateTenantSettingChanges < ActiveRecord::Migration[8.1]
     # Each tenant's values today, dated from its creation: what we know was in force.
     # Postgres 16 has no uuidv7(), so the ids come from Ruby.
     tenants = select_rows(<<~SQL.squish)
-      SELECT id, time_zone, comparison_config ->> 'min_group_size', created_at FROM tenants ORDER BY created_at, id
+      SELECT id, time_zone, comparison_config ? 'min_group_size', comparison_config ->> 'min_group_size', created_at
+      FROM tenants ORDER BY created_at, id
     SQL
     return if tenants.empty?
 
-    rows = tenants.flat_map do |id, zone, size, created_at|
-      { "time_zone" => zone, "min_group_size" => size_read(size) }.map do |setting, value|
+    rows = tenants.flat_map do |id, zone, stored, size, created_at|
+      { "time_zone" => zone, "min_group_size" => size_read(stored, size) }.map do |setting, value|
         "(#{[ SecureRandom.uuid_v7, id, setting, value, created_at ].map { connection.quote(it) }.join(', ')})"
       end
     end
     execute "INSERT INTO tenant_setting_changes (id, tenant_id, setting, value, changed_at) VALUES #{rows.join(', ')}"
   end
 
-  # The size the app reads from what is stored: a decimal truncates, as the
-  # integer attribute casts it; anything else, or nothing, is the default.
-  def size_read(stored) = (stored.to_s.match?(/\A\d+(\.\d+)?\z/) ? stored.to_i : DEFAULT_MIN_GROUP_SIZE).to_s
+  # The floor the app applies to what is stored: the default when no size is
+  # stored, else the size cast as the integer attribute casts it, never below
+  # the least an admin may set.
+  def size_read(stored, size)
+    return DEFAULT_MIN_GROUP_SIZE.to_s unless ActiveModel::Type::Boolean.new.cast(stored)
+
+    [ ActiveModel::Type::Integer.new.cast(size).to_i, LOWEST_MIN_GROUP_SIZE ].max.to_s
+  end
 
   def down
     drop_table :tenant_setting_changes

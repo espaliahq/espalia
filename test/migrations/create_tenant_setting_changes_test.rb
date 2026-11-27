@@ -4,33 +4,40 @@ require "test_helper"
 require Rails.root.join("db/migrate/20261127082422_create_tenant_setting_changes")
 
 class CreateTenantSettingChangesTest < ActiveSupport::TestCase
+  STORED_SIZES = { "a whole number" => 8, "a decimal" => 4.5, "a decimal string" => "4.9", "a leading zero" => "08",
+                   "a blank" => "", "a word" => "five", "a negative" => -3, "a null" => nil }.freeze
+
   def migrate(direction)
     ActiveRecord::Migration.suppress_messages { CreateTenantSettingChanges.new.migrate(direction) }
   end
 
-  should "hold its default size to the app's" do
-    assert_equal ComparisonConfig::DEFAULT_MIN_GROUP_SIZE, CreateTenantSettingChanges::DEFAULT_MIN_GROUP_SIZE
+  def store(tenant, config)
+    Tenant.where(id: tenant.id).update_all([ "comparison_config = ?::jsonb", config.to_json ])
   end
 
-  should "record each tenant's values today, dated from its creation, reading a size as the app does" do
-    sydney = create(:tenant, time_zone: "Australia/Sydney", comparison_config: ComparisonConfig.new(min_group_size: 8))
-    plain = create(:tenant)
-    blank, decimal, junk = create_list(:tenant, 3)
-    Tenant.where(id: plain.id).update_all(comparison_config: {})
-    Tenant.where(id: blank.id).update_all(%(comparison_config = '{"min_group_size": ""}'::jsonb))
-    Tenant.where(id: decimal.id).update_all(%(comparison_config = '{"min_group_size": 4.5}'::jsonb))
-    Tenant.where(id: junk.id).update_all(%(comparison_config = '{"min_group_size": "five"}'::jsonb))
+  should "hold its sizes to the app's" do
+    assert_equal ComparisonConfig::DEFAULT_MIN_GROUP_SIZE, CreateTenantSettingChanges::DEFAULT_MIN_GROUP_SIZE
+    assert_equal ComparisonConfig::LOWEST_MIN_GROUP_SIZE, CreateTenantSettingChanges::LOWEST_MIN_GROUP_SIZE
+  end
+
+  should "record each tenant's values today, dated from its creation, with the floor the app reads from each stored size" do
+    staged = STORED_SIZES.to_h { |name, size| [ name, create(:tenant).tap { store(it, { "min_group_size" => size }) } ] }
+    staged["no size"] = create(:tenant).tap { store(it, {}) }
+    sydney = create(:tenant, time_zone: "Australia/Sydney")
 
     migrate(:down)
     migrate(:up)
 
     TenantSettingChange.reset_column_information
-    rows = TenantSettingChange.unscoped.where(tenant_id: [ sydney, plain, blank, decimal, junk ].map(&:id)).pluck(:tenant_id, :setting, :value, :changed_at)
-    expected = [ [ sydney, "Australia/Sydney", "8" ], [ plain, "UTC", "5" ], [ blank, "UTC", "5" ], [ decimal, "UTC", "4" ], [ junk, "UTC", "5" ] ].flat_map do |tenant, zone, size|
-      created = tenant.reload.created_at
-      [ [ tenant.id, "time_zone", zone, created ], [ tenant.id, "min_group_size", size, created ] ]
+    recorded = TenantSettingChange.unscoped.where(tenant_id: [ *staged.values, sydney ].map(&:id)).to_a
+    staged.merge("Sydney" => sydney).each do |name, tenant|
+      tenant.reload
+      rows = recorded.select { it.tenant_id == tenant.id }.to_h { [ it.setting, it ] }
+      app_floor = ComparisonConfig.floor_for(tenant.comparison_config.min_group_size).to_s
+
+      assert_equal [ app_floor, tenant.time_zone ], rows.values_at("min_group_size", "time_zone").map(&:value), name
+      assert_equal [ tenant.created_at ] * 2, rows.values.map(&:changed_at), name
     end
-    assert_equal expected.sort_by(&:to_s), rows.sort_by(&:to_s)
   ensure
     TenantSettingChange.reset_column_information
   end

@@ -40,6 +40,15 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
     end
   end
 
+  should "go with its tenant when the tenant is destroyed" do
+    tenant = create(:tenant)
+    tenant.update!(time_zone: "Europe/Paris")
+
+    tenant.destroy!
+
+    assert_empty TenantSettingChange.unscoped.where(tenant_id: tenant.id)
+  end
+
   should "keep a row unchanged once saved" do
     row = ActsAsTenant.with_tenant(tenant = create(:tenant)) { tenant.setting_changes.first }
 
