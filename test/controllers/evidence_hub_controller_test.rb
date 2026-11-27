@@ -289,6 +289,33 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-conversation-thread-target='composer'] button", count: 0
     end
 
+    should "close a pending request about a forgotten person to both sides" do
+      request = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_request, tenant: @tenant, requester: @manager, requestee: @peer, person_id: @assessee.id,
+                                  framework_id: @framework_id)
+      end
+      forget!(@assessee)
+
+      sign_in @peer_user
+      get evidence_conversation_path(@manager.id)
+      assert_select "##{request.dom_id}", text: /Closed/ do
+        assert_select "button", text: "Respond", count: 0
+        assert_select "button", text: "Decline", count: 0
+      end
+      assert_select "##{request.dom_id}", text: /Waiting on/, count: 0
+      assert_select "#needs-you [data-testid='needs-you-request']", count: 0
+
+      sign_in @manager_user
+      get evidence_conversation_path(@peer.id)
+      assert_select "##{request.dom_id}", text: /Closed/ do
+        assert_select "a", text: "Cancel request", count: 0
+        assert_select "button", text: "Send a nudge", count: 0
+      end
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@peer.id}']" do
+        assert_select "*", text: "Waiting", count: 0
+      end
+    end
+
     should "open an empty thread with someone the viewer hasn't talked to" do
       sign_in @assessee_user
       get evidence_conversation_path(@manager.id)

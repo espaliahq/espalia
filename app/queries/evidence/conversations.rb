@@ -162,11 +162,18 @@ class Evidence::Conversations
   # @return [Boolean]
   def owes?(message)
     case message.kind
-    when :request then message.request.pending? && message.request.requestee_person_id == viewer_id
+    when :request then open?(message.request) && message.request.requestee_person_id == viewer_id
     when :reply, :feedback then placeable?(message.item)
     else false
     end
   end
+
+  # Whether a request still waits on someone. One about a forgotten person
+  # stays pending in the data (#627) but nobody can answer it.
+  #
+  # @param request [EvidenceRequest]
+  # @return [Boolean]
+  def open?(request) = request.pending? && !request.assessee&.forgotten?
 
   # @return [Hash{String => Person}] the other party of each conversation, in
   #   either group
@@ -183,7 +190,7 @@ class Evidence::Conversations
     Conversation.new(
       person_id: person_id, messages: list,
       owes: list.any? { |m| owes?(m) },
-      waiting: list.any? { |m| m.kind == :request && m.request.pending? && m.request.requested_by_id == viewer_id }
+      waiting: list.any? { |m| m.kind == :request && open?(m.request) && m.request.requested_by_id == viewer_id }
     )
   end
 

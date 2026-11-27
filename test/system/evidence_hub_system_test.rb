@@ -292,6 +292,23 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     end
   end
 
+  should "show a request about a forgotten person as closed, with nothing to answer" do
+    request_id = make_request!
+    ActsAsTenant.with_tenant(@tenant) do
+      @report.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+
+    sign_in_as(@peer_user)
+    visit evidence_conversation_path(@report.id)
+    within("##{EvidenceRequest.dom_id(request_id)}") do
+      assert_text "About Former member"
+      assert_text "Closed"
+      assert_no_text "Waiting on"
+      assert_no_button "Respond"
+      assert_no_button "Decline"
+    end
+  end
+
   should "let the requester nudge a stale open request" do
     make_request!
     ActsAsTenant.with_tenant(@tenant) do

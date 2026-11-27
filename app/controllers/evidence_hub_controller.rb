@@ -177,9 +177,9 @@ class EvidenceHubController < ApplicationController
                                                             params: { scope: place_param == "org" ? "org" : "team" })
     about_you, for_team = to_place_records(placing)
     for_team = [] if place_param == "mine"
-    incoming = EvidenceRequest.incoming_for(current_person.id).pending.least_recently_touched
+    incoming = EvidenceRequest.incoming_for(current_person.id).open.least_recently_touched
       .includes(:requester, :assessee).to_a
-    waiting = EvidenceRequest.outgoing_for(current_person.id).pending.least_recently_touched.includes(:requestee).to_a
+    waiting = EvidenceRequest.outgoing_for(current_person.id).open.least_recently_touched.includes(:requestee).to_a
     paths = {}
     incoming.each do |r|
       paths[r.id] = message_path(conversations, request_id: r.id, anchor: r.dom_id)
@@ -271,7 +271,8 @@ class EvidenceHubController < ApplicationController
     {
       messages: shown, hidden_count: hidden_count, shown_ids: shown.to_set(&:dom_id),
       owed_ids: shown.select { |m| conversations.owes?(m) }.map(&:dom_id).to_set,
-      closed_ids: items.select { |item| forgotten.include?(item.person_id) }.to_set(&:id),
+      closed_ids: (items.select { |item| forgotten.include?(item.person_id) } +
+                   requests.select { |request| request.pending? && !conversations.open?(request) }).to_set(&:id),
       cells: Evidence::CellContextResolver.new(requests + items.select(&:capability_stable_id)).by_id,
       links: links_for(items),
       in_situ_paths: in_situ_paths_for(items),
