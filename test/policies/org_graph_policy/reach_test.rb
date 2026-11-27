@@ -288,24 +288,31 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     end
   end
 
-  should "check a membership change again under the member's lock against the member and the caller as they stand" do
-    manager = as(as_tenant { create(:person, tenant: @tenant).tap { @org[:dot].update!(manager: it) } })
+  should "check a membership change again under the member's lock, refusing a manager taken off the member through the Org Graph, " \
+         "for a tenant cut over to it" do
+    as_tenant { @tenant.update!(org_graph_people_projected_at: Time.current) }
+    lead = as_tenant { create(:person, tenant: @tenant).tap { manage_dot(it) } }
+    assert_equal lead.id, as_tenant { @org[:dot].reload.manager_id }, "change_manager writes the column the policy reads"
+    manager = as(lead)
     {
-      "the member's manager changed" => [ ->(_) { Person.find(@org[:dot].id).update!(manager: @skip) },
-                                          ->(id) { Person.find(@org[:dot].id).update!(manager_id: id) } ],
+      "the member's manager changed" => [ ->(_) { manage_dot(@skip) }, ->(_) { manage_dot(lead) } ],
       "the caller deactivated" => [ ->(id) { Person.find(id).update!(status: "inactive") },
                                     ->(id) { Person.find(id).update!(status: "active") } ],
       "the caller unlinked from their account" => [ ->(_) { TenantUser.find(manager.tenant_user.id).update!(person_id: nil) },
                                                     ->(id) { TenantUser.find(manager.tenant_user.id).update!(person_id: id) } ]
     }.each do |revocation, (revoke, restore)|
-      membership_changes.each do |change, command|
-        assert_refused_under_the_lock("#{change}, #{revocation}", command, manager, handler: OrgGraph::CommandHandler) do
-          revoke.call(manager.person.id)
-        end
-      ensure
-        as_tenant { restore.call(manager.person.id) }
-      end
+      assert_membership_changes_refused_under_the_lock(manager, revocation, revoke:, restore:)
     end
+  end
+
+  # Only narrowed: the HRIS sync writes this tenant's manager_id to the row
+  # directly, outside any person lock, so nothing serialises the two.
+  should "only read the member's manager again under the member's lock, serialising nothing, for a tenant not yet cut over" do
+    manager = as(as_tenant { create(:person, tenant: @tenant).tap { @org[:dot].update!(manager: it) } })
+
+    assert_membership_changes_refused_under_the_lock(manager, "the member's manager changed",
+                                                     revoke: ->(_) { Person.find(@org[:dot].id).update!(manager: @skip) },
+                                                     restore: ->(id) { Person.find(@org[:dot].id).update!(manager_id: id) })
   end
 
   should "let the system change the organisation's types under the lock, with no person to read again" do
@@ -388,6 +395,11 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
 
   def system = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+
+  def manage_dot(manager)
+    OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                            .change_manager(@org[:dot].id, manager.id, provider: OrgGraph::StructureAggregate::ESPALIA, **ON)
+  end
 
   def structure(actor) = StructureHandler.new(@tenant, OrgGraph::StructureCommandHandler.new(actor:))
 
@@ -509,6 +521,16 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
   end
 
   def event_ids = Rails.configuration.event_store.read.map(&:event_id)
+
+  def assert_membership_changes_refused_under_the_lock(manager, revocation, revoke:, restore:)
+    membership_changes.each do |change, command|
+      assert_refused_under_the_lock("#{change}, #{revocation}", command, manager, handler: OrgGraph::CommandHandler) do
+        revoke.call(manager.person.id)
+      end
+    ensure
+      as_tenant { restore.call(manager.person.id) }
+    end
+  end
 
   def unit(id) = as_tenant { OrgUnit.find(id) }
 

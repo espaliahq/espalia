@@ -191,10 +191,13 @@ stands. Every structure command checks again under that lock, against the
 caller as the database holds them then. So an owner removed, or a caller
 deactivated, demoted, unlinked from their person or stripped of the editor
 grant while the command waited, is refused. A membership command checks
-again under the member's lock, so a manager taken off the member while it
-waited is refused. That lock doesn't hold the managers further up the line or
-the unit's owners, so a change to those is read again but can still land
-between the check and the write. A check builds one however many
+again under the member's lock. For a tenant cut over to the Org Graph, the
+member's manager is written under that same lock, so a manager taken off the
+member while the command waited is refused. For a tenant not yet cut over, the
+HRIS sync writes the manager to the row outside any person lock, so the change
+is read again but can still land between the check and the write. The same
+holds everywhere for the managers further up the line and the unit's owners
+([#643](https://github.com/espaliahq/espalia/issues/643)). A check builds one however many
 units it names, so a command's check under the lock builds at most three (a
 move between structures checks the move and each structure), and
 a screen asking which changes it may change back shares one across them all. A unit or person the Org Graph
