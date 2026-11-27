@@ -342,8 +342,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   def structure_links
     div(class: "flex flex-wrap gap-2") do
       if @overview.declares_structure?(@unit)
-        reshape_link("Edit its unit types", tenant_org_graph_settings_path(anchor: Views::Tenant::OrgGraph::Settings::LevelsPanel.anchor(@unit.id)),
-                     label: "Edit the unit types beneath #{@unit.name}")
+        reshape_link("Edit its unit types", edit_tenant_org_structure_path(@unit.id), label: "Edit the unit types beneath #{@unit.name}")
         reshape_link("Withdraw its structure", new_tenant_org_unit_structure_withdrawal_path(@unit, on: @effective_on, **compared),
                      tone: :danger, label: "Withdraw #{@unit.name}'s structure")
       else

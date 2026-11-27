@@ -31,7 +31,7 @@ class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
         sign_in_as(@admin_user)
       end
 
-      should "give a unit new types from its drawer, and land on its panel in Settings" do
+      should "give a unit new types from its drawer, and land on its structure's own page" do
         visit edit_tenant_org_unit_path(@org[:checkout])
         within("#org-unit-structure") { assert_text "Its unit type comes from the organisation's structure." }
 
@@ -44,7 +44,7 @@ class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
         click_button_with_js_fallback "Give Checkout its own structure",
                                       expect_text: "Checkout has its own structure. Say here where each of its types can sit."
         within("#org-graph-levels-#{@org[:checkout]}") { assert_text "Group" }
-        assert_equal "#org-graph-levels-#{@org[:checkout]}", page.evaluate_script("window.location.hash")
+        assert_current_path edit_tenant_org_structure_path(@org[:checkout])
         assert_equal "Group", type_of(:payments)
       end
 

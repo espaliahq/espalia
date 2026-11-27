@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Gives a unit a structure of its own from its drawer ([#494](https://github.com/espaliahq/espalia/issues/494)), then lands the
-# admin on that structure in Settings to say where each type can sit.
+# declarer on that structure's own page to say where each type can sit.
 class Tenant::OrgUnitStructureDeclarationsController < ApplicationController
   include OrgUnitDrawer
   include OrgStructureAuthorization
@@ -20,8 +20,7 @@ class Tenant::OrgUnitStructureDeclarationsController < ApplicationController
     authorize :org_graph, :show_units?
     overview = OrgGraph::UnitsOverview.new(selected_unit_id: @unit.id)
     Operations::OrgGraph::DeclareStructure.call(context: pundit_user, params: with_date(unit_id: @unit.id, **declaration(overview)))
-    redirect_to tenant_org_graph_settings_path(anchor: Views::Tenant::OrgGraph::Settings::LevelsPanel.anchor(@unit.id)),
-                status: :see_other, notice: "#{@unit.name} has its own structure. Say here where each of its types can sit."
+    redirect_to edit_tenant_org_structure_path(@unit.id), status: :see_other, notice: "#{@unit.name} has its own structure. Say here where each of its types can sit."
   rescue *FAILURES => e
     redirect_to new_tenant_org_unit_structure_declaration_path(@unit, on: effective_on, fresh: (1 if fresh?), **comparison_params),
                 flash: { drawer_alert: readable(e.message) }

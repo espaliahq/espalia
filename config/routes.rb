@@ -111,8 +111,7 @@ Rails.application.routes.draw do
                                            constraints: { inputs: /pay_bands|exchange_rates|budget_lines/ }
 
     # Org Graph Units view (#80), with "change it back" in its activity
-    # sidebar (#137). Here, admins only, until the Org Graph screens are
-    # finished.
+    # sidebar (#137), for anyone who holds a right in the Org Graph (#537).
     resource :org_graph, only: :show, controller: "org_graphs" do
       post :change_back
     end
@@ -150,6 +149,9 @@ Rails.application.routes.draw do
       resource :structure_withdrawal, only: [ :new, :create ], controller: "org_unit_structure_withdrawals"
       resource :structure_move, only: [ :new, :create ], controller: "org_unit_structure_moves"
     end
+
+    # A unit's own structure on a page of its own, for anyone who may change it (#537).
+    resources :org_structures, only: :edit, path: "org_graph/structures", param: :unit_id
 
     # The person drawer (#132): `show` opens it over the Units view, and each
     # membership change posts to its own resource, keyed by the unit.

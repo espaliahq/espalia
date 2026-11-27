@@ -18,10 +18,10 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       structure.define_taxonomy([ { level_id: @tribe_id, name: "Tribe" }, { level_id: @squad_id, name: "Squad" },
                                   { level_id: @team_id, name: "Team" } ], effective_on: Date.current)
-      tribe = SecureRandom.uuid_v7
-      structure.create_unit(tribe, "Commerce", level_id: @tribe_id, effective_on: Date.current)
+      @commerce_id = SecureRandom.uuid_v7
+      structure.create_unit(@commerce_id, "Commerce", level_id: @tribe_id, effective_on: Date.current)
       @payments_id = SecureRandom.uuid_v7
-      structure.create_unit(@payments_id, "Payments", level_id: @team_id, parent_id: tribe, effective_on: Date.current)
+      structure.create_unit(@payments_id, "Payments", level_id: @team_id, parent_id: @commerce_id, effective_on: Date.current)
     end
   end
 
@@ -45,6 +45,13 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
 
       assert_equal "The unit type could not be added: There is already a unit type called Squad", flash[:alert]
       assert_equal %w[Tribe Squad Team], level_names
+    end
+
+    should "send a unit with no structure of its own back to the Units view" do
+      get edit_tenant_org_structure_path(@payments_id)
+
+      assert_redirected_to tenant_org_graph_path(unit: @payments_id)
+      assert_equal "Payments has no structure of its own to change.", flash[:alert]
     end
 
     should "ask for a name" do
@@ -268,6 +275,31 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       delete tenant_org_graph_settings_level_path(guild_id), params: { structure_unit_id: @payments_id }
       assert_nil flash[:alert]
       assert_equal %w[Pod], own_names
+    end
+
+    should "open Payments' structure on a page of its own, in the app's layout, and land its writes back there" do
+      get edit_tenant_org_structure_path(@payments_id)
+
+      assert_response :success
+      assert_select "h1", text: "The structure beneath Payments"
+      assert_select "a[href='#{tenant_org_graph_path}']", text: "Organisation"
+      assert_select "a[href='#{tenant_org_graph_settings_path}']", count: 0
+      assert_select "#org-graph-levels-#{@payments_id} input[name='back'][value='structure']"
+
+      post tenant_org_graph_settings_levels_path, params: { name: "Guild", structure_unit_id: @payments_id, back: "structure" }
+      assert_redirected_to edit_tenant_org_structure_path(@payments_id)
+      assert_equal %w[Pod Guild], own_names
+
+      post tenant_org_graph_settings_levels_path, params: { name: "pod", structure_unit_id: @payments_id, back: "structure" }
+      assert_redirected_to edit_tenant_org_structure_path(@payments_id)
+      assert_predicate flash[:alert], :present?
+    end
+
+    should "not open the structure page of a unit they don't own" do
+      get edit_tenant_org_structure_path(@commerce_id)
+
+      assert_redirected_to root_path
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
 
     should "refuse to change the organisation's structure" do

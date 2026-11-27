@@ -50,7 +50,7 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
 
     post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } }
 
-    assert_redirected_to tenant_org_graph_settings_path(anchor: "org-graph-levels-#{@org[:checkout]}")
+    assert_redirected_to edit_tenant_org_structure_path(@org[:checkout])
     assert_equal %w[Department Team Squad], own_types(:checkout)
     assert_equal "Squad", type_of(:payments)
     assert_not_equal @org[:squad], overview.unit(@org[:payments]).level_id
@@ -65,7 +65,7 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
 
     post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } }
 
-    assert_redirected_to tenant_org_graph_settings_path(anchor: "org-graph-levels-#{@org[:checkout]}")
+    assert_redirected_to edit_tenant_org_structure_path(@org[:checkout])
     assert_equal %w[Department Team Squad], own_types(:checkout)
     assert_equal "Squad", type_of(:payments)
   end

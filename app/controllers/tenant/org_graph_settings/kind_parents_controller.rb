@@ -43,7 +43,7 @@ class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
   end
 
   def back_with_alert(alert)
-    redirect_to tenant_org_graph_settings_path(anchor:), alert:, status: :see_other
+    redirect_to landing(anchor), alert:, status: :see_other
   end
 
   def in_structure = params[:structure_unit_id].present? ? { structure_unit_id: params[:structure_unit_id].to_s } : {}

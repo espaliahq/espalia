@@ -32,11 +32,13 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   # @param levels [Array<Hash>] each level as Operations::OrgGraph::Sources reads it, top first
   # @param can_edit_taxonomy [Boolean] whether the viewer may add and remove unit types, and set where each can sit
   # @param structure [Hash, nil] `{ unit_id, name }` of the unit whose own structure this is; nil for the top one
-  def initialize(hris:, levels:, can_edit_taxonomy: false, structure: nil)
+  # @param on_structure_page [Boolean] whether its writes land back on the structure's own page, not Settings
+  def initialize(hris:, levels:, can_edit_taxonomy: false, structure: nil, on_structure_page: false)
     @hris = hris
     @levels = levels
     @can_edit_taxonomy = can_edit_taxonomy
     @structure = structure
+    @on_structure_page = on_structure_page
   end
 
   # @param structure_unit_id [String, nil]
@@ -84,7 +86,10 @@ class Views::Tenant::OrgGraph::Settings::LevelsPanel < Views::Base
   end
 
   def structure_field
-    input(type: "hidden", name: "structure_unit_id", value: @structure[:unit_id]) if @structure
+    return unless @structure
+
+    input(type: "hidden", name: "structure_unit_id", value: @structure[:unit_id])
+    input(type: "hidden", name: "back", value: "structure") if @on_structure_page
   end
 
   def level_row(level)
