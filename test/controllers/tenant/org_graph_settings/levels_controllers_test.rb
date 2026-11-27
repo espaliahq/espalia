@@ -54,6 +54,12 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_equal "Payments has no structure of its own to change.", flash[:alert]
     end
 
+    should "find no structure page for a unit the Org Graph doesn't hold" do
+      get edit_tenant_org_structure_path(SecureRandom.uuid)
+
+      assert_response :not_found
+    end
+
     should "ask for a name" do
       post tenant_org_graph_settings_levels_path, params: { name: " " }
 
