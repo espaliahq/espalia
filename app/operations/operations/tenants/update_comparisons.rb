@@ -8,7 +8,7 @@ class Operations::Tenants::UpdateComparisons < Operations::Base
               "level: enabled turns the comparison on or off; min_group_size is the fewest people a level " \
               "needs before its scores show (at least 4, default 5) on the comparison, and in the capability " \
               "attainment report to a viewer who can't open every assessment in the group (today every viewer of " \
-              "that report can); snapshot_every_months is how often the group scores are taken, on the 1st " \
+              "that report can; a closed cycle's report keeps at least the size in force when it closed); snapshot_every_months is how often the group scores are taken, on the 1st " \
               "of the month (1, 3 or 6, default 1). Only the settings given change. Refused unless the caller " \
               "is a tenant admin."
   category :write
