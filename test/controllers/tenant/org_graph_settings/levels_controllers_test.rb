@@ -237,22 +237,44 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
     end
   end
 
+  context "as a member with no rights" do
+    setup do
+      @member_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: @member_user, role: :member, person: create(:person, tenant: @tenant))
+      end
+      sign_in @member_user
+    end
+
+    should "refuse to add, rule or remove a unit type, in either structure, changing nothing" do
+      [ {}, { structure_unit_id: @payments_id } ].each do |structure|
+        [ -> { post tenant_org_graph_settings_levels_path, params: { name: "Guild", **structure } },
+          -> { patch tenant_org_graph_settings_kind_parent_path(@squad_id), params: { parent_ids: [], top: "1", **structure } },
+          -> { delete tenant_org_graph_settings_level_path(@team_id), params: structure } ].each do |request|
+          request.call
+          assert_redirected_to root_path
+          assert_equal "You are not authorized to perform this action.", flash[:alert]
+        end
+      end
+      assert_equal %w[Tribe Squad Team], level_names
+      assert_empty own_names
+    end
+  end
+
   context "as an Org Graph editor" do
     setup { sign_in @editor_user }
 
-    should "refuse to add, change or remove a unit type, and offer none of it" do
+    should "add, change and remove a unit type, as the MCP tools let them, though Settings stays the admin's" do
       post tenant_org_graph_settings_levels_path, params: { name: "Guild" }
-      assert_equal "You are not authorized to perform this action.", flash[:alert]
+      assert_nil flash[:alert]
+      assert_equal %w[Tribe Squad Team Guild], level_names
 
-      patch tenant_org_graph_settings_kind_parent_path(@squad_id), params: { parent_ids: [ @tribe_id ], top: "0" }
-      assert_equal "You are not authorized to perform this action.", flash[:alert]
-
-      delete tenant_org_graph_settings_level_path(@squad_id)
-      assert_equal "You are not authorized to perform this action.", flash[:alert]
+      guild_id = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_structure.find_by!(name: "Guild").id }
+      delete tenant_org_graph_settings_level_path(guild_id)
+      assert_nil flash[:alert]
       assert_equal %w[Tribe Squad Team], level_names
 
       get tenant_org_graph_settings_path
-      assert_select "#org-graph-level-remove-#{@squad_id}", count: 0
       assert_select "#org-graph-level-menu-#{@squad_id}", count: 0
     end
   end

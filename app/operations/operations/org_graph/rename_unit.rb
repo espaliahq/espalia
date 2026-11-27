@@ -7,7 +7,8 @@ class Operations::OrgGraph::RenameUnit < Operations::Base
 
   description "Rename a unit in the Org Graph, from effective_on (today by default). Only a unit Espalia " \
               "holds can be renamed here; one an HRIS supplies is renamed in the HRIS. Refused unless the " \
-              "caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it."
+              "caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it, " \
+              "or anyone above them in the reporting line."
   approval :mcp_client
 
   parameter :unit_id, String, required: true
