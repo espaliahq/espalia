@@ -636,6 +636,15 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       assert_equal 1.0, @aggregate.bindings[@bid][:weight]
     end
 
+    should "open no draft when a new binding is refused on a published framework" do
+      @aggregate.publish_version(@framework_id, "seed")
+      before = @aggregate.unpublished_events.to_a.size
+      assert_raises(Frameworks::Aggregate::UnstorableDecimal) do
+        @aggregate.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @rid, weight: "1.234")
+      end
+      assert_equal before, @aggregate.unpublished_events.to_a.size
+    end
+
     should "carry the largest values the columns hold, as given" do
       @aggregate.update_capability_role_binding(@framework_id, @bid, weight: "999.99", individual_tolerance: 0.25)
 

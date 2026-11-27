@@ -528,6 +528,8 @@ class Frameworks::Aggregate
   # @raise [RuntimeError] if no draft in progress, capability or role not found, or binding already exists
   # @raise [UnstorableDecimal] if a decimal has more than two decimal places or is 1000 or more in size
   def create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: 1.0, individual_tolerance: nil)
+    weight = storable_decimal(weight, "Weight")
+    individual_tolerance = storable_decimal(individual_tolerance, "Individual tolerance")
     ensure_draft_in_progress!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
@@ -538,8 +540,8 @@ class Frameworks::Aggregate
       binding_id: binding_id,
       capability_id: capability_id,
       role_id: role_id,
-      weight: storable_decimal(weight, "Weight"),
-      individual_tolerance: storable_decimal(individual_tolerance, "Individual tolerance")
+      weight: weight,
+      individual_tolerance: individual_tolerance
     }))
   end
 
