@@ -8,9 +8,16 @@
 # `via_suggestion_id` decides the row: `accepted`, or `edited` when the link's
 # valence differs from the one suggested. A decision is final, as on the
 # aggregate.
+#
+# The Org Graph's `PersonForgotten` closes the person's pending rows, so they
+# leave every screen. The aggregate still holds them as pending, and
+# {PersonDevelopment::SuggestionWrites} refuses every command on a forgotten
+# person, so the two never disagree about a write
+# ([#590](https://github.com/espaliahq/espalia/issues/590)).
 class PersonDevelopment::Projections::EvidenceSuggestions
   PROJECTION_NAME = "person_development/evidence_suggestions"
-  CODE_VERSION = 1
+  # 2: closes a forgotten person's pending rows, including those forgotten before.
+  CODE_VERSION = 2
 
   # @return [Array<Class>] event classes this projection handles
   def self.handled_events
@@ -20,7 +27,8 @@ class PersonDevelopment::Projections::EvidenceSuggestions
       PersonDevelopment::Events::EvidencePlacementSuggestionDismissed,
       PersonDevelopment::Events::EvidenceLinkAdded,
       PersonDevelopment::Events::EvidenceLinkRevalenced,
-      PersonDevelopment::Events::FrameworkVersionMigrated
+      PersonDevelopment::Events::FrameworkVersionMigrated,
+      OrgGraph::Events::PersonForgotten
     ]
   end
 
@@ -47,6 +55,7 @@ class PersonDevelopment::Projections::EvidenceSuggestions
     when PersonDevelopment::Events::EvidenceLinkAdded then handle_link(event, event.data[:linked_by_id])
     when PersonDevelopment::Events::EvidenceLinkRevalenced then handle_link(event, event.data[:changed_by_id])
     when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
+    when OrgGraph::Events::PersonForgotten then handle_forgotten(event)
     end
   end
 
@@ -56,7 +65,7 @@ class PersonDevelopment::Projections::EvidenceSuggestions
   def handle_suggested(event)
     data = event.data
     row = EvidencePlacementSuggestion.find_or_initialize_by(id: data[:suggestion_id])
-    return if row.persisted? && EvidencePlacementSuggestion::DECIDED_STATUSES.include?(row.status)
+    return if row.persisted? && (EvidencePlacementSuggestion::DECIDED_STATUSES + %w[closed]).include?(row.status)
 
     row.assign_attributes(
       evidence_id: data[:evidence_id], person_id: event.metadata[:person_id], framework_id: event.metadata[:framework_id],
@@ -71,6 +80,11 @@ class PersonDevelopment::Projections::EvidenceSuggestions
   def handle_superseded(event)
     EvidencePlacementSuggestion.pending.where(id: Array(event.data[:suggestion_ids]))
       .update_all(status: "superseded", updated_at: Time.current)
+  end
+
+  def handle_forgotten(event)
+    EvidencePlacementSuggestion.pending.where(person_id: event.data[:person_id])
+      .update_all(status: "closed", updated_at: Time.current)
   end
 
   def handle_dismissed(event)

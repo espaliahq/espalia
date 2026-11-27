@@ -11,8 +11,12 @@
 # supersedes the pending set and reuses a superseded suggestion when the model
 # proposes the same cell again; a cell someone decided on is never proposed
 # again.
+#
+# Forgetting the person the feedback is about closes their pending rows, and
+# nobody decides a closed row
+# ([#590](https://github.com/espaliahq/espalia/issues/590)).
 class EvidencePlacementSuggestion < ApplicationRecord
-  STATUSES = %w[pending accepted edited dismissed superseded].freeze
+  STATUSES = %w[pending accepted edited dismissed superseded closed].freeze
   DECIDED_STATUSES = %w[accepted edited dismissed].freeze
   # A rationale quotes the feedback in one sentence; anything longer is the
   # model rambling, and the hub row has room for one line. A decision model
