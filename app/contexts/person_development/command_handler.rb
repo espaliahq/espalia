@@ -681,12 +681,14 @@ class PersonDevelopment::CommandHandler
   def add_evidence_link(person_id, framework_id, evidence_id,
                         capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil,
                         via_suggestion_id: nil)
-    @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.add_evidence_link(evidence_id,
-        capability_stable_id: capability_stable_id,
-        level_ordinal: level_ordinal,
-        linked_by_id: linked_by_id, valence: valence, rationale: rationale,
-        via_suggestion_id: via_suggestion_id)
+    PersonDevelopment::ForgottenSubject.writing(person_id) do
+      @repository.with_person_development(person_id, framework_id) do |aggregate|
+        aggregate.add_evidence_link(evidence_id,
+          capability_stable_id: capability_stable_id,
+          level_ordinal: level_ordinal,
+          linked_by_id: linked_by_id, valence: valence, rationale: rationale,
+          via_suggestion_id: via_suggestion_id)
+      end
     end
   end
 
@@ -703,12 +705,14 @@ class PersonDevelopment::CommandHandler
   def set_evidence_link_valence(person_id, framework_id, evidence_id,
                                 capability_stable_id:, level_ordinal:, valence:, changed_by_id:,
                                 via_suggestion_id: nil)
-    @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.set_evidence_link_valence(evidence_id,
-        capability_stable_id: capability_stable_id,
-        level_ordinal: level_ordinal,
-        valence: valence, changed_by_id: changed_by_id,
-        via_suggestion_id: via_suggestion_id)
+    PersonDevelopment::ForgottenSubject.writing(person_id) do
+      @repository.with_person_development(person_id, framework_id) do |aggregate|
+        aggregate.set_evidence_link_valence(evidence_id,
+          capability_stable_id: capability_stable_id,
+          level_ordinal: level_ordinal,
+          valence: valence, changed_by_id: changed_by_id,
+          via_suggestion_id: via_suggestion_id)
+      end
     end
   end
 
@@ -723,11 +727,13 @@ class PersonDevelopment::CommandHandler
   # @param reason [String, nil] optional explanation
   def remove_evidence_link(person_id, framework_id, evidence_id,
                            capability_stable_id:, level_ordinal:, removed_by_id:, reason: nil)
-    @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.remove_evidence_link(evidence_id,
-        capability_stable_id: capability_stable_id,
-        level_ordinal: level_ordinal,
-        removed_by_id: removed_by_id, reason: reason)
+    PersonDevelopment::ForgottenSubject.writing(person_id) do
+      @repository.with_person_development(person_id, framework_id) do |aggregate|
+        aggregate.remove_evidence_link(evidence_id,
+          capability_stable_id: capability_stable_id,
+          level_ordinal: level_ordinal,
+          removed_by_id: removed_by_id, reason: reason)
+      end
     end
   end
 

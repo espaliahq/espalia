@@ -376,6 +376,21 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       assert_response :redirect
       assert_equal [ [ @cap.stable_id, 2 ] ], active_links, "the only link must remain"
     end
+
+    should "refuse to change the links of a forgotten person, and say why" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @assessee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      sign_in @manager_user
+
+      post add_link_assessment_evidence_path(@assignment, @item.id), params: {
+        evidence: { capability_stable_id: @new_cap.stable_id, level_ordinal: 2, valence: "demonstrated" }
+      }
+
+      assert_response :redirect
+      assert_equal "Could not link feedback: this person has been forgotten", flash[:alert]
+      assert_equal [ [ @cap.stable_id, 2 ] ], active_links
+    end
   end
 
   context "PATCH /assessments/:assessment_id/evidence/:id" do
