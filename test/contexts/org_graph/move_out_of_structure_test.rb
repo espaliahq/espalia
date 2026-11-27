@@ -159,7 +159,7 @@ class OrgGraph::MoveOutOfStructureTest < ActiveSupport::TestCase
         error = assert_raises(OrgGraph::Authorization::Refused) do
           move_out(as: allowed_to_change(allowed), parent_id: @lending, conversion: { @group => @lane, @stream => @track })
         end
-        assert_equal "Only a tenant admin can move a unit between structures", error.message
+        assert_equal "You need the right to change both structures to move a unit between them", error.message
       end
       assert_equal @payments, structure.structure_in_force(@ledger)
 
@@ -170,7 +170,7 @@ class OrgGraph::MoveOutOfStructureTest < ActiveSupport::TestCase
     should "need the right to change the organisation's structure for a move out" do
       [ [ @payments ], [ nil ] ].each do |allowed|
         error = assert_raises(OrgGraph::Authorization::Refused) { move_out(as: allowed_to_change(allowed)) }
-        assert_equal "Only a tenant admin can move a unit between structures", error.message
+        assert_equal "You need the right to change both structures to move a unit between them", error.message
       end
 
       move_out(as: allowed_to_change([ @payments, nil ]))
@@ -179,7 +179,7 @@ class OrgGraph::MoveOutOfStructureTest < ActiveSupport::TestCase
 
     should "refuse the system" do
       error = assert_raises(OrgGraph::Authorization::Refused) { move_out(as: @system) }
-      assert_equal "Only a tenant admin can move a unit between structures", error.message
+      assert_equal "The system cannot change a structure", error.message
     end
   end
 
@@ -206,7 +206,7 @@ class OrgGraph::MoveOutOfStructureTest < ActiveSupport::TestCase
       define_method(:edit_taxonomy?) { structure_unit_ids.include?(nil) }
       define_method(:edit_structure_of?) { |unit| structure_unit_ids.include?(unit&.id) }
     end.new(OrgGraphPolicy.new(@admin_context, :org_graph))
-    OrgGraph::StructureCommandHandler.new(actor: @admin_context).tap { it.instance_variable_set(:@policy, policy) }
+    OrgGraph::StructureCommandHandler.new(actor: @admin_context).tap { it.define_singleton_method(:policy) { policy } }
   end
 
   def event_store = Rails.configuration.event_store
