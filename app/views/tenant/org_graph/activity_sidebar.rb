@@ -17,9 +17,11 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
 
   # @param feed [OrgGraph::ActivityFeed]
   # @param open_unit [OrgUnit, nil] the unit open beside it, which the organisation's feed links back to
-  def initialize(feed:, open_unit: feed.unit)
+  # @param organisation [Boolean] whether the reader may open the organisation's activity
+  def initialize(feed:, organisation:, open_unit: feed.unit)
     @feed = feed
     @open_unit = open_unit
+    @organisation = organisation
   end
 
   def view_template
@@ -47,7 +49,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   def list_name = @feed.organisation? ? "Organisation activity" : "Activity in #{@feed.unit.name}"
 
   def switch_link
-    return unless @open_unit
+    return unless @open_unit && @organisation
 
     label, params = @feed.organisation? ? [ "Back to #{@open_unit.name}'s activity", {} ] : [ "Organisation activity", { activity: ORGANISATION } ]
     p(class: "mt-4 text-sm") do
@@ -120,7 +122,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   end
 
   def change_back(item)
-    return if item.group.changed_back?
+    return if item.group.changed_back? || !@feed.change_back?
 
     if item.changeable?
       if item.whole_cause?
@@ -137,7 +139,7 @@ class Views::Tenant::OrgGraph::ActivitySidebar < Views::Base
   end
 
   def entry_change_back(part)
-    return if part.entry.changed_back?
+    return if part.entry.changed_back? || !@feed.change_back?
 
     part.changeable? ? change_back_form("Change this back", entry_id: part.entry.id) : refusal(part.refusal)
   end

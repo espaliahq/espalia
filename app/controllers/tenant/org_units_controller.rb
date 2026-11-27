@@ -14,6 +14,7 @@ class Tenant::OrgUnitsController < ApplicationController
       overview:,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
+      viewer: OrgGraphPolicy::Viewer.new(policy(:org_graph)),
       tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a },
       confirmations:,
       drawer: Views::Tenant::OrgGraph::UnitDrawer.new(

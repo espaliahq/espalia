@@ -18,9 +18,11 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
   # @param comparison_bar [Phlex::SGML, nil] the comparison's controls and counts
   # @param comparison [OrgGraph::Comparison]
   # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members shown (#142)
-  def initialize(overview:, user:, current_tenant:, tenants: [], drawer: nil, sidebar: nil,
+  # @param viewer [OrgGraphPolicy::Viewer] the shell, Settings and people's drawers
+  def initialize(overview:, user:, current_tenant:, viewer:, tenants: [], drawer: nil, sidebar: nil,
                  comparison_bar: nil, comparison: OrgGraph::Comparison::NONE, confirmations: nil)
     @overview = overview
+    @viewer = viewer
     @confirmations = confirmations
     @user = user
     @current_tenant = current_tenant
@@ -32,10 +34,7 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
   end
 
   def view_template
-    render Components::Shell::TenantAdminLayout.new(
-      active_section: :org_graph,
-      user: @user, current_tenant: @current_tenant, tenants: @tenants
-    ) do
+    shell do
       # From `lg` up the drawer sits over the right of the page, so the page
       # makes room for it rather than hiding the cards beneath.
       div(class: ("lg:pr-[30rem]" if @drawer)) do
@@ -43,8 +42,10 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
           "Org Graph",
           subtitle: "Units and who is in each, as the Org Graph knows them today. Open a unit to change it."
         ) do |heading|
-          heading.action do
-            render Components::Kit::Button.new(variant: :outline, tone: :neutral, size: :sm, href: tenant_org_graph_settings_path) { "Settings" }
+          if @viewer.admin?
+            heading.action do
+              render Components::Kit::Button.new(variant: :outline, tone: :neutral, size: :sm, href: tenant_org_graph_settings_path) { "Settings" }
+            end
           end
         end
         render @comparison_bar if @comparison_bar
@@ -55,7 +56,7 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
                                                              comparison: @comparison)
             div(class: "flex-1 min-w-0 space-y-6") do
               render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview, comparison: @comparison,
-                                                            confirmations: @confirmations)
+                                                            confirmations: @confirmations, people: @viewer.editor?)
               tray
             end
             render @sidebar if @sidebar
@@ -79,5 +80,16 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
 
   private
 
-  def tray = render(Views::Tenant::OrgGraph::Tray.new(people: @overview.unplaced, unit_id: @overview.selected&.id))
+  def shell(&)
+    if @viewer.admin?
+      render(Components::Shell::TenantAdminLayout.new(active_section: :org_graph, user: @user, current_tenant: @current_tenant,
+                                                      tenants: @tenants), &)
+    else
+      render(Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants), &)
+    end
+  end
+
+  def tray
+    render Views::Tenant::OrgGraph::Tray.new(people: @overview.unplaced, unit_id: @overview.selected&.id, links: @viewer.editor?)
+  end
 end

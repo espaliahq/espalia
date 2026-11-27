@@ -18,6 +18,7 @@ class Tenant::OrgGraphsController < ApplicationController
       overview:,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
+      viewer: OrgGraphPolicy::Viewer.new(policy(:org_graph)),
       tenants: tenants_for_user,
       sidebar: activity_sidebar(overview),
       confirmations: OrgGraphPolicy::Confirmations.for_cards(policy(:org_graph), overview),
@@ -45,11 +46,16 @@ class Tenant::OrgGraphsController < ApplicationController
                           activity_page: params[:activity_page].presence, **comparison_params)
   end
 
+  # The organisation's activity is for admins and editors, so anyone else
+  # sees the opened unit's, or no sidebar while none is open.
   def activity_sidebar(overview)
-    organisation = overview.selected.nil? || params[:activity] == Views::Tenant::OrgGraph::ActivitySidebar::ORGANISATION
+    allowed = policy(:org_graph).edit_structure?
+    organisation = overview.selected.nil? || (allowed && params[:activity] == Views::Tenant::OrgGraph::ActivitySidebar::ORGANISATION)
+    return if organisation && !allowed
+
     feed = OrgGraph::ActivityFeed.new(unit: (overview.selected unless organisation), actor: pundit_user,
                                       page: params[:activity_page] || 1)
-    Views::Tenant::OrgGraph::ActivitySidebar.new(feed:, open_unit: overview.selected)
+    Views::Tenant::OrgGraph::ActivitySidebar.new(feed:, open_unit: overview.selected, organisation: allowed)
   end
 
   # @return [Array<Tenant>]

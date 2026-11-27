@@ -14,8 +14,9 @@ class Operations::OrgGraph::Activity < Operations::Base
               "when it took effect, when the Org Graph learned it, any plan reference, its parts and " \
               "whether the caller can change it back, with the reason when not. Each part has its own " \
               "id, description and change-back answer. Changing a group back reverses it in every unit " \
-              "it touched, and units_touched counts them. A unit's activity is for admins while the Org " \
-              "Graph is unfinished; the organisation's is for admins and Org Graph editors."
+              "it touched, and units_touched counts them. Only an admin or an Org Graph editor can change " \
+              "anything back. A unit's activity is for anyone org_graph_units admits, whichever unit it is; " \
+              "the organisation's is for admins and Org Graph editors."
   category :read
   approval :none
 

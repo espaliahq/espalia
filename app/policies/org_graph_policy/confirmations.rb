@@ -11,12 +11,15 @@ class OrgGraphPolicy::Confirmations
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
 
   # The confirmations for the members of the cards the Units view shows,
-  # read through the same operation MCP calls.
+  # read through the same operation MCP calls. Stale facts are for admins and
+  # editors, so anyone else sees none.
   #
   # @param policy [OrgGraphPolicy]
   # @param overview [OrgGraph::UnitsOverview]
   # @return [OrgGraphPolicy::Confirmations]
   def self.for_cards(policy, overview)
+    return new(policy, overview, ::OrgGraph::StaleFacts.new(person_ids: [])) unless policy.edit_structure?
+
     members = overview.cards.flat_map { |unit| overview.members_of(unit) }
     read = Operations::OrgGraph::StaleFacts.new(context: policy.context, params: { person_ids: members.map(&:person_id) })
     read.call

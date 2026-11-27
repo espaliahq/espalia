@@ -68,7 +68,7 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       policy = policy_for(context_for(@other, org_graph_editor: true))
 
       assert_full_rights policy
-      assert_not policy.show_units?, "the Units view is for admins until the Org Graph's screens are done"
+      assert policy.show_units?
       assert_not policy.edit_settings?, "the settings screen is for admins"
       assert policy.edit_taxonomy?
       assert [ nil, unit(@payments_id) ].all? { policy.edit_structure_of?(it) }
@@ -122,10 +122,16 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       assert_not @policy.move_membership?(@other, unit(@billing_id), unit(@product_id))
     end
 
+    should "see the Units view" do
+      assert @policy.show_units?
+    end
+
     should "lose the rights once they leave" do
       as_tenant { @other.update!(status: "inactive") }
+      policy = policy_for(context_for(@other))
 
-      assert_not policy_for(context_for(@other)).edit_unit?(unit(@billing_id))
+      assert_not policy.edit_unit?(unit(@billing_id))
+      assert_not policy.show_units?
     end
   end
 
@@ -173,10 +179,20 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       assert_not @policy.edit_structure?
     end
 
+    should "see the Units view while a report is active" do
+      assert @policy.show_units?
+
+      as_tenant { @report.update!(status: "inactive") }
+
+      assert_not policy_for(context_for(@lead)).show_units?
+    end
+
     should "lose the rights once they leave" do
       as_tenant { @lead.update!(status: "inactive") }
+      policy = policy_for(context_for(@lead))
 
-      assert_not policy_for(context_for(@lead)).edit_membership?(@report, unit(@product_id))
+      assert_not policy.edit_membership?(@report, unit(@product_id))
+      assert_not policy.show_units?
     end
   end
 

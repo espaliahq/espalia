@@ -322,4 +322,46 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_not entry.reload.changed_back?
     end
   end
+
+  context "as a unit owner who isn't an admin" do
+    setup do
+      @org = build_org_graph(@tenant)
+      owner_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        owner = create(:person, tenant: @tenant, name: "Gale Orrin")
+        create(:tenant_user, tenant: @tenant, user: owner_user, person: owner, role: :member)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .add_unit_owner(@org[:payments], owner.id, effective_on: "2026-01-01")
+        editor = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant, name: "Rowan Grant"))
+        AccountGrants::CommandHandler.new.add(:org_graph_editor, editor)
+      end
+      sign_in owner_user
+    end
+
+    should "show the units in the app's own layout, with no Settings and no way into a person" do
+      get tenant_org_graph_path(unit: @org[:payments])
+
+      assert_response :success
+      assert_select "a[href='#{tenant_org_graph_path}']", text: "Organisation"
+      assert_select "a", text: "Settings", count: 0
+      assert_select "a[href^='#{tenant_org_person_path(@org[:dot])}']", count: 0
+      assert_includes response.body, "Dot Fennick"
+    end
+
+    should "offer nothing to change back, and keep the organisation's activity to itself" do
+      get tenant_org_graph_path(unit: @org[:payments], activity: "organisation")
+
+      assert_response :success
+      assert_select "button", text: /Change back/, count: 0
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Rowan Grant/, count: 0
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Added Dot Fennick/
+    end
+
+    should "refuse a person's drawer" do
+      get tenant_org_person_path(@org[:dot], unit: @org[:payments])
+
+      assert_response :redirect
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
+    end
+  end
 end

@@ -197,6 +197,11 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     should "keep the Units view from someone who holds no right" do
       assert_not policy_for(as(@org[:dot])).show_units?
     end
+
+    should "open the Units view to an owner and to their manager" do
+      assert policy_for(as(@owner)).show_units?
+      assert policy_for(as(@manager)).show_units?
+    end
   end
 
   context "a move between structures" do

@@ -251,7 +251,11 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     person = membership.person
     li(id: "org-unit-member-#{person.id}", class: "space-y-2 py-3 text-sm") do
       div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5") do
-        a(href: tenant_org_person_path(person, unit: @unit.id, back: "edit", **compared), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+        if @rights.people?
+          a(href: tenant_org_person_path(person, unit: @unit.id, back: "edit", **compared), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+        else
+          span(class: "font-medium text-default") { person.name }
+        end
         span(class: "text-muted") { terms(membership) }
         unless membership.provider == ::OrgGraph::StructureAggregate::ESPALIA
           render Components::Kit::Badge.new("From #{HrisConfig.provider_label(membership.provider)}", leading_icon: :lock)

@@ -21,6 +21,12 @@ class OrgGraphPolicy::UnitRights
   # @return [Boolean]
   def move? = rename? && (parent_choices.any? || root_choice? || conversion_parent_choices.any? || root_conversion_choice?)
 
+  # Whether a member's name opens their drawer: people's facts are for
+  # admins and editors.
+  #
+  # @return [Boolean]
+  def people? = @policy.edit_structure?
+
   # Give the unit a structure of its own, or withdraw it ([#494](https://github.com/espaliahq/espalia/issues/494)).
   #
   # @return [Boolean]

@@ -20,7 +20,7 @@ class Views::Tenant::OrgGraph::ActivitySidebarTest < ActiveSupport::TestCase
       feed = OrgGraph::ActivityFeed.new(unit: OrgUnit.find(unit_id), actor: context, page:)
       controller = ApplicationController.new
       controller.request = ActionDispatch::TestRequest.create
-      Nokogiri::HTML5(controller.view_context.render(Views::Tenant::OrgGraph::ActivitySidebar.new(feed:)))
+      Nokogiri::HTML5(controller.view_context.render(Views::Tenant::OrgGraph::ActivitySidebar.new(feed:, organisation: true)))
     end
   end
 

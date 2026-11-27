@@ -72,8 +72,13 @@ class Operations::OrgGraph::UnitsTest < ActiveSupport::TestCase
     assert_equal [], call[:units]
   end
 
-  should "refuse a member, and an Org Graph editor who is not an admin" do
+  should "refuse a member who holds no right in the Org Graph" do
     assert_raises(Pundit::NotAuthorizedError) { call(tenant_user: @member) }
-    assert_raises(Pundit::NotAuthorizedError) { call(tenant_user: @editor) }
+  end
+
+  should "list every unit for an Org Graph editor who is not an admin" do
+    build_org_graph(@tenant)
+
+    assert_equal %w[Engineering Checkout Payments Platform], call(tenant_user: @editor)[:units].map { it[:name] }
   end
 end

@@ -7,7 +7,7 @@ class Tenant::OrgPersonMembershipsController < ApplicationController
 
   # POST /tenant/org_graph/people/:org_person_id/memberships
   def create
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
     unit_id = params[:unit_id].presence
     return redirect_to(drawer_path, flash: { drawer_alert: "Choose a team to add #{@person.name} to." }) unless unit_id
 
@@ -21,7 +21,7 @@ class Tenant::OrgPersonMembershipsController < ApplicationController
 
   # PATCH /tenant/org_graph/people/:org_person_id/memberships/:id
   def update
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
     write(notice: "Moved to #{unit_name(params[:unit_id])}.") do
       Operations::OrgGraph::MoveMember.call(
         context: pundit_user,
@@ -32,7 +32,7 @@ class Tenant::OrgPersonMembershipsController < ApplicationController
 
   # DELETE /tenant/org_graph/people/:org_person_id/memberships/:id
   def destroy
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
     write(notice: "Left #{unit_name(params[:id])}.", status: :see_other) do
       Operations::OrgGraph::RemoveMember.call(context: pundit_user, params: with_date(person_id: @person.id, unit_id: params[:id]))
     end
