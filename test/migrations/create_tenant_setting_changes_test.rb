@@ -8,6 +8,10 @@ class CreateTenantSettingChangesTest < ActiveSupport::TestCase
     ActiveRecord::Migration.suppress_messages { CreateTenantSettingChanges.new.migrate(direction) }
   end
 
+  should "fill a missing size with the app's default" do
+    assert_equal ComparisonConfig::DEFAULT_MIN_GROUP_SIZE, CreateTenantSettingChanges::DEFAULT_MIN_GROUP_SIZE
+  end
+
   should "record each tenant's values today, dated from its creation" do
     sydney = create(:tenant, time_zone: "Australia/Sydney", comparison_config: ComparisonConfig.new(min_group_size: 8))
     plain = create(:tenant)
