@@ -322,11 +322,13 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_redirected_to tenant_org_graph_path(unit: @payments_id)
     end
 
-    should "not open the structure page of a unit they don't own" do
-      get edit_tenant_org_structure_path(@commerce_id)
+    should "get the same refusal for the structure page of a unit they don't own and of one the Org Graph doesn't hold" do
+      [ @commerce_id, SecureRandom.uuid ].each do |unit_id|
+        get edit_tenant_org_structure_path(unit_id)
 
-      assert_redirected_to root_path
-      assert_equal "You are not authorized to perform this action.", flash[:alert]
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
     end
 
     should "refuse a type from the organisation's or another unit's structure, named under Payments, writing nothing" do

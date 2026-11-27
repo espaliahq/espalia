@@ -9,7 +9,9 @@ class Tenant::OrgStructuresController < ApplicationController
   # GET /tenant/org_graph/structures/:unit_id/edit
   def edit
     authorize :org_graph, :show_units?
-    unit = OrgUnit.live.find_by!(id: params[:unit_id].to_s.downcase)
+    unit = OrgUnit.live.find_by(id: params[:unit_id].to_s.downcase)
+    raise ActiveRecord::RecordNotFound if unit.nil? && policy(:org_graph).edit_structure?
+
     authorize_structure_of!(unit)
     structure = Operations::OrgGraph::UnitStructure.call(context: pundit_user, params: { unit_id: unit.id })
     unless structure[:declares]
