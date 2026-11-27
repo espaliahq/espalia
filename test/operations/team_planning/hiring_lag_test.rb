@@ -125,6 +125,19 @@ class Operations::TeamPlanning::HiringLagTest < ActiveSupport::TestCase
     assert_equal [ { unit_id: @unit_id, headcount: "0", cost: { "EUR" => "-18000" }, capacity: {} } ], lags(@q2)
   end
 
+  should "hold a closed step's forecast still as the clock moves on" do
+    open_position
+    travel_back
+    travel_to Time.utc(2026, 7, 2, 9)
+    call(Operations::TeamPlanning::CloseStep, plan_id: @plan_id, scenario_id: @q2)
+    closed = lags(@q2)
+    travel_back
+    travel_to Time.utc(2026, 8, 1, 9)
+
+    assert_equal [ { unit_id: @unit_id, headcount: "-1", cost: { "EUR" => "-24200" }, capacity: { "per_fte" => "-1" } } ], closed
+    assert_equal closed, lags(@q2)
+  end
+
   should "file the lag under the seat's cost centre in cost and capacity alike" do
     open_position(cost_centre: "Growth")
     time_to_hire(200)
