@@ -70,8 +70,8 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       assert_full_rights policy
       assert_not policy.show_units?, "the Units view is for admins until the Org Graph's screens are done"
       assert_not policy.edit_settings?, "the settings screen is for admins"
-      assert_not policy.edit_taxonomy?, "the taxonomy's shape is the admin's call"
-      assert_not policy.edit_structure_of?(unit(@payments_id)), "a unit's own structure is the admin's call too, until step 6"
+      assert policy.edit_taxonomy?
+      assert [ nil, unit(@payments_id) ].all? { policy.edit_structure_of?(it) }
     end
   end
 
@@ -81,7 +81,9 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       @policy = policy_for(context_for(@other))
     end
 
-    should "change the unit and every unit beneath it" do
+    should "change the unit and every unit beneath it, their structures included" do
+      assert @policy.edit_structure_of?(unit(@payments_id))
+      assert @policy.edit_structure_of?(unit(@billing_id))
       assert @policy.edit_unit?(unit(@payments_id))
       assert @policy.edit_unit?(unit(@billing_id))
       assert @policy.create_unit?(unit(@billing_id))
@@ -97,7 +99,8 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
     should "not change the unit above, a unit elsewhere, or anything tenant-wide" do
       assert_not @policy.edit_unit?(unit(@engineering_id))
       assert_not @policy.edit_unit?(unit(@product_id))
-      assert_not @policy.edit_structure_of?(unit(@payments_id)), "owning a unit doesn't give its structure until step 6"
+      assert_not @policy.edit_structure_of?(unit(@engineering_id))
+      assert_not @policy.edit_structure_of?(nil)
       assert_not @policy.edit_structure?
       assert_not @policy.create_unit?(nil)
       assert_not @policy.edit_membership?(@report, unit(@product_id))

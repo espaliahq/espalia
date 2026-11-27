@@ -164,7 +164,7 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
     as_tenant { tenant_user.update!(org_graph_editor: false) }
 
     error = assert_raises(OrgGraph::Authorization::Refused) { change_back(latest(@payments), actor: editor) }
-    assert_equal "Only a tenant admin or an Org Graph editor can change a unit's type", error.message
+    assert_equal "Only a tenant admin or an Org Graph editor can change Payments's type", error.message
     assert_equal @departments, as_tenant { OrgUnit.find(@payments).level_id }
   end
 

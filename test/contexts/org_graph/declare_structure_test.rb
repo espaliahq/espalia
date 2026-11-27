@@ -369,7 +369,7 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
       remove_level: -> { @handler.remove_level(@stream, structure_unit_id: @payments, effective_on: @today) }
     }.each do |command, call|
       error = assert_raises(OrgGraph::Authorization::Refused, command.to_s) { as_tenant(&call) }
-      assert_equal "Only a tenant admin can change a unit's structure", error.message
+      assert_equal "The system cannot change a structure", error.message
     end
     assert_equal before, event_store.read.stream(as_tenant { EventStreamNaming.org_structure_stream }).count
 
