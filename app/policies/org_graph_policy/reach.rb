@@ -7,7 +7,8 @@
 #
 # Built once per policy. A request reads it once; a command handler builds a
 # policy for each check, so a check under the structure's lock, or of a unit
-# the command just created, reads the line as it stands.
+# the command just created, reads the line as it stands. Both queries name the
+# person's tenant, so neither leans on a current tenant being set.
 #
 # @example
 #   OrgGraphPolicy::Reach.new(person).covers?(unit)
@@ -27,7 +28,8 @@ class OrgGraphPolicy::Reach
   def owned_unit_ids
     @owned_unit_ids ||= if @person
       subtree = [ @person.id, *@person.all_reports.pluck(:id) ]
-      OrgUnitOwner.joins(:person).merge(Person.active).where(person_id: subtree).distinct.pluck(:unit_id).to_set
+      OrgUnitOwner.joins(:person).merge(Person.active)
+                  .where(tenant_id: @person.tenant_id, person_id: subtree).distinct.pluck(:unit_id).to_set
     else
       Set.new
     end

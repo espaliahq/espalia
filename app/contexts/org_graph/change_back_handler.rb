@@ -74,7 +74,7 @@ class OrgGraph::ChangeBackHandler
 
   def refusal_for(entries, apart_from: nil)
     ensure_reversible!(entries, apart_from:)
-    inverted(entries).each { authorize_inverse!(it) }
+    reading { inverted(entries).each { authorize_inverse!(it) } }
     nil
   rescue Refused, RuntimeError => e
     e.message

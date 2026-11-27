@@ -94,8 +94,8 @@ module OrgGraph::Authorization
 
     unit = unit_for(unit_id)
     parent = parent_id && unit_for(parent_id)
-    authorize!(:move_unit?, unit, parent) do
-      next "#{only_owners_of(unit)} can move #{unit_name(unit)}" unless policy.edit_unit?(unit)
+    authorize!(:move_unit?, unit, parent) do |checked|
+      next "#{only_owners_of(unit)} can move #{unit_name(unit)}" unless checked.edit_unit?(unit)
 
       cannot_place_beneath(parent_id, parent)
     end
@@ -125,8 +125,8 @@ module OrgGraph::Authorization
     return if system?
 
     units = unit_ids.flatten.compact.map { |unit_id| unit_for(unit_id) }
-    authorize!(:record_succession?, units) do
-      refused = units.find { |unit| !policy.edit_unit?(unit) }
+    authorize!(:record_succession?, units) do |checked|
+      refused = units.find { |unit| !checked.edit_unit?(unit) }
       "#{only_owners_of(refused)} can name #{unit_name(refused)} in a succession"
     end
   end
@@ -153,11 +153,15 @@ module OrgGraph::Authorization
     end
   end
 
+  # The refusal block gets the policy that refused, so naming the unit at
+  # fault reads the same reach.
   def authorize!(predicate, *records)
     return if system?
-    return if policy.public_send(predicate, *records)
 
-    raise Refused, yield
+    checked = policy
+    return if checked.public_send(predicate, *records)
+
+    raise Refused, yield(checked)
   end
 
   # Names the actor in the event, unless the caller already named someone.
@@ -166,9 +170,19 @@ module OrgGraph::Authorization
     actor_id ? { key => actor_id }.merge(options) : options
   end
 
-  # Built afresh for each check, never memoised: a command checks again under
-  # the structure's lock, and a split checks successors it has just created.
-  def policy = OrgGraphPolicy.new(@actor, :org_graph)
+  # Built afresh for each check: a command checks again under the structure's
+  # lock, and a split checks successors it has just created. Inside {#reading}
+  # every check shares one.
+  def policy = @reading_policy || OrgGraphPolicy.new(@actor, :org_graph)
+
+  # Answers the block's checks from one policy kept for the handler's life,
+  # for a screen that asks about many changes and writes nothing.
+  def reading
+    @reading_policy = (@read_policy ||= OrgGraphPolicy.new(@actor, :org_graph))
+    yield
+  ensure
+    @reading_policy = nil
+  end
 
   def unit_for(unit_id)
     OrgUnit.find_by(id: unit_id.to_s.downcase)

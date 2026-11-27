@@ -70,6 +70,40 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
       assert reach_of(@checkout_owner).covers?(unit(@billing)), "the unit above still covers it"
     end
 
+    should "answer empty or false, and never raise, for nobody or someone who has left" do
+      as_tenant { @owner.update!(status: "inactive") }
+      payments = unit(@org[:payments])
+
+      as_tenant do
+        [ nil, @owner.reload ].each do |person|
+          reach = OrgGraphPolicy::Reach.new(person)
+          assert_not reach.covers?(payments)
+          assert_not reach.covers?(nil)
+          assert_empty reach.owned_unit_ids
+        end
+      end
+    end
+
+    should "never cross into another tenant, with or without a current tenant" do
+      other_tenant = create(:tenant)
+      other = build_org_graph(other_tenant)
+      ActsAsTenant.with_tenant(other_tenant) do
+        system = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        system.add_unit_owner(other[:checkout], other[:ezra].id, **ON)
+        system.add_unit_owner(other[:engineering], other[:dot].id, **ON)
+        other[:ezra].update_column(:manager_id, @manager.id)
+        OrgUnitOwner.find_by!(unit_id: other[:engineering]).update_column(:person_id, @owner.id)
+        OrgUnit.find(other[:payments]).update_column(:parent_id, @org[:payments])
+      end
+      foreign = ActsAsTenant.with_tenant(other_tenant) { OrgUnit.where(id: other.values_at(:engineering, :checkout, :payments)).to_a }
+
+      [ -> { reach_of(@manager) }, -> { ActsAsTenant.without_tenant { OrgGraphPolicy::Reach.new(@manager.reload) } } ].each do |build|
+        reach = build.call
+        assert_equal [ @org[:payments] ].to_set, ActsAsTenant.without_tenant { reach.owned_unit_ids }
+        foreign.each { |unit| assert_not ActsAsTenant.without_tenant { reach.covers?(unit) }, unit.name }
+      end
+    end
+
     should "be empty for a person who is an owner but inactive" do
       as_tenant { @owner.update!(status: "inactive") }
 
@@ -217,6 +251,26 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     assert_raises(OrgGraph::Authorization::Refused) { structure(context).rename_unit(@org[:payments], "Payments Core", **ON) }
   end
 
+  should "build one reach for a check, however many units it names, and one for a screen's change-back checks" do
+    lanes = as_tenant do
+      Array.new(12) { SecureRandom.uuid_v7.tap { system.create_unit(it, "Lane #{it.last(4)}", level_id: @lane, parent_id: @org[:payments], **ON) } }
+    end
+    handler = structure(as(@manager))
+    handler.rename_unit(@org[:payments], "Payments Core", **ON)
+    handler.rename_unit(lanes.first, "First lane", **ON)
+    entries = as_tenant { OrgUnitActivity.where(unit_id: [ @org[:payments], lanes.first ], event_type: "UnitRenamed").to_a }
+
+    assert_equal 1, reaches_built {
+      error = assert_raises(OrgGraph::Authorization::Refused) do
+        handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: lanes, successor_ids: [ @org[:checkout] ], **ON)
+      end
+      assert_match "Checkout", error.message
+    }
+
+    change_back = StructureHandler.new(@tenant, OrgGraph::ChangeBackHandler.new(actor: as(@manager)))
+    assert_equal 1, reaches_built { entries.each { assert_nil change_back.refusal(it) } }
+  end
+
   should "read rights over a large tree in as many queries as over a small one" do
     small = queries_for_rights_over(4)
     large = queries_for_rights_over(200)
@@ -261,6 +315,17 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
   def policy_for(context) = OrgGraphPolicy.new(context, :org_graph)
 
   def reach_of(person) = as_tenant { OrgGraphPolicy::Reach.new(person.reload) }
+
+  def reaches_built
+    built = 0
+    OrgGraphPolicy::Reach.alias_method(:__counted_initialize, :initialize)
+    OrgGraphPolicy::Reach.define_method(:initialize) { |person| built += 1; __counted_initialize(person) }
+    yield
+    built
+  ensure
+    OrgGraphPolicy::Reach.alias_method(:initialize, :__counted_initialize)
+    OrgGraphPolicy::Reach.remove_method(:__counted_initialize)
+  end
 
   def rights_of(context)
     as_tenant do
