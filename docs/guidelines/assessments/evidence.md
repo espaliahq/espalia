@@ -611,7 +611,14 @@ Rules, all deliberate:
   fails with "this person has been forgotten", on the hub and through MCP,
   and the job stores nothing. A dismissal's reason is text someone wrote
   about them. An erase that commits while a command waits is seen
-  ([#586](https://github.com/espaliahq/espalia/issues/586)).
+  ([#586](https://github.com/espaliahq/espalia/issues/586)). The check lives
+  in `PersonDevelopment::ForgottenSubject`, which the three link commands
+  call too, so the links on a forgotten person's feedback stay as they were
+  when they were forgotten, and "Feedback to place" leaves their items out.
+  `EvidenceDiffSubmit` checks it before its first write, so a modal save that
+  would change one of those links normally stores nothing. Only the subject
+  counts: a forgotten author's feedback about someone here can still be placed
+  ([#609](https://github.com/espaliahq/espalia/issues/609)).
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; a placement notifier would hook in
   there.

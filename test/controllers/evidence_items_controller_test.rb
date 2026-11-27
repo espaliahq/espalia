@@ -190,6 +190,29 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "store nothing when the save changes a forgotten person's links" do
+      peer_item = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(@author.id, @framework_id, peer_item,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "peer", evidence_type: "peer_feedback",
+          content: "Before", author_id: @other.id, valence: "demonstrated")
+        @author.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      sign_in @other_user
+      first, second = "#{@cap.stable_id}|2", "#{@cap2.stable_id}|2"
+      patch evidence_item_path(peer_item), params: { return_to: "hub", evidence: {
+        evidence_id: peer_item, desired_links: [ first, second ], link_valences: { second => "demonstrated" },
+        evidence_type: "peer_feedback", content: "After"
+      } }
+
+      assert_redirected_to evidence_hub_path
+      assert_equal "this person has been forgotten", flash[:alert]
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "Before", EvidenceItem.find(peer_item).content
+        assert_equal [ [ @cap.stable_id, 2 ] ], EvidenceLink.active.where(evidence_id: peer_item).pluck(:capability_stable_id, :level_ordinal)
+      end
+    end
+
     should "deny a non-author" do
       sign_in @other_user
       cell = "#{@cap.stable_id}|2"

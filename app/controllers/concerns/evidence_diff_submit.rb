@@ -88,6 +88,11 @@ module EvidenceDiffSubmit
     # missing valence on cell N would abort after cells 1..N-1 (and the
     # response itself) had already landed.
     ([ primary ] + extras).each { |cell| valence_for!(valences, cell) }
+    # Best effort: stops the ordinary case before the response is stored. The
+    # lock ends with this check, so an erase that commits before the link
+    # commands still leaves the response stored and the links refused. The
+    # link commands hold the lock; they are what keeps a link from being written.
+    PersonDevelopment::ForgottenSubject.refuse!(request.person_id) if extras.any?
 
     result = Operations::Assessments::RespondToEvidenceRequest.call(context: pundit_user, params: {
       request_id: request.id, valence: valences[primary], **content_params(p)
@@ -119,6 +124,9 @@ module EvidenceDiffSubmit
     new_cells.each { |cell| valence_for!(valences, cell) }
     kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
     ensure_staged_cells_exist!(item, kept_suggestions)
+    # Best effort, as in diff_respond: an erase that commits after this check
+    # still leaves the content edit stored and the link refused.
+    PersonDevelopment::ForgottenSubject.refuse!(item.person_id) if kept_suggestions.any? || links_change?(current_valences, desired, valences, p[:staged_suggestion_ids])
 
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {
@@ -170,6 +178,14 @@ module EvidenceDiffSubmit
     return {} if ids.blank?
 
     EvidencePlacementSuggestion.pending.for_evidence(item.id).where(id: ids).index_by(&:cell)
+  end
+
+  # A staged suggestion is accepted or dismissed on save, and both refuse too,
+  # so the caller also counts the kept ones, which can arrive without staged ids.
+  def links_change?(current_valences, desired, valences, staged_suggestion_ids)
+    return true if Array(staged_suggestion_ids).any? || desired != current_valences.keys.to_set
+
+    desired.any? { |cell| valences[cell] && valences[cell] != current_valences[cell] }
   end
 
   # A suggestion kept through "Adjust" is accepted with the valence the

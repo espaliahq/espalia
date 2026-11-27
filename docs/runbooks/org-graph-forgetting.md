@@ -14,6 +14,8 @@ A new MCP read must join the audit with a file of its own in `test/integration/f
 
 Text people wrote stays, by design. Evidence, feedback, comments and alignment notes each belong to two people: the person who wrote them and the person they are about. Forgetting one of them removes that person's name and identifiers and leaves the words, because erasing them would also erase the other person's record. The words can still name or point to the person forgotten. They live in clear in Person Development events.
 
+Where a forgotten person's feedback was placed stays as it was at the moment they were forgotten. Adding, reclassifying or removing a link on their existing feedback is refused with "this person has been forgotten", on the web and over MCP, and a save in the feedback modal that would change one normally stores nothing. The hub's "Feedback to place" leaves out their unplaced items. New feedback about them is not refused yet; [#610](https://github.com/espaliahq/espalia/issues/610) closes every other write to their stream. Only the subject counts: feedback a forgotten author wrote about someone still here can still be placed.
+
 The reason someone gives for dismissing an evidence suggestion follows the same rule as a comment. It is stored in clear in the dismissal event on the person's development stream, and the projection copies it to `evidence_placement_suggestions.dismiss_reason`.
 
 Forgetting also settles evidence placement suggestions ([#590](https://github.com/espaliahq/espalia/issues/590)):

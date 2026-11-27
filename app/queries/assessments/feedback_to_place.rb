@@ -12,7 +12,9 @@
 #
 # A view filter, never authority: EvidencePolicy#add_link? still lets an
 # ancestor place anything in their subtree. Items the person wrote are left
-# out; the hub lists them under the feedback they've given.
+# out; the hub lists them under the feedback they've given. So are items about
+# a forgotten person, whose links can no longer change; an item a forgotten
+# author wrote about someone else still waits to be placed.
 class Assessments::FeedbackToPlace
   SCOPES = %w[team org].freeze
   DEFAULT_SCOPE = "team"
@@ -78,7 +80,8 @@ class Assessments::FeedbackToPlace
   private
 
   def unplaced
-    EvidenceItem.unplaced.where.not(author_id: @viewer.id).includes(:author).order(:recorded_at, :id)
+    EvidenceItem.unplaced.where.not(author_id: @viewer.id).where.not(person_id: Person.forgotten.select(:id))
+      .includes(:author).order(:recorded_at, :id)
   end
 
   def others_waiting?
