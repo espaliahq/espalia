@@ -311,6 +311,17 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_equal "The unit type could not be added: You can't change the structure beneath Payments.", flash[:alert]
     end
 
+    should "land a write on the unit, not the structure page, once Payments has no structure left" do
+      ActsAsTenant.with_tenant(@tenant) do
+        admin = AuthorizationContext.new(user: @admin_user, tenant_user: TenantUser.find_by!(user: @admin_user), person: nil)
+        OrgGraph::StructureCommandHandler.new(actor: admin).withdraw_structure(@payments_id, conversion: {}, effective_on: Date.current)
+      end
+
+      delete tenant_org_graph_settings_level_path(@pod_id), params: { structure_unit_id: @payments_id, back: "structure" }
+
+      assert_redirected_to tenant_org_graph_path(unit: @payments_id)
+    end
+
     should "not open the structure page of a unit they don't own" do
       get edit_tenant_org_structure_path(@commerce_id)
 
