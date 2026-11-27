@@ -22,6 +22,7 @@ class PayBandLockingTest < ActiveSupport::TestCase
     event_ids = PayBand.connection.select_values("SELECT event_id FROM event_store_events_in_streams WHERE #{linked}")
     PayBand.connection.execute("DELETE FROM event_store_events_in_streams WHERE #{linked}")
     PayBand.connection.execute(PayBand.sanitize_sql_array([ "DELETE FROM event_store_events WHERE event_id IN (?)", event_ids ])) if event_ids.any?
+    TenantSettingChange.unscoped.where(tenant_id: @tenant.id).delete_all
     @tenant.delete
   end
 

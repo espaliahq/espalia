@@ -14,6 +14,7 @@ class SeedFrameworkTaskTest < ActiveSupport::TestCase
     # Tests in this file use a real tenant + framework; wipe between runs.
     FrameworkState::Framework.destroy_all
     FrameworkExplorerGraph.delete_all
+    TenantSettingChange.unscoped.where(tenant_id: Tenant.where(slug: "nullisland").select(:id)).delete_all
     Tenant.where(slug: "nullisland").destroy_all
   end
 
