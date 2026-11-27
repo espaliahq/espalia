@@ -37,6 +37,11 @@ evidence_links:
   owner: person_development/evidence_collection
 evidence_placement_suggestions:
   owner: person_development/evidence_suggestions
+  reason: >-
+    The projection's own pre-deploy reconcile closes the pending rows of people forgotten before it
+    handled PersonForgotten (https://github.com/espaliahq/espalia/issues/590).
+  writers:
+    - app/contexts/person_development/projections/evidence_suggestions.rb
 evidence_requests:
   owner: person_development/evidence_requests
 person_development_comments:
@@ -203,6 +208,13 @@ tenant_users:
     - app/notifiers/slack_delivery_method.rb
     - lib/tasks/example_seed.rb
     - lib/tasks/stress_seed.rb
+global_admin_changes:
+  owner: plain
+  reason: >-
+    The audit of users.global_admin, which stays plain state as it is global and no tenant stream fits
+    (https://github.com/espaliahq/espalia/issues/539). User records a row in the save that changes the flag.
+  writers:
+    - app/models/user.rb
 users:
   owner: plain
   reason: Devise's sign-in identity, shared across tenants.

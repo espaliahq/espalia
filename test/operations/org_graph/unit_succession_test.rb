@@ -144,11 +144,14 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
                            conversion: { @org[:squad] => group }, effective_on: "2026-01-05"
         )
       end
-      ledger = own_two_squads(@tenant, @org, @owner.person)
-      owner = AuthorizationContext.new(user: @owner.user, tenant_user: @owner, person: @owner.person)
+      squads_owner = ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant))
+      end
+      ledger = own_two_squads(@tenant, @org, squads_owner.person)
+      owner = AuthorizationContext.new(user: squads_owner.user, tenant_user: squads_owner, person: squads_owner.person)
       assert_not OrgGraphPolicy.new(owner, :org_graph).edit_structure_of?(unit(@org[:checkout]))
 
-      result = call(Operations::OrgGraph::MergeUnit, as: @owner, unit_id: @org[:payments], into_unit_id: ledger,
+      result = call(Operations::OrgGraph::MergeUnit, as: squads_owner, unit_id: @org[:payments], into_unit_id: ledger,
                                                      effective_on: Date.current.iso8601)
 
       assert_equal 1, result[:memberships_moved]
@@ -159,6 +162,14 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
   end
 
   context "SplitUnit" do
+    should "let an owner split a unit beneath theirs, naming the successors it has just created" do
+      result = call(Operations::OrgGraph::SplitUnit, as: @owner, unit_id: @org[:payments], successor_names: [ "Core", "Edge" ],
+                                                     placements: { @org[:dot].id => "Core" }, effective_on: Date.current.iso8601)
+
+      assert unit(@org[:payments]).retired?
+      assert_equal %w[Core Edge], result[:successors].map { unit(it[:unit_id]).name }
+    end
+
     should "create the successors beside the unit, move the placed, and leave the rest in no team" do
       with_leaver_in(:platform)
       result = call(Operations::OrgGraph::SplitUnit, unit_id: @org[:platform], successor_names: [ " Core ", "Edge" ],

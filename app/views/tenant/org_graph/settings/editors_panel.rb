@@ -17,8 +17,9 @@ class Views::Tenant::OrgGraph::Settings::EditorsPanel < Views::Base
       card.body do
         dl(class: "space-y-4 text-sm") do
           group("Tenant admins", "Change anything, and choose the editors.") { names(@editors[:admins]) }
-          group("Org Graph editors", "Change the sources, the units and anyone's facts.") { editor_list }
-          group("Unit owners", "Change their unit and every unit beneath it.")
+          group("Org Graph editors", "Change the sources, the units, the unit types and anyone's facts.") { editor_list }
+          group("Unit owners", "Change their unit and every unit beneath it. Give any of those units a " \
+                               "structure of its own, and change the unit types in it. So may anyone above them in the reporting line.")
           group("Managers", "Move their reports between teams.")
         end
         add_form if @candidates.any?

@@ -342,9 +342,11 @@ holds is open to:
 - **An Org Graph editor.** A tenant-level role for the people team. An admin gives it,
   and each grant is an event in the tenant's `TenantAccountGrants` stream that says who gave it
   and when.
-- **A unit's owners.** A unit can have several, with none primary: a product manager and
-  an engineering manager can both own a squad. An owner may edit the unit and the units
-  beneath it. A unit with no owner of its own inherits its parent's.
+- **A unit's owners, and the current line above them.** A unit can have several owners,
+  with none primary: a product manager and an engineering manager can both own a squad.
+  An owner may edit the unit and the units beneath it, structures included, and so may
+  anyone they report to, at any depth. A unit with no owner of its own inherits its
+  parent's. Retyping a unit needs the right over the structure in force where it sits.
 - **A person's manager chain**, for that person's memberships only. A design lead can
   place their designer in a squad they do not own.
 
@@ -361,7 +363,8 @@ back.
 Ownership is always stated. It is never derived from reporting lines or from a role in
 the unit, because a cross-functional team has no single line to derive it from. When a
 unit's last owner leaves, the unit is flagged and inherits its parent's owners until
-someone is named.
+someone is named. The rights an owner holds follow the reporting line above them; the
+ownership itself does not.
 
 `UnitOwnerAdded` and `UnitOwnerRemoved` live in the structure stream, and any live unit
 takes owners, one an HRIS supplies included. An owner leaves when they are removed, or

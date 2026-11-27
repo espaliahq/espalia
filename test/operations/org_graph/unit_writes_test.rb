@@ -150,7 +150,7 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
         call(Operations::OrgGraph::ChangeUnitKind, as: @owner, unit_id: @org[:payments], level_id: @pods)
       end
 
-      assert_equal "Only a tenant admin or an Org Graph editor can change a unit's type", error.message
+      assert_equal "Only a tenant admin or an Org Graph editor can change Payments's type", error.message
       assert_equal @org[:squad], unit(:payments).level_id
     end
 
