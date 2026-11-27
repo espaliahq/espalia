@@ -397,6 +397,17 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
       assert_equal [ { @basket => %w[Lane] }, {} ], [ @retire_on - 1, @retire_on ].map { structures_as_of(it) }
     end
 
+    should "leave no type in the retired unit's structure, so the sources page asks no right over a retired unit" do
+      declare(unit: @basket, levels: [ { level_id: @lane, name: "Lane" } ], conversion: {})
+      assert as_tenant { OrgTaxonomyLevel.exists?(structure_unit_id: @basket) }
+
+      as_tenant { @admin.retire_unit(@basket, effective_on: @retire_on) }
+
+      assert_not as_tenant { OrgTaxonomyLevel.exists?(structure_unit_id: @basket) }
+      sources = as_tenant { Operations::OrgGraph::Sources.call(context: admin_context, params: {}) }
+      assert_not_includes sources[:structures].map { it[:unit_id] }, @basket
+    end
+
     should "refuse a retirement, succession or applied succession that withdraws a structure while the kinds are rebuilt, and retire any other unit" do
       declare(unit: @basket, levels: [ { level_id: @lane, name: "Lane" } ], conversion: {})
       till, ledger = %w[Till Ledger].map { create_unit(it, @pod, parent_id: @checkout) }
