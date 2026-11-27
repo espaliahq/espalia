@@ -318,8 +318,8 @@ class PersonDevelopment::Projections::CurrentAssessment
   # and the absorbed row stays under the retiring stable id, flagged
   # `capability_merged`, exactly as `archived`/`split` rows are. Both are
   # then invisible in the matrix (archived capabilities are filtered) until
-  # the relink/dismiss UI surfaces them. This also keeps the read model
-  # aligned with the aggregate, which never re-keys its rating maps.
+  # the relink/dismiss UI surfaces them. The aggregate's rating maps follow
+  # the same rule, cell by cell (`PersonDevelopment::Aggregate#rekey_ratings`).
   #
   # Two statements: re-key the non-colliding rows (NOT EXISTS), after which
   # whatever is still under the retiring id is by construction the colliding
