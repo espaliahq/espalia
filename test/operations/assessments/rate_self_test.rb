@@ -48,11 +48,11 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
     @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
   end
 
-  def call_op(frequency:, comment: nil, clear: nil)
+  def call_op(frequency:, comment: nil, clear: nil, capability: @cap)
     ActsAsTenant.with_tenant(@tenant) do
       params = {
         assignment_id: @assignment.id,
-        capability_stable_id: @cap.stable_id,
+        capability_stable_id: capability.stable_id,
         level_ordinal: 2,
         frequency: frequency,
         comment: comment
@@ -246,6 +246,40 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         row = AssessmentLevelRating.across_all_roles.find_by!(person_id: @person.id, capability_stable_id: @cap.stable_id, level_ordinal: 2)
         assert_equal "consistent", row.self_rated_frequency
+      end
+    end
+  end
+
+  # #606: the merged row stays under the retiring id, and stays frozen.
+  context "when a publish during alignment merges a rated capability into this one" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @retiring = create(:framework_capability, category_id: @cap.category_id, name: "Old Thinking")
+        create(:framework_capability_role_binding, capability_id: @retiring.capability_id, role_id: @role.role_id, weight: 1.0)
+        create(:framework_behavioural_expectation, capability_id: @retiring.capability_id, level_ordinal: 2, description: "Reasons")
+      end
+      call_op(frequency: "some", capability: @retiring)
+      call_op(frequency: "some")
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.start_alignment(@person.id, @framework_id, @cycle_id, started_by_id: @person.id)
+      end
+    end
+
+    should "refuse a rating on the retiring capability before the publish and after it" do
+      assert_raises(Pundit::NotAuthorizedError) { call_op(frequency: "consistent", capability: @retiring) }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @retiring.update!(status: "archived")
+        PersonDevelopment::CommandHandler.new.migrate_framework_version(@person.id, @framework_id, 1, 2, [
+          { from_stable_id: @retiring.stable_id, to_stable_id: @cap.stable_id, mapping_type: "evolved", requires_reassessment: false }
+        ])
+      end
+
+      assert_raises(Operations::Base::ParameterError) { call_op(frequency: "consistent", capability: @retiring) }
+      assert_raises(Pundit::NotAuthorizedError) { call_op(frequency: "consistent") }
+      ActsAsTenant.with_tenant(@tenant) do
+        rows = AssessmentLevelRating.across_all_roles.where(person_id: @person.id, level_ordinal: 2)
+        assert_equal({ @retiring.stable_id => "some", @cap.stable_id => "some" }, rows.to_h { |r| [ r.capability_stable_id, r.self_rated_frequency ] })
       end
     end
   end
