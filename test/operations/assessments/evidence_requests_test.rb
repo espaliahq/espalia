@@ -310,6 +310,16 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       end
     end
 
+    should "give a caller with no right on the request the ordinary refusal, not the former-member one" do
+      age_request!(3.days.ago)
+      ActsAsTenant.with_tenant(@tenant) do
+        @peer.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+        assert_raises(Pundit::NotAuthorizedError) do
+          Operations::Assessments::NudgeEvidenceRequest.call(context: @manager_ctx, params: { request_id: @request_id })
+        end
+      end
+    end
+
     should "reject nudging a resolved request" do
       age_request!(3.days.ago)
       ActsAsTenant.with_tenant(@tenant) do
