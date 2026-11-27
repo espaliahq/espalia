@@ -596,6 +596,97 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  context "decimals the numeric(5, 2) columns would round or overflow" do
+    setup do
+      rfid = SecureRandom.uuid_v7
+      @rid = SecureRandom.uuid_v7
+      cat_id = SecureRandom.uuid_v7
+      @cap_id = SecureRandom.uuid_v7
+      @aggregate.add_role_family(@framework_id, rfid, "Engineering")
+      @aggregate.add_role(@framework_id, @rid, rfid, "Engineer", "E", "ic")
+      @aggregate.add_capability_category(@framework_id, cat_id, "Thinking")
+      @aggregate.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
+      @bid = SecureRandom.uuid_v7
+      @aggregate.create_capability_role_binding(@framework_id, @bid, @cap_id, @rid, weight: 1.0)
+    end
+
+    should "be refused by every command that writes one, naming the field" do
+      [ "1.234", 1000, -1000, "lots" ].each do |value|
+        commands = {
+          "Weight" => -> { @aggregate.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @rid, weight: value) },
+          "Individual tolerance" => -> { @aggregate.update_capability_role_binding(@framework_id, @bid, individual_tolerance: value) },
+          "Mastery threshold" => -> { @aggregate.configure_scoring_thresholds(@framework_id, mastery_threshold: value) },
+          "Meeting expectation threshold" => -> { @aggregate.configure_scoring_thresholds(@framework_id, promotion_score_threshold: value) },
+          "Underperforming threshold" => -> { @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: value) },
+          "Deficit threshold" => -> { @aggregate.configure_scoring_thresholds(@framework_id, deficit_threshold: value) }
+        }
+        commands.each do |label, command|
+          error = assert_raises(Frameworks::Aggregate::UnstorableDecimal, "#{label} = #{value.inspect}") { command.call }
+          assert_match(/\A#{label} must be below 1000 with at most two decimal places/, error.message)
+        end
+      end
+    end
+
+    should "apply nothing when refused" do
+      before = @aggregate.unpublished_events.to_a.size
+      assert_raises(Frameworks::Aggregate::UnstorableDecimal) do
+        @aggregate.update_capability_role_binding(@framework_id, @bid, weight: "1.005")
+      end
+      assert_equal before, @aggregate.unpublished_events.to_a.size
+      assert_equal 1.0, @aggregate.bindings[@bid][:weight]
+    end
+
+    should "open no draft when a new binding is refused on a published framework" do
+      @aggregate.publish_version(@framework_id, "seed")
+      before = @aggregate.unpublished_events.to_a.size
+      assert_raises(Frameworks::Aggregate::UnstorableDecimal) do
+        @aggregate.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @rid, weight: "1.234")
+      end
+      assert_equal before, @aggregate.unpublished_events.to_a.size
+    end
+
+    should "carry the largest values the columns hold, as given" do
+      @aggregate.update_capability_role_binding(@framework_id, @bid, weight: "999.99", individual_tolerance: 0.25)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_equal [ "999.99", 0.25 ], [ event.data[:weight], event.data[:individual_tolerance] ]
+    end
+
+    should "carry negative zero as zero" do
+      @aggregate.update_capability_role_binding(@framework_id, @bid, individual_tolerance: -0.0)
+      assert_equal 0.0, @aggregate.bindings[@bid][:individual_tolerance]
+      refute @aggregate.bindings[@bid][:individual_tolerance].to_s.start_with?("-")
+
+      @aggregate.configure_scoring_thresholds(@framework_id, deficit_threshold: BigDecimal("-0.00"))
+      assert_equal BigDecimal::SIGN_POSITIVE_ZERO, @aggregate.unpublished_events.to_a.last.data[:deficit_threshold].sign
+    end
+
+    should "still refuse thresholds out of order, and accept ordered ones to two places" do
+      assert_raises(RuntimeError) do
+        @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: BigDecimal("0.95"),
+                                                promotion_score_threshold: BigDecimal("0.90"), mastery_threshold: BigDecimal("1.25"))
+      end
+
+      @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: BigDecimal("0.67"),
+                                              promotion_score_threshold: BigDecimal("0.90"), mastery_threshold: BigDecimal("1.25"))
+      assert_equal [ BigDecimal("0.67"), BigDecimal("0.90"), BigDecimal("1.25") ],
+                   @aggregate.unpublished_events.to_a.last.data.values_at(:underperforming_threshold, :promotion_score_threshold, :mastery_threshold)
+    end
+
+    should "check the order of thresholds given as strings" do
+      error = assert_raises(RuntimeError) do
+        @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: "0.95",
+                                                promotion_score_threshold: "0.90", mastery_threshold: "1.25")
+      end
+      assert_match(/must be ordered/, error.message)
+
+      @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: "0.67",
+                                              promotion_score_threshold: "0.90", mastery_threshold: "1.25")
+      assert_equal [ "0.67", "0.90", "1.25" ],
+                   @aggregate.unpublished_events.to_a.last.data.values_at(:underperforming_threshold, :promotion_score_threshold, :mastery_threshold)
+    end
+  end
+
   context "#remove_capability_role_binding" do
     should "apply CapabilityRoleBindingRemoved event" do
       rfid = SecureRandom.uuid_v7
