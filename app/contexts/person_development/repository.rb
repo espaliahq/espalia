@@ -15,7 +15,7 @@ class PersonDevelopment::Repository
   # The writes a forgotten person's stream still takes. Each call that skips
   # the refusal names one; an append from it races the erase unlocked, so
   # its events must carry nothing about the person that the erase removes.
-  FORGOTTEN_ALLOWED = %i[framework_migration cycle_ending].freeze
+  FORGOTTEN_ALLOWED = %i[framework_migration cycle_ending offboarding].freeze
 
   # Loads the person development aggregate, yields it, and stores any new events.
   #
@@ -32,11 +32,14 @@ class PersonDevelopment::Repository
     tenant = ActsAsTenant.current_tenant
     raise ArgumentError, "No tenant context available" unless tenant
 
+    store = -> { @event_store.with_metadata(tenant_id: tenant.id, person_id: person_id, framework_id: framework_id) { @repository.with_aggregate(PersonDevelopment::Aggregate.new, stream, &block) } }
+    # An exception opens no transaction of its own, so its handlers and
+    # broadcasts run exactly as they did before the refusal existed.
+    return store.call if forgotten
+
     Person.transaction do
-      PersonDevelopment::ForgottenSubject.refuse!(person_id) unless forgotten
-      @event_store.with_metadata(tenant_id: tenant.id, person_id: person_id, framework_id: framework_id) do
-        @repository.with_aggregate(PersonDevelopment::Aggregate.new, stream, &block)
-      end
+      PersonDevelopment::ForgottenSubject.refuse!(person_id)
+      store.call
     end
   end
 

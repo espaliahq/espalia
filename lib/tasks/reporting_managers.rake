@@ -20,7 +20,8 @@ namespace :events do
 
     tenants.find_each do |tenant|
       ActsAsTenant.with_tenant(tenant) do
-        assignments = PersonFrameworkAssignment.where(tenant_id: tenant.id)
+        # A forgotten person's stream takes nothing more, so they are skipped.
+        assignments = PersonFrameworkAssignment.where(tenant_id: tenant.id).where.not(person_id: Person.forgotten.select(:id))
         # One query for all managers instead of one per assignment.
         managers = Person.where(id: assignments.select(:person_id)).pluck(:id, :manager_id).to_h
 

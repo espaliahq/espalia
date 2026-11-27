@@ -6,7 +6,8 @@ class PersonDevelopment::ForgottenSubjectWritesTest < ActiveSupport::TestCase
   EXCEPTIONS = {
     migrate_framework_version: :framework_migration,
     leave_cycle: :cycle_ending,
-    conclude_cycle: :cycle_ending
+    conclude_cycle: :cycle_ending,
+    offboard_from_framework: :offboarding
   }.freeze
 
   # Records how each command opens the stream, without opening it.
@@ -48,6 +49,31 @@ class PersonDevelopment::ForgottenSubjectWritesTest < ActiveSupport::TestCase
 
     writes.each do |command|
       assert_equal [ EXCEPTIONS[command] ], opened[command], "#{command} opens the stream with the wrong exception"
+    end
+  end
+
+  should "name exactly three exceptions, used by four commands" do
+    assert_equal %i[framework_migration cycle_ending offboarding], PersonDevelopment::Repository::FORGOTTEN_ALLOWED
+    assert_equal 4, EXCEPTIONS.size
+  end
+
+  should "offboard a forgotten person from the framework, though an unassign is refused" do
+    forget!(@subject)
+
+    assert_raises(PersonDevelopment::ForgottenSubject::Forgotten) do
+      @handler.unassign_from_framework(@subject.id, @framework_id, reason: "manual")
+    end
+    @handler.offboard_from_framework(@subject.id, @framework_id)
+
+    event = Rails.configuration.event_store.read.stream(@stream).last
+    assert_kind_of PersonDevelopment::Events::PersonUnassignedFromFramework, event
+    assert_equal "left_company", event.data[:reason]
+    assert_nil event.data[:unassigned_by]
+  end
+
+  should "refuse to leave a cycle with a reason off the fixed list" do
+    assert_raises(ArgumentError) do
+      @handler.leave_cycle(@subject.id, @framework_id, SecureRandom.uuid_v7, "she asked to leave")
     end
   end
 
@@ -112,8 +138,9 @@ class PersonDevelopment::ForgottenSubjectWritesTest < ActiveSupport::TestCase
 
   def placeholder_args(command)
     params = PersonDevelopment::CommandHandler.instance_method(command).parameters
-    positional = params.filter_map { |type, _| "placeholder" if type == :req }
-    keywords = params.each_with_object({}) { |(type, name), acc| acc[name] = "placeholder" if type == :keyreq }
+    value = ->(name) { name == :reason ? "manual" : "placeholder" }
+    positional = params.filter_map { |type, name| value.(name) if type == :req }
+    keywords = params.each_with_object({}) { |(type, name), acc| acc[name] = value.(name) if type == :keyreq }
     [ positional, keywords ]
   end
 
