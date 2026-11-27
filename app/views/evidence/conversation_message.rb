@@ -30,7 +30,7 @@ class Views::Evidence::ConversationMessage < Views::Base
   def view_template
     article(id: @message.dom_id, class: "group scroll-mt-24 flex flex-col gap-1 max-w-[min(38rem,94%)] #{mine? ? "self-end items-end" : "self-start"}",
             data: { testid: "conversation-message", kind: @message.kind, mine: mine?.to_s }) do
-      p(class: "px-1 text-xs text-muted") { "#{who(sender_id, sender)} · #{short_date(@message.at)}#{answering_note}" }
+      p(class: "px-1 text-xs text-muted") { "#{byline(sender_id, sender)} · #{short_date(@message.at)}#{answering_note}" }
       div(class: "w-full rounded-2xl group-target:ring-2 group-target:ring-(--gos-border-strong)") do
         render Components::Kit::Card.new(variant: mine? ? :inset : :default, density: :compact) do |card|
           card.body { div(class: "space-y-2") { body } }

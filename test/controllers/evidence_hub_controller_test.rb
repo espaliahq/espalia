@@ -94,6 +94,17 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "#needs-you", text: /Former/, count: 0
     end
 
+    should "name a forgotten author as removed in the byline only, never inside a sentence" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @peer.update_columns(forgotten_at: Time.current, name: Person::FORMER_MEMBER, email: nil)
+      end
+      sign_in @assessee_user
+      get evidence_conversation_path(@peer.id)
+
+      assert_select "[data-testid='conversation-thread'] p", text: /\A#{Person::REMOVED} · /
+      assert_no_match(/#{Person::REMOVED}'s|(Give|Ask|about) #{Person::REMOVED}/, response.body)
+    end
+
     should "ask the manager to place a report's feedback, linking to the report's thread" do
       sign_in @manager_user
       get evidence_hub_path

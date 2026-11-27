@@ -14,9 +14,12 @@ module Views::Evidence::ConversationChrome
     person_id == @viewer_id ? "you" : first_name(person)
   end
 
-  def first_name(person)
-    return Person::REMOVED if person&.forgotten?
+  # Who wrote a message, for its byline: a forgotten person reads "Person removed".
+  def byline(person_id, person)
+    person&.forgotten? ? Person::REMOVED : who(person_id, person)
+  end
 
+  def first_name(person)
     person&.name.to_s.split.first || "A colleague"
   end
 
