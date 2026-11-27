@@ -10,10 +10,11 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   # @param overview [OrgGraph::UnitsOverview] with a selected unit
   # @param comparison [OrgGraph::Comparison] marks what changed in the window
   # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members shown (#142)
-  # @param people [Boolean] whether each member's name opens their drawer
-  def initialize(overview:, people:, comparison: OrgGraph::Comparison::NONE, confirmations: nil)
+  # @param editor [Boolean] whether each member's name opens their drawer, beside their title, allocation
+  #   and HRIS level, which are for admins and editors
+  def initialize(overview:, editor:, comparison: OrgGraph::Comparison::NONE, confirmations: nil)
     @overview = overview
-    @people = people
+    @editor = editor
     @confirmations = confirmations
     @unit = overview.selected
     @comparison = comparison
@@ -105,7 +106,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   def member_row(membership)
     person = membership.person
     li(class: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-sm") do
-      if @people
+      if @editor
         a(href: tenant_org_person_path(person, unit: @unit.id, **compared), class: "font-medium text-link hover:text-link-hover underline") { person.name }
       else
         span(class: "font-medium text-default") { person.name }
@@ -113,9 +114,11 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
       also = @overview.other_units_of(membership)
       span(class: "text-xs text-muted") { "also #{also.map(&:name).join(', ')}" } if also.any?
       span(class: "ml-auto flex items-baseline gap-3 text-muted") do
-        span { [ membership.role, person.job_title ].compact_blank.join(" · ") }
-        span(class: "tabular-nums") { "#{(membership.allocation * 100).round}%" } if membership.allocation
-        hris_level(person)
+        span { [ membership.role, (person.job_title if @editor) ].compact_blank.join(" · ") }
+        if @editor
+          span(class: "tabular-nums") { "#{(membership.allocation * 100).round}%" } if membership.allocation
+          hris_level(person)
+        end
       end
       stale_flag(membership) if @confirmations
     end

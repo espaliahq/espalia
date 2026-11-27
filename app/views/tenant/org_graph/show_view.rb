@@ -56,7 +56,7 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
                                                              comparison: @comparison)
             div(class: "flex-1 min-w-0 space-y-6") do
               render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview, comparison: @comparison,
-                                                            confirmations: @confirmations, people: @viewer.editor?)
+                                                            confirmations: @confirmations, editor: @viewer.editor?)
               tray
             end
             render @sidebar if @sidebar
@@ -90,6 +90,6 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
   end
 
   def tray
-    render Views::Tenant::OrgGraph::Tray.new(people: @overview.unplaced, unit_id: @overview.selected&.id, links: @viewer.editor?)
+    render Views::Tenant::OrgGraph::Tray.new(people: @overview.unplaced, unit_id: @overview.selected&.id, editor: @viewer.editor?)
   end
 end

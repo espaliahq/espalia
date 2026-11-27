@@ -35,6 +35,17 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Faye Lumen"
     end
 
+    should "show each member's title, allocation and HRIS level, and the same for the people in no team" do
+      org = build_org_graph(@tenant)
+
+      get tenant_org_graph_path(unit: org[:payments])
+
+      assert_select "#unit-#{org[:payments]}", text: /Engineer/
+      assert_select "#unit-#{org[:payments]}", text: /100%/
+      assert_select "#unit-#{org[:payments]}", text: /L4/
+      assert_select "##{Views::Tenant::OrgGraph::Tray::ID}", text: /Analyst L3/
+    end
+
     should "open the unit named in the query" do
       org = build_org_graph(@tenant)
 
@@ -355,6 +366,15 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_select "button", text: /Change back/, count: 0
       assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Rowan Grant/, count: 0
       assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Added Dot Fennick/
+    end
+
+    should "show each member's name and role, but not their title, allocation or HRIS level" do
+      get tenant_org_graph_path(unit: @org[:payments])
+
+      assert_select "#unit-#{@org[:payments]}", text: /Dot Fennick/
+      assert_select "#unit-#{@org[:payments]}", text: /Engineer|L4|100%/, count: 0
+      assert_select "##{Views::Tenant::OrgGraph::Tray::ID}", text: /Ezra Pell/
+      assert_select "##{Views::Tenant::OrgGraph::Tray::ID}", text: /Analyst|L3/, count: 0
     end
 
     should "refuse a person's drawer" do
