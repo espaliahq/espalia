@@ -359,6 +359,17 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Dot Fennick"
     end
 
+    should "refuse a change back, by entry or by cause, and write nothing" do
+      before = Rails.configuration.event_store.read.count
+      [ { entry_id: SecureRandom.uuid_v7 }, { cause_id: SecureRandom.uuid_v7 } ].each do |params|
+        post change_back_tenant_org_graph_path, params: params.merge(unit: @org[:payments])
+
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+      assert_equal before, Rails.configuration.event_store.read.count
+    end
+
     should "offer nothing to change back, and keep the organisation's activity to itself" do
       get tenant_org_graph_path(unit: @org[:payments], activity: "organisation")
 
