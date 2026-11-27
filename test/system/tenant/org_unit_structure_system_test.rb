@@ -149,6 +149,37 @@ class Tenant::OrgUnitStructureSystemTest < ApplicationSystemTestCase
         assert_equal [ %w[Department Team], %w[Department Team Squad] ], [ top_types, own_types(:checkout) ]
         assert_equal [ "Team", "Squad", "Squad" ], %i[checkout platform payments].map { type_of(it) }
       end
+
+      should "let Checkout's owner give it types from the Units view and shape them on its own page" do
+        owner_user = FactoryBot.create(:user, password: "password123")
+        ActsAsTenant.with_tenant(@tenant) do
+          FactoryBot.create(:tenant_user, tenant: @tenant, user: owner_user, person: @org[:ada], role: :member)
+          OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                           .add_unit_owner(@org[:checkout], @org[:ada].id, effective_on: Date.current)
+        end
+        Capybara.reset_sessions!
+        page.driver.browser.manage.window.resize_to(*size)
+        sign_in_as(owner_user)
+
+        visit edit_tenant_org_unit_path(@org[:checkout])
+        within("#org-unit-structure") { assert_text "Its unit type comes from the organisation's structure." }
+        click_link_with_js_fallback "Give it its own structure", expect_selector: "#org-unit-structure-copy"
+        click_link_with_js_fallback "New types", expect_selector: "#org-unit-structure-permissive"
+        js_fill_in "names[#{@org[:squad]}]", with: "Group"
+        click_button_with_js_fallback "Give Checkout its own structure",
+                                      expect_text: "Checkout has its own structure. Say here where each of its types can sit."
+        assert_selector "h1", text: "The structure beneath Checkout"
+
+        js_fill_in "Name of the new unit type", with: "Guild"
+        click_button_with_js_fallback "Add a unit type", expect_text: "Guild is a unit type now."
+        assert_current_path edit_tenant_org_structure_path(@org[:checkout])
+        within("#org-graph-levels-#{@org[:checkout]}") { assert_text "Guild" }
+        assert_no_selector "a", text: "Settings"
+        assert_no_sideways_overflow
+        screenshot("owner_structure_page_#{viewport}")
+
+        assert_equal %w[Group Guild], own_types(:checkout)
+      end
     end
   end
 end
