@@ -164,9 +164,33 @@ class Operations::CalibrationSessions::FlagExpectationTest < ActiveSupport::Test
         )
       end
     end
+  end
 
-    should "404 an unknown capability stable id" do
-      assert_raises(ActiveRecord::RecordNotFound) { flag!(capability_stable_id: SecureRandom.uuid_v7) }
+  # #615
+  context "with a capability that isn't active in the published framework" do
+    setup do
+      category_id = FrameworkState::Capability.find_by!(stable_id: @cap_stable).category_id
+      @retired = create(:framework_capability, category_id: category_id, name: "Old Thinking", status: "archived")
+    end
+
+    should "refuse a retired capability and a made-up id alike" do
+      [ @retired.stable_id, SecureRandom.uuid_v7 ].each do |id|
+        err = assert_raises(Operations::Base::ParameterError) { flag!(capability_stable_id: id) }
+        assert_equal "capability_stable_id #{id} is not an active capability in the published framework", err.message
+      end
+    end
+
+    should "still report a draft session first, as before" do
+      draft_id = SecureRandom.uuid_v7
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        AssessmentCycles::CalibrationCommandHandler.new.define_session(
+          draft_id, @cycle.cycle_id, @framework_id, "Draft session", 1,
+          facilitator_id: @dept_head.id, participant_ids: [ @em.id ], calibrant_person_ids: [ @report.id ]
+        )
+      end
+
+      err = assert_raises(Operations::Base::ParameterError) { flag!(session_id: draft_id, capability_stable_id: @retired.stable_id) }
+      assert_match(/live session/, err.message)
     end
   end
 end

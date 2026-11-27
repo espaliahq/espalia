@@ -14,6 +14,8 @@
 # grant permissions or change other people's data); the same friction as
 # recording evidence is appropriate.
 class Operations::Assessments::AddEvidenceLink < Operations::Base
+  include Operations::CapabilityGuard
+
   description "Link an existing feedback / evidence item to an additional capability × level."
   category :write
   approval :mcp_client
@@ -38,7 +40,7 @@ class Operations::Assessments::AddEvidenceLink < Operations::Base
   #   links }` — the new link plus every active link the item now carries.
   def perform
     validate_level_ordinal!
-    validate_capability_in_framework!(params[:capability_stable_id])
+    ensure_active_capability!(assignment.framework_id, params[:capability_stable_id])
 
     PersonDevelopment::CommandHandler.new.add_evidence_link(
       assignment.person_id, assignment.framework_id, params[:evidence_id],
@@ -74,22 +76,6 @@ class Operations::Assessments::AddEvidenceLink < Operations::Base
 
     raise Operations::Base::ParameterError,
       "level_ordinal #{params[:level_ordinal]} does not exist for the assignment's role"
-  end
-
-  # Guards against linking to a capability outside this assessment's
-  # framework — without this an attacker authorised for framework A could
-  # persist a link onto a capability_stable_id from framework B (the lookup
-  # is scoped to the assignment's framework, so a foreign id resolves to nil).
-  def validate_capability_in_framework!(capability_stable_id)
-    in_framework = FrameworkState::Capability
-      .joins(:category)
-      .where(stable_id: capability_stable_id)
-      .merge(FrameworkState::CapabilityCategory.where(framework_id: assignment.framework_id))
-      .exists?
-    return if in_framework
-
-    raise Operations::Base::ParameterError,
-      "capability_stable_id does not belong to the assignment's framework"
   end
 
   def active_links_for(evidence_id)
