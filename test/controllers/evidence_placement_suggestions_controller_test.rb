@@ -235,6 +235,20 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
         end
     end
 
+    should "carry nothing from another tenant that reuses the same ids, in the hub or the dismiss response" do
+      plant_lookalikes_in_another_tenant
+      sign_in @jordan_user
+      stream_post dismiss_evidence_placement_suggestion_path(@ownership_suggestion), params: { reason: "Not ownership" }
+      dismiss_response = response.body
+      get evidence_conversation_path(@alex.id)
+
+      { "dismiss response" => dismiss_response, "hub" => response.body }.each do |where, body|
+        assert_includes body, "You dismissed the suggestion for Collaboration · E4 today.", where
+        refute_includes body, LOOKALIKE, where
+        refute_includes body, CGI.escapeHTML(LOOKALIKE), where
+      end
+    end
+
     should "show nothing once the person the feedback is about is forgotten" do
       ActsAsTenant.with_tenant(@tenant) { @alex.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
       sign_in @jordan_user

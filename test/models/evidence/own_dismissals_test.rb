@@ -53,6 +53,16 @@ class Evidence::OwnDismissalsTest < ActiveSupport::TestCase
     assert_empty Evidence::OwnDismissals.for([ @item ], @jordan.id)
   end
 
+  should "read nothing from another tenant that reuses the same feedback, framework and capability ids" do
+    dismiss_on(@ownership, by: @jordan, reason: REASON)
+    plant_lookalikes_in_another_tenant
+
+    entry = Evidence::OwnDismissals.for([ @item ], @jordan.id).fetch(@item.id)
+
+    assert_equal [ REASON ], entry[:dismissals].map(&:dismiss_reason)
+    assert_equal({ name: "Ownership", level_code: "E3" }, entry[:cells].values.sole)
+  end
+
   should "give nothing about a forgotten person, and read no stream to find that out" do
     dismiss_on(@ownership, by: @jordan, reason: REASON)
     @alex.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
