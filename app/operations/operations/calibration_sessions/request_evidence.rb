@@ -158,7 +158,6 @@ class Operations::CalibrationSessions::RequestEvidence < Operations::Base
           "they already have a pending request on this behaviour — nudge that one instead"
   end
 
-
   # Best-effort undo of a request whose session provenance lost the race.
   # If the cancel ITSELF fails (the requestee responded in the gap — the
   # aggregate refuses cancelling a non-pending request), the request stands

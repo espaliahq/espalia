@@ -49,8 +49,12 @@ class Operations::Assessments::PostComment < Operations::Base
     # An evidence-link comment's coordinates name the linkage, and the
     # aggregate's ever-linked check owns their validity — a manager may
     # have linked at any ordinal, not just the assessee's role's levels.
-    validate_level_ordinal! unless evidence_id
-    ensure_active_capability!(assignment.framework_id, params[:capability_stable_id])
+    # A comment on an existing link may still discuss one left on a retired
+    # capability, as the link tools may still tidy it.
+    if evidence_id.nil?
+      validate_level_ordinal!
+      ensure_active_capability!(assignment.framework_id, params[:capability_stable_id])
+    end
 
     comment_id = SecureRandom.uuid_v7
     PersonDevelopment::CommandHandler.new.post_comment(

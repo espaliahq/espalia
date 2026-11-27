@@ -163,7 +163,6 @@ class Operations::Assessments::RecordEvidence < Operations::Base
     end
   end
 
-
   # The external reference URL is validated upfront — same posture as
   # the web controller — so a `javascript:` URL or similar XSS vector
   # never lands in the event stream and can't fail on replay.

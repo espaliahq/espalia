@@ -68,7 +68,6 @@ class Operations::Assessments::RequestEvidence < Operations::Base
     raise Operations::Base::ParameterError, "cannot request evidence from yourself" if person.id == context.person.id
   end
 
-
   def validate_level_ordinal!
     return if FrameworkState::Level.exists?(role_id: assignment.role_id, ordinal: params[:level_ordinal])
 

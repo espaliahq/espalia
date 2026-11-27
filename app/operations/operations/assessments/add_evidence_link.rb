@@ -74,7 +74,6 @@ class Operations::Assessments::AddEvidenceLink < Operations::Base
       "level_ordinal #{params[:level_ordinal]} does not exist for the assignment's role"
   end
 
-
   def active_links_for(evidence_id)
     EvidenceLink.active.where(evidence_id: evidence_id).order(:linked_at).map do |link|
       { capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal,

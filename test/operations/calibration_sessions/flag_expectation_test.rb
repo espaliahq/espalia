@@ -179,5 +179,18 @@ class Operations::CalibrationSessions::FlagExpectationTest < ActiveSupport::Test
         assert_equal "capability_stable_id #{id} is not an active capability in the published framework", err.message
       end
     end
+
+    should "still report a draft session first, as before" do
+      draft_id = SecureRandom.uuid_v7
+      Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+        AssessmentCycles::CalibrationCommandHandler.new.define_session(
+          draft_id, @cycle.cycle_id, @framework_id, "Draft session", 1,
+          facilitator_id: @dept_head.id, participant_ids: [ @em.id ], calibrant_person_ids: [ @report.id ]
+        )
+      end
+
+      err = assert_raises(Operations::Base::ParameterError) { flag!(session_id: draft_id, capability_stable_id: @retired.stable_id) }
+      assert_match(/live session/, err.message)
+    end
   end
 end

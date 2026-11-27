@@ -25,12 +25,10 @@ class Operations::CalibrationSessions::RecordNote < Operations::Base
   # @return [Hash] `{ session_id }`
   def perform
     ensure_body!
-    if params[:capability_stable_id].present?
-      ensure_uuid!(:capability_stable_id, params[:capability_stable_id])
-      ensure_active_capability!(session.framework_id, params[:capability_stable_id])
-    end
+    ensure_uuid!(:capability_stable_id, params[:capability_stable_id]) if params[:capability_stable_id].present?
     ensure_uuid!(:person_id, params[:person_id]) if params[:person_id].present?
     ensure_session_started!
+    ensure_active_capability!(session.framework_id, params[:capability_stable_id]) if params[:capability_stable_id].present?
 
     command_handler.record_note(
       session.id,

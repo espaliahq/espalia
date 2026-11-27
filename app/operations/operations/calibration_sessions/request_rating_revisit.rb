@@ -37,10 +37,10 @@ class Operations::CalibrationSessions::RequestRatingRevisit < Operations::Base
   def perform
     ensure_uuid!(:person_id, params[:person_id])
     ensure_uuid!(:capability_stable_id, params[:capability_stable_id])
-    ensure_active_capability!(session.framework_id, params[:capability_stable_id])
     ensure_session_started!
     ensure_note!
     ensure_rater_in_session!
+    ensure_active_capability!(session.framework_id, params[:capability_stable_id])
 
     begin
       command_handler.request_rating_revisit(

@@ -96,6 +96,24 @@ class Operations::Assessments::RetiredCapabilityWritesTest < ActiveSupport::Test
 
   WRITES = %i[record_evidence add_link post_comment request_evidence].freeze
 
+  should "let a comment discuss a link left on a retired capability" do
+    evidence_id = call(Operations::Assessments::RecordEvidence, @report, evidence_type: "project_outcome",
+      content: "Linked before the capability retired.")[:evidence_id]
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.add_evidence_link(@report.id, @framework_id, evidence_id,
+        capability_stable_id: @retired.stable_id, level_ordinal: 2, linked_by_id: @report.id, valence: "demonstrated")
+    end
+
+    result = call(Operations::Assessments::PostComment, @report, evidence_id: evidence_id,
+      capability_stable_id: @retired.stable_id, level_ordinal: 2, body: "This link should go")
+    assert_equal @retired.stable_id, result[:capability_stable_id]
+  end
+
+  should "refuse a capability id that isn't a UUID with the same message, before querying" do
+    err = assert_raises(Operations::Base::ParameterError) { post_comment(@report, "abc") }
+    assert_equal "capability_stable_id abc is not an active capability in the published framework", err.message
+  end
+
   should "migrate the in-progress person and skip the completed-alignment one" do
     assert migrated?(@report)
     assert_not migrated?(@aligned)
