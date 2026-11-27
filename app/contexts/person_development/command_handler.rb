@@ -224,7 +224,7 @@ class PersonDevelopment::CommandHandler
       attempts += 1
       # A placement job or a decision can store to the stream mid-publish. Losing that race must not roll the publish back.
       ActiveRecord::Base.transaction(requires_new: true) do
-        @repository.with_person_development(person_id, framework_id) do |aggregate|
+        @repository.with_person_development(person_id, framework_id, forgotten: :framework_migration) do |aggregate|
           aggregate.migrate_framework_version(framework_id, old_version, new_version, mappings)
         end
       end
@@ -245,7 +245,7 @@ class PersonDevelopment::CommandHandler
   # @param cycle_id [String] UUID of the cycle being left (must match current)
   # @param reason [String] why the person is leaving
   def leave_cycle(person_id, framework_id, cycle_id, reason)
-    @repository.with_person_development(person_id, framework_id) do |aggregate|
+    @repository.with_person_development(person_id, framework_id, forgotten: :cycle_ending) do |aggregate|
       aggregate.leave_cycle(cycle_id, reason)
     end
   end
@@ -260,7 +260,7 @@ class PersonDevelopment::CommandHandler
   # @param framework_id [String] UUID of the framework
   # @param cycle_id [String] UUID of the cycle that concluded (must match current)
   def conclude_cycle(person_id, framework_id, cycle_id)
-    @repository.with_person_development(person_id, framework_id) do |aggregate|
+    @repository.with_person_development(person_id, framework_id, forgotten: :cycle_ending) do |aggregate|
       aggregate.conclude_cycle(cycle_id)
     end
   end
@@ -681,14 +681,12 @@ class PersonDevelopment::CommandHandler
   def add_evidence_link(person_id, framework_id, evidence_id,
                         capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil,
                         via_suggestion_id: nil)
-    PersonDevelopment::ForgottenSubject.writing(person_id) do
-      @repository.with_person_development(person_id, framework_id) do |aggregate|
-        aggregate.add_evidence_link(evidence_id,
-          capability_stable_id: capability_stable_id,
-          level_ordinal: level_ordinal,
-          linked_by_id: linked_by_id, valence: valence, rationale: rationale,
-          via_suggestion_id: via_suggestion_id)
-      end
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.add_evidence_link(evidence_id,
+        capability_stable_id: capability_stable_id,
+        level_ordinal: level_ordinal,
+        linked_by_id: linked_by_id, valence: valence, rationale: rationale,
+        via_suggestion_id: via_suggestion_id)
     end
   end
 
@@ -705,14 +703,12 @@ class PersonDevelopment::CommandHandler
   def set_evidence_link_valence(person_id, framework_id, evidence_id,
                                 capability_stable_id:, level_ordinal:, valence:, changed_by_id:,
                                 via_suggestion_id: nil)
-    PersonDevelopment::ForgottenSubject.writing(person_id) do
-      @repository.with_person_development(person_id, framework_id) do |aggregate|
-        aggregate.set_evidence_link_valence(evidence_id,
-          capability_stable_id: capability_stable_id,
-          level_ordinal: level_ordinal,
-          valence: valence, changed_by_id: changed_by_id,
-          via_suggestion_id: via_suggestion_id)
-      end
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.set_evidence_link_valence(evidence_id,
+        capability_stable_id: capability_stable_id,
+        level_ordinal: level_ordinal,
+        valence: valence, changed_by_id: changed_by_id,
+        via_suggestion_id: via_suggestion_id)
     end
   end
 
@@ -727,13 +723,11 @@ class PersonDevelopment::CommandHandler
   # @param reason [String, nil] optional explanation
   def remove_evidence_link(person_id, framework_id, evidence_id,
                            capability_stable_id:, level_ordinal:, removed_by_id:, reason: nil)
-    PersonDevelopment::ForgottenSubject.writing(person_id) do
-      @repository.with_person_development(person_id, framework_id) do |aggregate|
-        aggregate.remove_evidence_link(evidence_id,
-          capability_stable_id: capability_stable_id,
-          level_ordinal: level_ordinal,
-          removed_by_id: removed_by_id, reason: reason)
-      end
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.remove_evidence_link(evidence_id,
+        capability_stable_id: capability_stable_id,
+        level_ordinal: level_ordinal,
+        removed_by_id: removed_by_id, reason: reason)
     end
   end
 

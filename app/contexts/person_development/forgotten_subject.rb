@@ -25,15 +25,4 @@ module PersonDevelopment::ForgottenSubject
   def self.refuse!(person_id)
     raise Forgotten if Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:forgotten_at)
   end
-
-  # Runs the block in a transaction that holds the person's row first.
-  #
-  # @param person_id [String]
-  # @return [Object] the block's value
-  def self.writing(person_id)
-    Person.transaction do
-      refuse!(person_id)
-      yield
-    end
-  end
 end
