@@ -7,10 +7,11 @@
 # another admin's change.
 class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
   include OrgGraphSettingsRedirect
+  include OrgStructureAuthorization
 
   # PATCH /tenant/org_graph/settings/kind_parents/:level_id
   def update
-    authorize :org_graph, :edit_taxonomy?
+    authorize_structure_of!(structure_unit)
     result = ActiveRecord::Base.transaction do
       ::OrgGraph::Repository.new.lock_structure # so no save lands between the comparison and this write
       next if changed_since_drawn?

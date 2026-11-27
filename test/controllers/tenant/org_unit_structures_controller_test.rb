@@ -213,6 +213,30 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Group", type_of(:payments)
   end
 
+  context "as Checkout's owner" do
+    setup do
+      owner_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: owner_user, person: @org[:ada], role: :member)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .add_unit_owner(@org[:checkout], @org[:ada].id, effective_on: "2026-01-01")
+      end
+      sign_out @admin_user
+      sign_in owner_user
+    end
+
+    should "open the structure steps for a unit they own, and for none elsewhere" do
+      get new_tenant_org_unit_structure_declaration_path(@org[:payments])
+      assert_response :success
+
+      [ new_tenant_org_unit_structure_declaration_path(@org[:platform]),
+        new_tenant_org_unit_structure_withdrawal_path(@org[:platform]) ].each do |path|
+        get path
+        assert_redirected_to root_path, path
+      end
+    end
+  end
+
   context "as a tenant member" do
     setup do
       sign_out @admin_user

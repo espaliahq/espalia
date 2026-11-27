@@ -4,10 +4,11 @@
 # admin on that structure in Settings to say where each type can sit.
 class Tenant::OrgUnitStructureDeclarationsController < ApplicationController
   include OrgUnitDrawer
+  include OrgStructureAuthorization
 
   # GET /tenant/org_graph/units/:org_unit_id/structure_declaration/new
   def new
-    authorize :org_graph, :show_units?
+    authorize_structure_of!(@unit)
     render_drawer do |overview, rights|
       Views::Tenant::OrgGraph::DeclareStructureStep.new(unit: @unit, overview:, rights:, effective_on: step_date,
                                                         alert: flash[:drawer_alert], fresh: params[:fresh].present?)

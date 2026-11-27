@@ -237,6 +237,50 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
     end
   end
 
+  context "as Payments' owner, with Payments' own structure" do
+    setup do
+      @pod_id = SecureRandom.uuid_v7
+      @owner_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        owner = create(:person, tenant: @tenant)
+        create(:tenant_user, tenant: @tenant, user: @owner_user, role: :member, person: owner)
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        structure.add_unit_owner(@payments_id, owner.id, effective_on: Date.current)
+        admin = AuthorizationContext.new(user: @admin_user, tenant_user: TenantUser.find_by!(user: @admin_user), person: nil)
+        OrgGraph::StructureCommandHandler.new(actor: admin).declare_structure(
+          @payments_id, levels: [ { level_id: @pod_id, name: "Pod", parent_level_ids: [ @pod_id ], top: true } ],
+                        conversion: {}, effective_on: Date.current
+        )
+      end
+      sign_in @owner_user
+    end
+
+    should "add, rule and remove a type in Payments' structure" do
+      post tenant_org_graph_settings_levels_path, params: { name: "Guild", structure_unit_id: @payments_id }
+      assert_nil flash[:alert]
+      assert_equal %w[Pod Guild], own_names
+
+      guild_id = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.in_structure(@payments_id).find_by!(name: "Guild").id }
+      patch tenant_org_graph_settings_kind_parent_path(guild_id),
+            params: { parent_ids: [ @pod_id ], top: "0", structure_unit_id: @payments_id }
+      assert_equal [ "Saved where Guild can sit.", nil ], [ flash[:notice], flash[:alert] ]
+
+      delete tenant_org_graph_settings_level_path(guild_id), params: { structure_unit_id: @payments_id }
+      assert_nil flash[:alert]
+      assert_equal %w[Pod], own_names
+    end
+
+    should "refuse to change the organisation's structure" do
+      [ -> { post tenant_org_graph_settings_levels_path, params: { name: "Guild" } },
+        -> { patch tenant_org_graph_settings_kind_parent_path(@squad_id), params: { parent_ids: [], top: "1" } },
+        -> { delete tenant_org_graph_settings_level_path(@team_id) } ].each do |request|
+        request.call
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+      assert_equal %w[Tribe Squad Team], level_names
+    end
+  end
+
   context "as a member with no rights" do
     setup do
       @member_user = create(:user)
