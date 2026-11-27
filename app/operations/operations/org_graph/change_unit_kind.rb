@@ -12,7 +12,7 @@ class Operations::OrgGraph::ChangeUnitKind < Operations::Base
               "every live sub-unit must be able to sit under it, on every day from effective_on, a move dated ahead included. " \
               "effective_on can't be after today or before the unit's last change of type. It needs the right to " \
               "change the structure in force where the unit sits: a tenant admin or an Org Graph editor for " \
-              "any, and for a unit's own structure an owner of that unit or a unit above it, or anyone they report to."
+              "any, and for a unit's own structure an owner of that unit or a unit above it, or anyone above them in the reporting line."
   approval :in_app
 
   parameter :unit_id, String, required: true

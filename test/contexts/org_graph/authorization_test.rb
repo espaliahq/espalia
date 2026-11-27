@@ -155,7 +155,7 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
       OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01")
     end
 
-    should "be left to its owners, those they report to, an Org Graph editor or a tenant admin" do
+    should "be left to its owners, anyone above them in the reporting line, an Org Graph editor or a tenant admin" do
       refusal = "You can change Engineering's structure if you own Engineering or a unit above it, " \
                 "have such an owner below you in your reporting line, or are an Org Graph editor"
       error = assert_raises(OrgGraph::Authorization::Refused) { structure(context_for(@report)).declare_structure(@engineering_id, **@declaration) }

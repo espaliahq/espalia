@@ -13,7 +13,7 @@ class Operations::OrgGraph::MoveUnit < Operations::Base
               "structure it joins for each type the unit and those beneath it hold. Each changes type in the same " \
               "change, and a unit with a structure of its own takes it along, nested. That needs the right to " \
               "change both structures, which a tenant admin or an Org Graph editor holds for any structure, and " \
-              "an owner of a unit, or anyone that owner reports to, holds for the structures that unit or one beneath it declares."
+              "an owner of a unit, or anyone above them in the reporting line, holds for the structures that unit or one beneath it declares."
   approval :in_app
 
   CONVERSION_SCHEMA = {

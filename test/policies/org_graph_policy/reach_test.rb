@@ -230,7 +230,7 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     next_request = as(@manager)
     assert_not policy_for(next_request).edit_unit?(unit(@org[:payments]))
     error = assert_raises(OrgGraph::Authorization::Refused) { structure(next_request).rename_unit(@org[:payments], "Payments", **ON) }
-    assert_match "an owner of Payments Core or a unit above it, or someone they report to", error.message
+    assert_match "an owner of Payments Core or a unit above it, or anyone above them in the reporting line", error.message
     assert policy_for(as(@org[:ezra])).edit_unit?(unit(@org[:payments]))
   end
 

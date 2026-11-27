@@ -40,7 +40,7 @@ class Operations::OrgGraph::DeclareStructure < Operations::Base
               "has a structure, and a date after today or before a change beneath. " \
               "org_graph_withdraw_structure undoes it. " \
               "Refused unless the caller is a tenant admin, an Org Graph editor, an owner of the unit or a unit " \
-              "above it, or someone such an owner reports to."
+              "above it, or anyone above them in the reporting line."
   approval :in_app
 
   parameter :unit_id, String, required: true, schema: { format: "uuid" }

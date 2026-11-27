@@ -1,6 +1,6 @@
 {
   "name": "org_graph_add_level",
-  "description": "Add a level to the bottom of the Org Graph's taxonomy, from effective_on (today by default). Espalia holds the new level. parent_ids lists the level_ids it can sit under (by default, every level above it), and top whether it can sit at the top (by default, only when parent_ids is empty, or when neither is given). org_graph_set_kind_parents changes these later. Level names are unique, ignoring case, within a structure. structure_unit_id adds the type to that unit's own structure instead of the top one. The organisation's structure needs a tenant admin or an Org Graph editor; a unit's own structure also admits an owner of that unit or a unit above it, and anyone such an owner reports to.",
+  "description": "Add a level to the bottom of the Org Graph's taxonomy, from effective_on (today by default). Espalia holds the new level. parent_ids lists the level_ids it can sit under (by default, every level above it), and top whether it can sit at the top (by default, only when parent_ids is empty, or when neither is given). org_graph_set_kind_parents changes these later. Level names are unique, ignoring case, within a structure. structure_unit_id adds the type to that unit's own structure instead of the top one. The organisation's structure needs a tenant admin or an Org Graph editor; a unit's own structure also admits an owner of that unit or a unit above it, and anyone above them in the reporting line.",
   "inputSchema": {
     "type": "object",
     "properties": {

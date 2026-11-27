@@ -12,7 +12,7 @@ class Operations::OrgGraph::AddLevel < Operations::Base
               "Level names are unique, ignoring case, within a structure. structure_unit_id adds the type to that " \
               "unit's own structure instead of the top one. " \
               "The organisation's structure needs a tenant admin or an Org Graph editor; a unit's own structure " \
-              "also admits an owner of that unit or a unit above it, and anyone such an owner reports to."
+              "also admits an owner of that unit or a unit above it, and anyone above them in the reporting line."
   approval :in_app
 
   parameter :name, String, required: true, allow_blank: false

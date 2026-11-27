@@ -201,7 +201,7 @@ module OrgGraph::Authorization
   end
 
   def owners_of(unit)
-    "an owner of #{unit_name(unit)} or a unit above it, or someone they report to"
+    "an owner of #{unit_name(unit)} or a unit above it, or anyone above them in the reporting line"
   end
 
   def only_managers_of(member)

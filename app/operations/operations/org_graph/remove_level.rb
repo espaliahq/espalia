@@ -13,7 +13,7 @@ class Operations::OrgGraph::RemoveLevel < Operations::Base
               "A level an HRIS provides is handed back to Espalia first. A level a live plan places a unit " \
               "at stays until the plan changes or is archived. " \
               "The organisation's structure needs a tenant admin or an Org Graph editor; a unit's own structure " \
-              "also admits an owner of that unit or a unit above it, and anyone such an owner reports to."
+              "also admits an owner of that unit or a unit above it, and anyone above them in the reporting line."
   category :destructive
   approval :in_app
 
