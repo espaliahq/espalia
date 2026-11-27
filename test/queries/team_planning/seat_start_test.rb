@@ -46,12 +46,17 @@ class TeamPlanning::SeatStartTest < ActiveSupport::TestCase
 
     assert_not held.started_in?(STEP)
     assert_nil held.planned
-    assert_nil held.forecast(time_to_hire: 90)
+    assert_nil held.forecast(time_to_hire: 90, today: STEP.begin)
     assert_equal "on_hold", held.basis
   end
 
   should "forecast only an undated seat, from the day it opens" do
-    assert_equal Date.new(2026, 5, 31), start.forecast(time_to_hire: 90)
-    assert_nil start(target_start: Date.new(2026, 5, 4)).forecast(time_to_hire: 90)
+    assert_equal Date.new(2026, 5, 31), start.forecast(time_to_hire: 90, today: STEP.begin)
+    assert_nil start(target_start: Date.new(2026, 5, 4)).forecast(time_to_hire: 90, today: STEP.begin)
+  end
+
+  should "never forecast a seat still open as filled before today" do
+    assert_equal Date.new(2026, 8, 1), start.forecast(time_to_hire: 90, today: Date.new(2026, 8, 1))
+    assert_equal Date.new(2026, 5, 31), start.forecast(time_to_hire: 90, today: Date.new(2026, 5, 31))
   end
 end

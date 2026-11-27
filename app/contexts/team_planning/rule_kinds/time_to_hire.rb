@@ -6,7 +6,8 @@
 #
 # It also forecasts the hiring lag on an open seat the plan gives no target
 # start ([#458](https://github.com/espaliahq/espalia/issues/458)): the seat is
-# forecast to fill this many days after it opens ({TeamPlanning::SeatStart#forecast}).
+# forecast to fill this many days after it opens, and never before today
+# ({TeamPlanning::SeatStart#forecast}, [#474](https://github.com/espaliahq/espalia/issues/474)).
 # Cost takes away the seat's days in the step before then. Headcount, capacity
 # and the run rate take the seat away only when it is forecast to fill after
 # the step ends, as they read the step's last day. A seat with a target
@@ -69,7 +70,7 @@ class TeamPlanning::RuleKinds::TimeToHire < TeamPlanning::ForecastKind
   # takes away from headcount, cost, capacity and the run rate.
   def self.lag(frame, position, fte, start, unit_id)
     held = start.held_in(frame.step) or return
-    fills = start.forecast(time_to_hire: days(frame.map.rule(rule_name, unit_id:))) or return
+    fills = start.forecast(time_to_hire: days(frame.map.rule(rule_name, unit_id:)), today: frame.today) or return
     empty = ([ fills - 1, held.end ].min - held.begin).to_i + 1
     return unless empty.positive?
 

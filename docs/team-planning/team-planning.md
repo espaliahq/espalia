@@ -228,7 +228,7 @@ organisation or for one unit.
   result is shown as a total for the unit.
 - **Hiring.** An open position has a hiring status (not started, hiring, offer made, on
   hold) and a target start date. Both are planned. Where no date is set, the tenant's
-  usual time to hire gives a forecast one. Cost starts on that date. Where a hiring
+  usual time to hire gives a forecast one, never before today. Cost starts on that date. Where a hiring
   system is connected it supplies the status.
 - **Ramp.** A new hire delivers less at first. The capacity model states how long a hire
   takes to reach full capacity, and a step counts them at what they deliver in it.
