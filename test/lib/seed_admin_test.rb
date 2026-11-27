@@ -123,6 +123,25 @@ class SeedAdminTest < ActiveSupport::TestCase
     assert_match(/SEED_ADMIN_EMAIL/, error.message)
   end
 
+  context "the audit" do
+    should "record a promotion and a new admin as seed" do
+      promoted = create(:user, email: SeedAdmin::DEV_EMAIL)
+      bootstrap(env: DEV)
+      created, = bootstrap(env: DEV, "SEED_ADMIN_EMAIL" => "ops@example.org", "SEED_ADMIN_PASSWORD" => "s3eded-secret")
+
+      assert_equal [ [ true, "seed" ] ], GlobalAdminChange.where(user_id: promoted.id).pluck(:global_admin, :source)
+      assert_equal [ [ true, "seed" ] ], GlobalAdminChange.where(user_id: created.id).pluck(:global_admin, :source)
+    end
+
+    should "record nothing when production already has an admin" do
+      create(:user, global_admin: true)
+
+      assert_no_difference -> { GlobalAdminChange.count } do
+        bootstrap(env: PROD, "SEED_ADMIN_EMAIL" => "ops@example.org", "SEED_ADMIN_PASSWORD" => "s3eded-secret")
+      end
+    end
+  end
+
   should "refuse an email without a password" do
     assert_raises(ArgumentError) { bootstrap(env: PROD, "SEED_ADMIN_EMAIL" => "ops@example.org") }
   end
