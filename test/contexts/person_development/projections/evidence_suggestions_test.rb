@@ -174,6 +174,32 @@ class PersonDevelopment::Projections::EvidenceSuggestionsTest < ActiveSupport::T
     assert_equal %w[closed dismissed], rows.map(&:status).sort
   end
 
+  should "keep a forgotten person's rows that no event records, closing the pending one, on a rebuild" do
+    unrecorded = ActsAsTenant.with_tenant(@tenant) do
+      [ create(:evidence_placement_suggestion, tenant: @tenant, item: @item, capability_stable_id: @ownership.stable_id,
+               level_ordinal: 3, valence: "demonstrated", confidence: 0.7),
+        create(:evidence_placement_suggestion, tenant: @tenant, item: @item, capability_stable_id: @collaboration.stable_id,
+               level_ordinal: 3, valence: "demonstrated", confidence: 0.7, status: "dismissed", dismiss_reason: "Not this") ]
+    end
+    ActsAsTenant.with_tenant(@tenant) { @alex.update_columns(forgotten_at: Time.current, name: Person::FORMER_MEMBER, email: nil) }
+
+    projection = PersonDevelopment::Projections::EvidenceSuggestions
+    projection.reset!(tenant: @tenant)
+    Projections::Replayer.replay(projection_class: projection, tenant: @tenant)
+
+    assert_equal [ [ unrecorded.first.id, "closed" ], [ unrecorded.last.id, "dismissed" ] ].sort, rows.map { [ it.id, it.status ] }.sort
+    assert_equal "Not this", row_at(@collaboration, 3).dismiss_reason
+  end
+
+  should "drop a forgotten person's rows on a reset when events record them" do
+    suggest(proposal)
+    ActsAsTenant.with_tenant(@tenant) { @alex.update_columns(forgotten_at: Time.current, name: Person::FORMER_MEMBER, email: nil) }
+
+    PersonDevelopment::Projections::EvidenceSuggestions.reset!(tenant: @tenant)
+
+    assert_empty rows
+  end
+
   should "keep a closed row closed when the same cell is suggested again" do
     suggest(proposal(@ownership, 3))
     forget(@alex)

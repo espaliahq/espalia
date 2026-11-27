@@ -35,7 +35,24 @@ class PersonDevelopment::Projections::EvidenceSuggestions
   # @param tenant [Tenant]
   def self.reset!(tenant:)
     ActsAsTenant.with_tenant(tenant) do
-      EvidencePlacementSuggestion.where(tenant_id: tenant.id).delete_all
+      kept = unrecorded_forgotten_rows
+      EvidencePlacementSuggestion.where(tenant_id: tenant.id).where.not(id: kept).delete_all
+      EvidencePlacementSuggestion.pending.where(id: kept).update_all(status: "closed", updated_at: Time.current)
+    end
+  end
+
+  # The catch-up that put the table's rows on the streams skipped forgotten
+  # people, so a row of someone forgotten before it may have no event to
+  # rebuild it from. A rebuild keeps such a row, closed, rather than lose it.
+  #
+  # @return [Array<String>] suggestion ids
+  def self.unrecorded_forgotten_rows
+    rows = EvidencePlacementSuggestion.where(person_id: Person.forgotten.select(:id)).pluck(:id, :person_id, :framework_id)
+    rows.group_by { it.drop(1) }.flat_map do |(person_id, framework_id), group|
+      stream = EventStreamNaming.person_development_stream(person_id, framework_id)
+      recorded = Rails.configuration.event_store.read.stream(stream)
+        .of_type([ PersonDevelopment::Events::EvidencePlacementSuggested ]).map { it.data[:suggestion_id] }
+      group.map(&:first) - recorded
     end
   end
 
