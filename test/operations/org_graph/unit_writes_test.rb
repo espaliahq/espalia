@@ -217,6 +217,51 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
       end
     end
 
+    context "from someone who is neither an admin nor an editor" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          @manager = create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant, name: "Mo Hart"))
+          [ :ezra, :brook ].each { @org[it].update!(manager: @manager.person) }
+        end
+      end
+
+      should "refuse an allocation from Checkout's owner and from Ezra's manager, adding no one" do
+        [ [ @owner, :checkout ], [ @manager, :platform ] ].each do |caller, key|
+          error = assert_raises(Operations::Base::ParameterError) do
+            call(Operations::OrgGraph::AddMember, as: caller, unit_id: @org[key], person_id: @org[:ezra].id, allocation: 0.5)
+          end
+
+          assert_equal "Only a tenant admin or an Org Graph editor may set an allocation", error.message
+          assert_nil membership(:ezra, key)
+        end
+      end
+
+      should "add people without an allocation for Checkout's owner and for Ezra's manager" do
+        call(Operations::OrgGraph::AddMember, as: @owner, unit_id: @org[:checkout], person_id: @org[:ezra].id, role: "Analyst")
+        call(Operations::OrgGraph::AddMember, as: @manager, unit_id: @org[:platform], person_id: @org[:ezra].id)
+
+        assert_equal [ "Analyst", nil ], [ membership(:ezra, :checkout).role, membership(:ezra, :checkout).allocation ]
+        assert_nil membership(:ezra, :platform).allocation
+      end
+
+      should "let an Org Graph editor who isn't an admin set one" do
+        editor = ActsAsTenant.with_tenant(@tenant) do
+          create(:tenant_user, tenant: @tenant, role: :member, org_graph_editor: true, person: create(:person, tenant: @tenant))
+        end
+        call(Operations::OrgGraph::AddMember, as: editor, unit_id: @org[:platform], person_id: @org[:ezra].id, allocation: 0.5)
+
+        assert_equal 0.5, membership(:ezra, :platform).allocation.to_f
+      end
+
+      should "keep a member's allocation and role when their manager moves them" do
+        call(Operations::OrgGraph::MoveMember, as: @manager, person_id: @org[:brook].id, from_unit_id: @org[:checkout],
+                                               unit_id: @org[:payments])
+
+        moved = membership(:brook, :payments)
+        assert_equal [ 0.5, "Tech lead" ], [ moved.allocation.to_f, moved.role ]
+      end
+    end
+
     should "move a member, keeping their terms" do
       call(Operations::OrgGraph::MoveMember, person_id: @org[:dot].id, from_unit_id: @org[:payments],
                                              unit_id: @org[:platform])
