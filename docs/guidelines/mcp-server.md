@@ -519,6 +519,18 @@ frameworks, and an attacker authorized for framework A could request a
 the authorized framework. Same applies for any "look up child X under
 parent Y" pattern.
 
+A write that takes a `capability_stable_id` goes one step further: it
+includes `Operations::CapabilityGuard` and calls
+`ensure_active_capability!(framework_id, stable_id)`. The capability must
+be active in the published framework, so a retired, draft-only or made-up
+id gets the same refusal. That holds even for a person a publish skipped
+because their alignment was complete (ADR-17). The rate tools get a
+stricter check from `Operations::Assessments::RatingCell`.
+`test/operations/capability_guard_coverage_test.rb` fails on a new write
+tool that has neither; tools that only touch an existing link are exempt
+there, each with a reason. Reads are not filtered: evidence recorded
+before a capability retired stays visible, by the product owner's decision.
+
 ### 6. CSRF protection 422s POSTs before Doorkeeper sees them
 
 The `Mcp::ServerController` POST endpoint inherits `ActionController::Base`
