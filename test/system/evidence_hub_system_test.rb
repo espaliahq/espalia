@@ -241,6 +241,26 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_text "Shipped the migration"
   end
 
+  should "offer no Edit links on feedback about a forgotten report" do
+    manager_user = create(:user, password: "password123")
+    ActsAsTenant.with_tenant(@tenant) do
+      manager = create(:person, tenant: @tenant, email: manager_user.email, name: "Morgan Manager")
+      create(:tenant_user, tenant: @tenant, user: manager_user, person: manager, role: :member)
+      @report.update!(manager: manager)
+      PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "peer", evidence_type: "peer_feedback",
+        content: "Paired well on the migration.", author_id: @peer.id, valence: "demonstrated")
+      @report.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+
+    sign_in_as(manager_user)
+    visit evidence_conversation_path(@peer.id, view: "person")
+    within("[data-testid='conversation-thread']") do
+      assert_text "Paired well on the migration."
+      assert_no_button "Edit links"
+    end
+  end
+
   should "let the requester nudge a stale open request" do
     make_request!
     ActsAsTenant.with_tenant(@tenant) do

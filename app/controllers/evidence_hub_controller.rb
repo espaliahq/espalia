@@ -284,9 +284,13 @@ class EvidenceHubController < ApplicationController
 
   # Items the viewer may place or link: what they're asked to place, plus
   # anything else the policy lets them link. The same items' suggestions are
-  # theirs to decide.
+  # theirs to decide. Feedback about a forgotten person takes no more links.
   def linkable_items(conversations, shown)
-    shown.select(&:item).select do |m|
+    candidates = shown.select(&:item)
+    forgotten = Person.forgotten.where(id: candidates.map { |m| m.item.person_id }).pluck(:id).to_set
+    candidates.select do |m|
+      next false if forgotten.include?(m.item.person_id)
+
       conversations.owes?(m) || EvidencePolicy.new(pundit_user, m.item).add_link?
     end.map(&:item)
   end

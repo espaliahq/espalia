@@ -208,6 +208,30 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "offer a manager Edit links on placed feedback about a report, until the report is forgotten" do
+      cap = ActsAsTenant.with_tenant(@tenant) do
+        cat = create(:framework_capability_category, framework_id: @framework_id, name: "Thinking", ordinal: 1)
+        create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
+      end
+      placed_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        @handler.record_evidence(@assessee.id, @framework_id, placed_id,
+          capability_stable_id: cap.stable_id, level_ordinal: 2, source: "peer", evidence_type: "peer_feedback",
+          content: "Paired well on the migration.", author_id: @peer.id, valence: "demonstrated")
+      end
+      sign_in @manager_user
+
+      get evidence_conversation_path(@peer.id, view: "person")
+      assert_select "##{EvidenceItem.dom_id(placed_id)} button", text: "Edit links"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @assessee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      get evidence_conversation_path(@peer.id, view: "person")
+      assert_select "##{EvidenceItem.dom_id(placed_id)}"
+      assert_select "##{EvidenceItem.dom_id(placed_id)} button", text: "Edit links", count: 0
+    end
+
     should "open an empty thread with someone the viewer hasn't talked to" do
       sign_in @assessee_user
       get evidence_conversation_path(@manager.id)
