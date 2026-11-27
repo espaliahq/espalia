@@ -526,7 +526,7 @@ class Frameworks::Aggregate
   # @param individual_tolerance [BigDecimal, nil] nil = category-governed,
   #   0 = mandatory, N = deficit capped at N before entering category pool
   # @raise [RuntimeError] if no draft in progress, capability or role not found, or binding already exists
-  # @raise [UnstorableDecimal] if a decimal has more than two decimal places or is 1000 or more either side of zero
+  # @raise [UnstorableDecimal] if a decimal has more than two decimal places or is 1000 or more in size
   def create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: 1.0, individual_tolerance: nil)
     ensure_draft_in_progress!
     raise "Capability #{capability_id} not found" unless @capabilities.key?(capability_id)
@@ -538,8 +538,8 @@ class Frameworks::Aggregate
       binding_id: binding_id,
       capability_id: capability_id,
       role_id: role_id,
-      weight: storable_decimal(weight, :weight),
-      individual_tolerance: storable_decimal(individual_tolerance, :individual_tolerance)
+      weight: storable_decimal(weight, "Weight"),
+      individual_tolerance: storable_decimal(individual_tolerance, "Individual tolerance")
     }))
   end
 
@@ -550,7 +550,7 @@ class Frameworks::Aggregate
   # @param weight [BigDecimal, nil] updated weight
   # @param individual_tolerance [BigDecimal, nil] updated individual tolerance
   # @raise [RuntimeError] if binding does not exist
-  # @raise [UnstorableDecimal] if a decimal has more than two decimal places or is 1000 or more either side of zero
+  # @raise [UnstorableDecimal] if a decimal has more than two decimal places or is 1000 or more in size
   def update_capability_role_binding(framework_id, binding_id, weight: nil, individual_tolerance: nil)
     ensure_created!
     raise "Binding #{binding_id} not found" unless @bindings.key?(binding_id)
@@ -558,8 +558,8 @@ class Frameworks::Aggregate
     apply(Frameworks::Events::CapabilityRoleBindingUpdated.new(data: {
       framework_id: framework_id,
       binding_id: binding_id,
-      weight: storable_decimal(weight, :weight),
-      individual_tolerance: storable_decimal(individual_tolerance, :individual_tolerance)
+      weight: storable_decimal(weight, "Weight"),
+      individual_tolerance: storable_decimal(individual_tolerance, "Individual tolerance")
     }.compact))
   end
 
@@ -1202,16 +1202,16 @@ class Frameworks::Aggregate
   # @param overperformance_cap [Integer, nil] levels above assigned that count toward score
   # @param deficit_threshold [BigDecimal, nil] weighted deficit above which a capability is blocked
   # @raise [RuntimeError] if framework not created
-  # @raise [UnstorableDecimal] if a decimal has more than two decimal places or is 1000 or more either side of zero
+  # @raise [UnstorableDecimal] if a decimal has more than two decimal places or is 1000 or more in size
   def configure_scoring_thresholds(framework_id, mastery_threshold: nil, promotion_score_threshold: nil,
                                    underperforming_threshold: nil,
                                    overperformance_cap: nil, deficit_threshold: nil)
     ensure_created!
-    mastery_threshold = storable_decimal(mastery_threshold, :mastery_threshold)
-    promotion_score_threshold = storable_decimal(promotion_score_threshold, :promotion_score_threshold)
-    underperforming_threshold = storable_decimal(underperforming_threshold, :underperforming_threshold)
-    deficit_threshold = storable_decimal(deficit_threshold, :deficit_threshold)
-    ensure_thresholds_ordered!(underperforming_threshold, promotion_score_threshold, mastery_threshold)
+    mastery_threshold = storable_decimal(mastery_threshold, "Mastery threshold")
+    promotion_score_threshold = storable_decimal(promotion_score_threshold, "Meeting expectation threshold")
+    underperforming_threshold = storable_decimal(underperforming_threshold, "Underperforming threshold")
+    deficit_threshold = storable_decimal(deficit_threshold, "Deficit threshold")
+    ensure_thresholds_ordered!(*[ underperforming_threshold, promotion_score_threshold, mastery_threshold ].map { |v| v && BigDecimal(v.to_s) })
 
     apply(Frameworks::Events::ScoringThresholdsConfigured.new(data: {
       framework_id: framework_id,
@@ -1324,12 +1324,12 @@ class Frameworks::Aggregate
 
   # The value as given, so new events carry the types old ones do.
   # Negative zero becomes zero, as the column stores it.
-  def storable_decimal(value, name)
+  def storable_decimal(value, label)
     return if value.nil?
 
     decimal = BigDecimal(value.to_s, exception: false)
     unless decimal&.finite? && decimal.round(2) == decimal && decimal.abs < 1000
-      raise UnstorableDecimal, "#{name} must be a number between -1000 and 1000 with at most two decimal places, got #{value.inspect}"
+      raise UnstorableDecimal, "#{label} must be below 1000 with at most two decimal places, got #{value.inspect}"
     end
     return value unless decimal.zero? && decimal.sign == BigDecimal::SIGN_NEGATIVE_ZERO
 

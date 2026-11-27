@@ -613,16 +613,16 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     should "be refused by every command that writes one, naming the field" do
       [ "1.234", 1000, -1000, "lots" ].each do |value|
         commands = {
-          weight: -> { @aggregate.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @rid, weight: value) },
-          individual_tolerance: -> { @aggregate.update_capability_role_binding(@framework_id, @bid, individual_tolerance: value) },
-          mastery_threshold: -> { @aggregate.configure_scoring_thresholds(@framework_id, mastery_threshold: value) },
-          promotion_score_threshold: -> { @aggregate.configure_scoring_thresholds(@framework_id, promotion_score_threshold: value) },
-          underperforming_threshold: -> { @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: value) },
-          deficit_threshold: -> { @aggregate.configure_scoring_thresholds(@framework_id, deficit_threshold: value) }
+          "Weight" => -> { @aggregate.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, @rid, weight: value) },
+          "Individual tolerance" => -> { @aggregate.update_capability_role_binding(@framework_id, @bid, individual_tolerance: value) },
+          "Mastery threshold" => -> { @aggregate.configure_scoring_thresholds(@framework_id, mastery_threshold: value) },
+          "Meeting expectation threshold" => -> { @aggregate.configure_scoring_thresholds(@framework_id, promotion_score_threshold: value) },
+          "Underperforming threshold" => -> { @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: value) },
+          "Deficit threshold" => -> { @aggregate.configure_scoring_thresholds(@framework_id, deficit_threshold: value) }
         }
-        commands.each do |field, command|
-          error = assert_raises(Frameworks::Aggregate::UnstorableDecimal, "#{field} = #{value.inspect}") { command.call }
-          assert_match(/\A#{field} must be a number between -1000 and 1000 with at most two decimal places/, error.message)
+        commands.each do |label, command|
+          error = assert_raises(Frameworks::Aggregate::UnstorableDecimal, "#{label} = #{value.inspect}") { command.call }
+          assert_match(/\A#{label} must be below 1000 with at most two decimal places/, error.message)
         end
       end
     end
@@ -661,6 +661,19 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: BigDecimal("0.67"),
                                               promotion_score_threshold: BigDecimal("0.90"), mastery_threshold: BigDecimal("1.25"))
       assert_equal [ BigDecimal("0.67"), BigDecimal("0.90"), BigDecimal("1.25") ],
+                   @aggregate.unpublished_events.to_a.last.data.values_at(:underperforming_threshold, :promotion_score_threshold, :mastery_threshold)
+    end
+
+    should "check the order of thresholds given as strings" do
+      error = assert_raises(RuntimeError) do
+        @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: "0.95",
+                                                promotion_score_threshold: "0.90", mastery_threshold: "1.25")
+      end
+      assert_match(/must be ordered/, error.message)
+
+      @aggregate.configure_scoring_thresholds(@framework_id, underperforming_threshold: "0.67",
+                                              promotion_score_threshold: "0.90", mastery_threshold: "1.25")
+      assert_equal [ "0.67", "0.90", "1.25" ],
                    @aggregate.unpublished_events.to_a.last.data.values_at(:underperforming_threshold, :promotion_score_threshold, :mastery_threshold)
     end
   end

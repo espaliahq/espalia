@@ -5,7 +5,7 @@ require "test_helper"
 # A decimal its numeric(5, 2) column would round reaches the person as a
 # refusal naming the limit, on the web form and over MCP, never as a 500.
 class FrameworkDecimalLimitsTest < ActionDispatch::IntegrationTest
-  LIMIT = /must be a number between -1000 and 1000 with at most two decimal places/
+  LIMIT = /must be below 1000 with at most two decimal places/
 
   setup do
     @tenant = create(:tenant)
@@ -96,14 +96,15 @@ class FrameworkDecimalLimitsTest < ActionDispatch::IntegrationTest
     end
 
     should "refuse over MCP when the approval runs" do
-      body = call_tool("frameworks_configure_scoring_thresholds", { framework_id: @framework_id, mastery_threshold: 1.234 })
+      body = call_tool("frameworks_configure_scoring_thresholds",
+                       { framework_id: @framework_id, meeting_expectation_threshold: 1.234 })
       approval = Mcp::PendingApproval.find(body.dig("result", "meta", "approvalId"))
 
       sign_in_admin
       post approve_mcp_approval_path(approval)
 
       assert_redirected_to mcp_approval_path(approval)
-      assert_match LIMIT, flash[:alert]
+      assert_match(/\AMeeting expectation threshold #{LIMIT.source}/, flash[:alert])
       assert_equal "pending", approval.reload.status
     end
   end
