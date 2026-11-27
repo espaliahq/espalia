@@ -186,7 +186,7 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
         handler.define_cycle(@cycle_id, @framework_id, "H2 2026 Review", "regular", 1)
         handler.enroll(@cycle_id, @assigned_person.id)
         handler.enroll(@cycle_id, @second_person.id)
-        handler.unenroll(@cycle_id, @second_person.id, "left team")
+        handler.unenroll(@cycle_id, @second_person.id, "manual")
         handler.close_cycle(@cycle_id)
         @cycle = AssessmentCycle.find_by!(cycle_id: @cycle_id)
       end

@@ -554,4 +554,46 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }
   end
+
+  context "on a forgotten assessee" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @evidence_id = SecureRandom.uuid_v7
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @assessee.id, @assignment.framework_id, @evidence_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          source: "manager", evidence_type: "code_review",
+          content: "Original.", author_id: @manager.id, valence: "demonstrated"
+        )
+        @assessee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+    end
+
+    should "refuse new feedback with a message, not a 500" do
+      sign_in @peer_user
+      post assessment_evidence_index_path(@assignment), params: {
+        evidence: { capability_stable_id: @cap.stable_id, level_ordinal: 2, valence: "demonstrated",
+                    evidence_type: "peer_feedback", content: "Calm on the call." }
+      }
+
+      assert_response :redirect
+      assert_equal "Could not record feedback: this person has been forgotten", flash[:alert]
+    end
+
+    should "refuse the author's withdrawal with a message, not a 500" do
+      sign_in @manager_user
+      delete assessment_evidence_path(@assignment, @evidence_id)
+
+      assert_response :redirect
+      assert_includes flash[:alert], "this person has been forgotten"
+    end
+
+    should "give a peer with no right on the item the ordinary refusal" do
+      sign_in @peer_user
+      delete assessment_evidence_path(@assignment, @evidence_id)
+
+      assert_response :redirect
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
+    end
+  end
 end

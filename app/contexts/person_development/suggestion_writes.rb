@@ -5,7 +5,9 @@
 # It refuses a forgotten person first, through
 # {PersonDevelopment::ForgottenSubject}: a rationale quotes the feedback, and a
 # dismissal can carry a typed reason. The person's row comes before anything
-# else, so a command waiting behind an erase holds nothing the job wants.
+# else, so a command waiting behind an erase holds nothing the job wants. The
+# repository refuses again as it opens the stream; the second key share is
+# a no-op.
 #
 # Then an advisory lock per evidence item, so runs and decisions for one
 # item never overlap: an edit and its original, or a double "Suggest again".

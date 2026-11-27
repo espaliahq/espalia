@@ -250,6 +250,32 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
     end
   end
 
+  context "for a forgotten person" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+    end
+
+    should "refuse the rating as invalid input and store nothing" do
+      error = assert_raises(Operations::Base::ParameterError) { call_op(frequency: "consistent") }
+
+      assert_equal "this person has been forgotten", error.message
+      assert_not ActsAsTenant.with_tenant(@tenant) { AssessmentLevelRating.exists?(person_id: @person.id) }
+    end
+
+    should "give a caller with no right on the assessment the ordinary refusal, never the forgotten one" do
+      stranger = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        person = create(:person, tenant: @tenant, email: stranger.email)
+        tenant_user = create(:tenant_user, tenant: @tenant, user: stranger, person: person, role: :member)
+        @context = AuthorizationContext.new(user: stranger, tenant_user: tenant_user, person: person)
+      end
+
+      assert_raises(Pundit::NotAuthorizedError) { call_op(frequency: "consistent") }
+    end
+  end
+
   # #606: the merged row stays under the retiring id, and stays frozen.
   context "when a publish during alignment merges a rated capability into this one" do
     setup do

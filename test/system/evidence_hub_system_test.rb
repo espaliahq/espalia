@@ -241,6 +241,90 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_text "Shipped the migration"
   end
 
+  should "offer no Edit links on feedback about a forgotten report" do
+    manager_user = create(:user, password: "password123")
+    ActsAsTenant.with_tenant(@tenant) do
+      manager = create(:person, tenant: @tenant, email: manager_user.email, name: "Morgan Manager")
+      create(:tenant_user, tenant: @tenant, user: manager_user, person: manager, role: :member)
+      @report.update!(manager: manager)
+      PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "peer", evidence_type: "peer_feedback",
+        content: "Paired well on the migration.", author_id: @peer.id, valence: "demonstrated")
+      @report.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+
+    sign_in_as(manager_user)
+    visit evidence_conversation_path(@peer.id, view: "person")
+    within("[data-testid='conversation-thread']") do
+      assert_text "Paired well on the migration."
+      assert_no_button "Edit links"
+    end
+  end
+
+  should "offer the author no Edit or Withdraw on feedback about a forgotten person" do
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+        source: "peer", evidence_type: "peer_feedback", content: "Kept the retro on time.", author_id: @peer.id)
+      @report.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+
+    sign_in_as(@peer_user)
+    visit evidence_conversation_path(@report.id)
+    within("[data-testid='conversation-thread']") do
+      assert_text "Kept the retro on time."
+      assert_no_button "Edit"
+      assert_no_button "Withdraw"
+    end
+  end
+
+  should "offer no Give or Ask in a thread with a forgotten person" do
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+        source: "peer", evidence_type: "peer_feedback", content: "Kept the retro on time.", author_id: @peer.id)
+      @report.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+
+    sign_in_as(@peer_user)
+    visit evidence_conversation_path(@report.id)
+    within("[data-conversation-thread-target='composer']") do
+      assert_text "A former member takes no new feedback."
+      assert_no_button
+    end
+  end
+
+  should "show a request about a forgotten person as closed, with nothing to answer" do
+    request_id = make_request!
+    ActsAsTenant.with_tenant(@tenant) do
+      @report.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+
+    sign_in_as(@peer_user)
+    visit evidence_conversation_path(@report.id)
+    within("##{EvidenceRequest.dom_id(request_id)}") do
+      assert_text "About Former member"
+      assert_text "Closed"
+      assert_no_text "Waiting on"
+      assert_no_button "Respond"
+      assert_no_button "Decline"
+    end
+  end
+
+  should "offer the requester Cancel but no Nudge once the person asked is forgotten" do
+    request_id = make_request!
+    ActsAsTenant.with_tenant(@tenant) do
+      EvidenceRequest.find(request_id).update_column(:requested_at, 3.days.ago)
+      @peer.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+
+    sign_in_as(@report_user)
+    visit evidence_conversation_path(@peer.id)
+    within("##{EvidenceRequest.dom_id(request_id)}") do
+      assert_text "Waiting on Former member"
+      assert_link "Cancel request"
+      assert_no_button "Send a nudge"
+    end
+  end
+
   should "let the requester nudge a stale open request" do
     make_request!
     ActsAsTenant.with_tenant(@tenant) do

@@ -3,9 +3,9 @@
 # Synchronous projection that materialises {EvidenceRequest} rows from the
 # PersonDevelopment stream. Sole writer of the `evidence_requests` table.
 #
-# Runs in the same transaction as the event publish and broadcasts the same
-# `assessment_updates` sync signal as the other PD projections, so an open
-# assessment / evidence view reloads when a request changes.
+# Broadcasts the same `assessment_updates` sync signal as the other PD
+# projections, so an open assessment / evidence view reloads when a request
+# changes.
 class PersonDevelopment::Projections::EvidenceRequests
   # Stable identifier; natural key in `projection_versions.name`.
   PROJECTION_NAME = "person_development/evidence_requests"
@@ -123,13 +123,15 @@ class PersonDevelopment::Projections::EvidenceRequests
   def broadcast_assessment_sync(event)
     return if Projections::Replayer.replay_mode?
 
-    Turbo::StreamsChannel.broadcast_replace_to(
-      "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
-      target: "assessment-sync-signal",
-      html: "<div id=\"assessment-sync-signal\" class=\"hidden\" data-assessment-sync-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
-    )
-  rescue => e
-    Rails.logger.warn("[EvidenceRequests] Broadcast failed: #{e.message}")
+    ActiveRecord.after_all_transactions_commit do
+      Turbo::StreamsChannel.broadcast_replace_to(
+        "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
+        target: "assessment-sync-signal",
+        html: "<div id=\"assessment-sync-signal\" class=\"hidden\" data-assessment-sync-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
+      )
+    rescue => e
+      Rails.logger.warn("[EvidenceRequests] Broadcast failed: #{e.message}")
+    end
   end
 
   def with_tenant(event, &)

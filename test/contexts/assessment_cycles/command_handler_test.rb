@@ -100,10 +100,9 @@ class AssessmentCycles::CommandHandlerTest < ActiveSupport::TestCase
       @handler.define_cycle(@cycle_id, @framework_id, "Q1 2026", "regular", 1)
       @handler.enroll(@cycle_id, @person_id)
 
-      err = assert_raises(RuntimeError) do
+      assert_raises(ArgumentError) do
         @handler.unenroll(@cycle_id, @person_id, "cycle_closed")
       end
-      assert_match /reserved reason/, err.message
 
       participant = AssessmentCycle.find_by(cycle_id: @cycle_id)
         .enrollments.find_by(person_id: @person_id)

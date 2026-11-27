@@ -619,6 +619,21 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
     end
 
+    should "offboard a leaver forgotten before the sync that would offboard them" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @alice_person.update_columns(status: "inactive", name: Person::FORMER_MEMBER, email: nil, external_id: nil, forgotten_at: Time.current)
+      end
+
+      result = build_adapter(@without_alice).sync_people
+
+      assert_empty result[:errors]
+      assert_equal 1, result[:offboarded]
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "withdrawn", AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @alice_person.id).status
+        assert_nil PersonFrameworkAssignment.find_by(person_id: @alice_person.id)
+      end
+    end
+
     should "be idempotent — a second sync after offboarding does nothing" do
       build_adapter(@without_alice).sync_people
       result = build_adapter(@without_alice).sync_people

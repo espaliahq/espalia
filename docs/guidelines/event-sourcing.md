@@ -140,9 +140,15 @@ Replay must not produce side effects beyond writing read models — no Turbo bro
 def broadcast_assessment_sync(event)
   return if Projections::Replayer.replay_mode?
 
-  Turbo::StreamsChannel.broadcast_replace_to(...)
+  ActiveRecord.after_all_transactions_commit do
+    Turbo::StreamsChannel.broadcast_replace_to(...)
+  rescue => e
+    Rails.logger.warn("[MyProjection] Broadcast failed: #{e.message}")
+  end
 end
 ```
+
+A synchronous handler can run inside the write's transaction, so send a broadcast only once it commits. Otherwise a page can refetch before the rows land, or after a rollback for rows that never will. Outside a transaction the block runs at once.
 
 `Projections::Replayer.replay_mode?` is a thread-local flag set by [lib/projections/replayer.rb](../../lib/projections/replayer.rb) around the replay loop. Currently used by `CurrentAssessment` and `EvidenceCollection`. Any new side-effect-emitting projection handler must add the same guard.
 
@@ -194,6 +200,16 @@ From Hard-Won Lesson 15 in [framework-explorer.md](framework-explorer.md):
 This is invisible while the aggregate is only a write-side validator (handlers' state is never read). The moment any code reads the aggregate's in-memory state — directly, or via a snapshot builder like `ExplorerGraph` — drift between published payload keys and consumed payload keys becomes a silent data bug.
 
 Whenever you touch an aggregate handler or an event payload, audit both ends.
+
+## A forgotten person's stream takes no new facts
+
+Open a Person Development stream for writing only through
+`PersonDevelopment::Repository#with_person_development`. It refuses a forgotten
+subject before it loads the aggregate. To let a write through anyway, pass
+`forgotten:` with a reason from `Repository::FORGOTTEN_ALLOWED`, and only for an
+event that carries nothing about the person, since it can land after the erase.
+Never free text. See
+[person-development-aggregate.md → Writes to a forgotten person's stream](../architecture/person-development-aggregate.md#writes-to-a-forgotten-persons-stream).
 
 ## Production data rules
 

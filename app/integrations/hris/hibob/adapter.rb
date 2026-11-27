@@ -770,9 +770,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           cycles_handler.unenroll(enrollment.cycle_id, person_id, OFFBOARD_REASON)
         end
         Array(assignments[person_id]).each do |assignment|
-          pd_handler.unassign_from_framework(
-            person_id, assignment.framework_id, reason: OFFBOARD_REASON
-          )
+          pd_handler.offboard_from_framework(person_id, assignment.framework_id)
         end
         result[:offboarded] += 1
       rescue => e
