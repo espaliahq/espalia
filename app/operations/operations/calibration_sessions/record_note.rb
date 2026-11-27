@@ -6,6 +6,7 @@
 # the session log on the session page (the follow-through artifact).
 class Operations::CalibrationSessions::RecordNote < Operations::Base
   include Operations::CalibrationSessions::ScopeChecks
+  include Operations::CapabilityGuard
 
   description "Record a free-text minute on a live calibration session, optionally anchored to a capability or person."
   category :write
@@ -24,7 +25,10 @@ class Operations::CalibrationSessions::RecordNote < Operations::Base
   # @return [Hash] `{ session_id }`
   def perform
     ensure_body!
-    ensure_uuid!(:capability_stable_id, params[:capability_stable_id]) if params[:capability_stable_id].present?
+    if params[:capability_stable_id].present?
+      ensure_uuid!(:capability_stable_id, params[:capability_stable_id])
+      ensure_active_capability!(session.framework_id, params[:capability_stable_id])
+    end
     ensure_uuid!(:person_id, params[:person_id]) if params[:person_id].present?
     ensure_session_started!
 

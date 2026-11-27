@@ -22,6 +22,7 @@
 # not become a way to fire requests about them.
 class Operations::CalibrationSessions::RequestEvidence < Operations::Base
   include Operations::CalibrationSessions::ScopeChecks
+  include Operations::CapabilityGuard
 
   description "Ask a colleague for feedback / evidence on a capability × level from a live calibration session."
   category :write
@@ -52,7 +53,7 @@ class Operations::CalibrationSessions::RequestEvidence < Operations::Base
     ensure_uuid!(:capability_stable_id, params[:capability_stable_id])
     ensure_session_started!
     ensure_requestee!
-    ensure_capability_in_framework!
+    ensure_active_capability!(session.framework_id, params[:capability_stable_id])
     ensure_not_already_pending!
 
     request_id = SecureRandom.uuid_v7
@@ -157,17 +158,6 @@ class Operations::CalibrationSessions::RequestEvidence < Operations::Base
           "they already have a pending request on this behaviour — nudge that one instead"
   end
 
-  def ensure_capability_in_framework!
-    in_framework = FrameworkState::Capability
-      .joins(:category)
-      .where(stable_id: params[:capability_stable_id])
-      .merge(FrameworkState::CapabilityCategory.where(framework_id: session.framework_id))
-      .exists?
-    return if in_framework
-
-    raise Operations::Base::ParameterError,
-          "capability_stable_id does not belong to the session's framework"
-  end
 
   # Best-effort undo of a request whose session provenance lost the race.
   # If the cancel ITSELF fails (the requestee responded in the gap — the
