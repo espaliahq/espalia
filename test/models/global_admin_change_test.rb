@@ -76,9 +76,9 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
   should "keep a row unchanged once saved" do
     row = changes_for(create(:user, global_admin: true)).sole
 
-    assert_raises(ActiveRecord::ReadOnlyRecord) { row.update!(source: "seed") }
+    assert_raises(ActiveRecord::ReadOnlyRecord) { row.update!(source: "console") }
     assert_raises(ActiveRecord::ReadOnlyRecord) { row.destroy! }
-    assert_equal "console", row.reload.source
+    assert_equal "seed", row.reload.source
   end
 
   should "hold the account id, the new value, the source and the time, and nothing else" do

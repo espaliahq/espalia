@@ -105,7 +105,7 @@ A save that changes the flag must name its source first, or it raises `User::Glo
 
 Rows are never changed or deleted: a saved row is read-only. A row holds no tenant, name or email, and no foreign key, so it outlives its account. Forgetting a person unlinks their account in that tenant but keeps the global `users` row, so the audit still points at it and adds nothing of its own. Nothing in the app deletes an account; if one is deleted by hand, its rows keep an id that names nobody.
 
-**The limit.** `update_column`, `update_all` and raw SQL skip the callback and leave no row. Two checks guard them, and nothing else does: the recorded write check fails on a write to `users` from a file `config/write_ownership.yml` doesn't name, and the `Espalia/WritesMustBeDeclared` cop flags a persistence call in an undeclared file (see [direct-writes.md](direct-writes.md)). Neither can tell which column a declared file writes.
+**The limit.** `update_column`, `update_all` and raw SQL skip the callback and leave no row. Three things guard them, and nothing else does. The recorded write check fails on a write to `users` from a file `config/write_ownership.yml` doesn't name. The `Espalia/WritesMustBeDeclared` cop flags a persistence call in an undeclared file (see [direct-writes.md](direct-writes.md)). Neither can tell which column a declared file writes. A database check constraint refuses any `source` outside the list, so raw SQL that writes a row can't invent one.
 
 ---
 
