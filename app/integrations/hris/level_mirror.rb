@@ -324,7 +324,6 @@ class Hris::LevelMirror
 
     retiring.each do |unit|
       structure.retire_unit(unit.id, provider: @provider, effective_on: @today)
-      @proposals[unit.id]&.destroy!
       counted
     rescue => e
       @result[:errors] << { unit_id: unit.id, error: e.message }
