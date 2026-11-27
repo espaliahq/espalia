@@ -6,10 +6,10 @@
 # By effective date (the default), the changes that took effect after `from`,
 # up to and including `to`: the steps from `OrgGraph::AsOf` on `from` to
 # `OrgGraph::AsOf` on `to`. It reads what the Org Graph knows now, or with
-# `known_on` what it knew at the end of that day in the tenant's time zone.
+# `known_on` what it knew at the end of that day in the tenant's time zone then.
 #
 # By learned date, what the Org Graph learned after the end of `from`, up to
-# the end of `to`, each in the tenant's time zone, whatever day each change took effect. A backdated
+# the end of `to`, each in the tenant's time zone then, whatever day each change took effect. A backdated
 # correction shows here with its earlier date. A change it no longer
 # believes, such as one changed back on its own day, comes back `withdrawn`.
 #
@@ -136,8 +136,8 @@ class OrgGraph::ChangesBetween
   # end. A step only the end knows was learned; one only the start knew was
   # withdrawn.
   def learned_changes
-    opened = @opened_at || Tenant.end_of(@from)
-    closed = Tenant.end_of(@to)
+    opened = @opened_at || Tenant.end_of_day_then(@from)
+    closed = Tenant.end_of_day_then(@to)
     periods = OrgFactPeriod.arel_table
     inside = ->(column) { OrgFactPeriod.where(periods[column].gt(opened).and(periods[column].lteq(closed))) }
     touched = facts(inside.(:learned_at).or(inside.(:superseded_at)))

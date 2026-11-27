@@ -430,7 +430,7 @@ class TenantTest < ActiveSupport::TestCase
     should "refuse to read today or a day's end outside a tenant" do
       ActsAsTenant.without_tenant do
         assert_raises(ActsAsTenant::Errors::NoTenantSet) { Tenant.today }
-        assert_raises(ActsAsTenant::Errors::NoTenantSet) { Tenant.end_of(Date.new(2026, 11, 16)) }
+        assert_raises(ActsAsTenant::Errors::NoTenantSet) { Tenant.end_of_day_then(Date.new(2026, 11, 16)) }
       end
     end
 
@@ -448,7 +448,7 @@ class TenantTest < ActiveSupport::TestCase
 
       assert_equal "UTC", tenant.reload.working_zone
       assert_equal Date.new(2026, 11, 16), tenant.today
-      assert_equal Time.utc(2026, 11, 16).end_of_day, tenant.end_of(Date.new(2026, 11, 16))
+      assert_equal Time.utc(2026, 11, 16).end_of_day, tenant.end_of_day_then(Date.new(2026, 11, 16))
     end
   end
 end

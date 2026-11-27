@@ -8,13 +8,13 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
   START = Time.zone.parse("2026-02-01 09:00")
 
   setup do
+    travel_to START
     @tenant = create(:tenant)
     @handler = OrgGraph::CommandHandler.new(actor: SYSTEM)
     @structure = OrgGraph::StructureCommandHandler.new(actor: SYSTEM)
     @departments, @squads = SecureRandom.uuid_v7, SecureRandom.uuid_v7
     @engineering, @payments, @platform, @billing = Array.new(4) { SecureRandom.uuid_v7 }
 
-    travel_to START
     as_tenant do
       @ada, @grace, @linus = create_list(:person, 3, tenant: @tenant)
       @structure.define_taxonomy([ { level_id: @departments, name: "Department" }, { level_id: @squads, name: "Squad" } ],
@@ -177,6 +177,17 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
 
     senior = changes("2026-03-01", "2026-03-31").changes.find { it.after == { "title" => "Senior Engineer" } }
     assert_equal START, senior.learned_at
+  end
+
+  should "end an earlier day in the time zone the tenant had then" do
+    travel_to Time.utc(2026, 4, 10, 20)
+    as_tenant { @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-03") }
+    travel_to Time.utc(2026, 4, 20, 9)
+    @tenant.update!(time_zone: "Australia/Sydney")
+
+    known = changes("2026-03-01", "2026-03-31", known_on: Date.new(2026, 4, 10))
+    assert_equal({ "title" => "Senior Engineer" }, known.changes.find { it.kind == :fact_changed && it.person_id == @ada.id }.after)
+    assert_equal [ Date.new(2026, 3, 3) ], changes("2026-04-09", "2026-04-10", by: :learned).changes.map(&:effective_on)
   end
 
   should "include the changes already recorded for a later day" do
