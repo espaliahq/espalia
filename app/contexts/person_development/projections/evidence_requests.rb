@@ -3,9 +3,9 @@
 # Synchronous projection that materialises {EvidenceRequest} rows from the
 # PersonDevelopment stream. Sole writer of the `evidence_requests` table.
 #
-# Runs in the same transaction as the event publish and broadcasts the same
-# `assessment_updates` sync signal as the other PD projections, so an open
-# assessment / evidence view reloads when a request changes.
+# Broadcasts the same `assessment_updates` sync signal as the other PD
+# projections, so an open assessment / evidence view reloads when a request
+# changes.
 class PersonDevelopment::Projections::EvidenceRequests
   # Stable identifier; natural key in `projection_versions.name`.
   PROJECTION_NAME = "person_development/evidence_requests"

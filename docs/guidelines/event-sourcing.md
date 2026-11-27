@@ -140,9 +140,15 @@ Replay must not produce side effects beyond writing read models — no Turbo bro
 def broadcast_assessment_sync(event)
   return if Projections::Replayer.replay_mode?
 
-  Turbo::StreamsChannel.broadcast_replace_to(...)
+  ActiveRecord.after_all_transactions_commit do
+    Turbo::StreamsChannel.broadcast_replace_to(...)
+  rescue => e
+    Rails.logger.warn("[MyProjection] Broadcast failed: #{e.message}")
+  end
 end
 ```
+
+A synchronous handler can run inside the write's transaction, so send a broadcast only once it commits. Otherwise a page can refetch before the rows land, or after a rollback for rows that never will. Outside a transaction the block runs at once.
 
 `Projections::Replayer.replay_mode?` is a thread-local flag set by [lib/projections/replayer.rb](../../lib/projections/replayer.rb) around the replay loop. Currently used by `CurrentAssessment` and `EvidenceCollection`. Any new side-effect-emitting projection handler must add the same guard.
 

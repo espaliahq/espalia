@@ -3,9 +3,9 @@
 # Synchronous projection that materialises evidence items.
 #
 # Subscribes to the three PersonDevelopment evidence events and upserts
-# {EvidenceItem} read model rows. Runs in the same transaction as the
-# event publish, so a successful command leaves both the event and the
-# read row durable together.
+# {EvidenceItem} read model rows. On the normal write path it runs inside
+# the write's transaction (PersonDevelopment::Repository), so a successful
+# command leaves both the event and the read row durable together.
 #
 # Broadcasts to the same `assessment_updates` Turbo channel as
 # {CurrentAssessment} so the open assessment view reloads the activity
