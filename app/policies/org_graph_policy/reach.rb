@@ -18,6 +18,9 @@ class OrgGraphPolicy::Reach
     @person = person&.status == "active" ? person : nil
   end
 
+  # A retired unit beneath one in reach stays in reach, so its last
+  # memberships can still be ended and it can be named as a predecessor.
+  #
   # @param unit [OrgUnit, nil]
   # @return [Boolean] whether the unit, or a unit above it, is owned within reach
   def covers?(unit)
