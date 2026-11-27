@@ -1,10 +1,22 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../support/rebuild_lock"
 
-# A Person Development write stores its event and runs its synchronous
-# handlers in one transaction (PersonDevelopment::Repository).
+# A Person Development write on the normal path stores its event and runs its
+# synchronous handlers in one transaction (PersonDevelopment::Repository).
 class PersonDevelopment::WriteTransactionTest < ActiveSupport::TestCase
+  include RebuildLock
+
+  PINGING = [
+    PersonDevelopment::Projections::AssessmentAuthority,
+    PersonDevelopment::Projections::CommentThread,
+    PersonDevelopment::Projections::CurrentAssessment,
+    PersonDevelopment::Projections::EvidenceCollection,
+    PersonDevelopment::Projections::EvidenceRequests,
+    PersonDevelopment::Projections::EvidenceSuggestions
+  ].freeze
+
   # Fails after the projections have written, so the test sees them undone.
   class FailingHandler
     attr_reader :projected_before_failing
@@ -50,6 +62,25 @@ class PersonDevelopment::WriteTransactionTest < ActiveSupport::TestCase
       assert_empty pings
       assert_empty delegation_events
     end
+
+    should "wait for the commit in every projection that sends it" do
+      event = PersonDevelopment::Events::ManagerRatingDelegated.new(
+        data: {}, metadata: { framework_id: @framework_id, person_id: @person.id }
+      )
+
+      PINGING.each do |projection|
+        committed = capture_pings { ActiveRecord::Base.transaction { projection.new.send(:broadcast_assessment_sync, event) } }
+        rolled_back = capture_pings do
+          ActiveRecord::Base.transaction do
+            projection.new.send(:broadcast_assessment_sync, event)
+            raise ActiveRecord::Rollback
+          end
+        end
+
+        assert_equal [ @outside ], committed, "#{projection} pinged before the commit"
+        assert_empty rolled_back, "#{projection} pinged for a rollback"
+      end
+    end
   end
 
   should "store nothing and fail the caller when a synchronous handler raises" do
@@ -65,9 +96,11 @@ class PersonDevelopment::WriteTransactionTest < ActiveSupport::TestCase
     assert_empty ManagerAssessmentDelegation.where(person_id: @person.id)
   end
 
-  should "store the write and project it while a projection it feeds is rebuilt" do
-    name = PersonDevelopment::Projections::AssessmentAuthority::PROJECTION_NAME
-    rebuild_holds_lock(name) { delegate }
+  should "store the write and project it, without waiting, while every projection it feeds is rebuilt" do
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    while_rebuilding(@tenant, *PINGING) { delegate }
+
+    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 5
 
     assert_equal 1, delegation_events.size
     assert_equal 1, ManagerAssessmentDelegation.where(person_id: @person.id).count
@@ -91,24 +124,5 @@ class PersonDevelopment::WriteTransactionTest < ActiveSupport::TestCase
     record = ->(*_args, **_kw) { pings << ActiveRecord::Base.connection.open_transactions }
     Turbo::StreamsChannel.stub(:broadcast_replace_to, record, &)
     pings
-  end
-
-  # Holds a rebuild's lock from a second session, as a running rebuild does.
-  def rebuild_holds_lock(name)
-    held = Queue.new
-    release = Queue.new
-    rebuild = Thread.new do
-      ActiveRecord::Base.connection_pool.with_connection do
-        ProjectionVersion.with_operation_lock(name) do
-          held << true
-          release.pop
-        end
-      end
-    end
-    held.pop
-    yield
-  ensure
-    release << true
-    rebuild&.join
   end
 end
