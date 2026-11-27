@@ -155,7 +155,11 @@ Evidence and feedback:
 
   Read model (EvidenceSuggestions): evidence_placement_suggestions, one row
   per suggestion keyed by suggestion_id; accepted or edited is derived from
-  the link's valence against the suggested one.
+  the link's valence against the suggested one. It also handles the Org
+  Graph's PersonForgotten: the person's pending rows become "closed" and
+  leave every screen, while decided rows stand. The stream still holds them
+  as pending, and SuggestionWrites refuses every command on a forgotten
+  person ([#590](https://github.com/espaliahq/espalia/issues/590)).
 
   EvidenceUpdated { evidence_id, title?, content, evidence_type, custom_type_label?,
                     external_reference?, edited_by_id }
@@ -363,6 +367,11 @@ Framework migration:
       skips re-keying/flagging rating rows of any cycle the person has aligned
       (frozen set read from AssessmentCycleProgress, owned by the same
       projection → replay-safe). Migrate-forward applies only to open cycles.
+    — The aggregate re-keys its self, manager and aligned rating maps by the
+      projection's rule, cell by cell: @rated_cells holds every cell with a
+      rating row (cleared sides too), and a cell moves to the survivor unless
+      the survivor already holds one at that level. A completed home
+      alignment freezes the maps as it freezes the rows ([#538](https://github.com/espaliahq/espalia/issues/538)).
   ReassessmentFlagged { capability_stable_id, reason }
     — not yet emitted; flagging is currently done in-place via
       `AssessmentLevelRating.migration_status = "flagged"` on the

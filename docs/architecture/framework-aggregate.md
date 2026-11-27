@@ -131,6 +131,9 @@ Shape-preserving — binding tuning (editorial / live):
   NOTE: Events retain legacy field names (individual_tolerance, promotion_score_threshold).
   The projection maps these to the current read model columns (deficit_threshold,
   meeting_expectation_threshold).
+  The three commands refuse a weight or threshold the numeric(5, 2) column would
+  round or overflow, and carry negative zero as zero. Only the commands check;
+  replaying stored events applies them as written.
   All four scoring thresholds are configurable via the framework settings UI
   (GET/PATCH /frameworks/:id/settings). Nil values revert to system defaults.
 

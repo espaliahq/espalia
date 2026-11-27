@@ -229,4 +229,24 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
       end
     end
   end
+
+  context "after a mid-cycle publish mapped the rated capability onto this one" do
+    should "revise the rating on the survivor's cell" do
+      ActsAsTenant.with_tenant(@tenant) do
+        retiring = SecureRandom.uuid_v7
+        handler = PersonDevelopment::CommandHandler.new
+        handler.rate_self(@person.id, @framework_id, retiring, level_ordinal: 2, frequency: "some", cycle_id: @cycle_id)
+        handler.migrate_framework_version(@person.id, @framework_id, 1, 2, [
+          { from_stable_id: retiring, to_stable_id: @cap.stable_id, mapping_type: "evolved", requires_reassessment: false }
+        ])
+      end
+
+      call_op(frequency: "consistent")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        row = AssessmentLevelRating.across_all_roles.find_by!(person_id: @person.id, capability_stable_id: @cap.stable_id, level_ordinal: 2)
+        assert_equal "consistent", row.self_rated_frequency
+      end
+    end
+  end
 end
