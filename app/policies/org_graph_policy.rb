@@ -6,13 +6,12 @@
 # Authorize against the `:org_graph` symbol. A unit predicate takes the
 # {OrgUnit} it acts on, a membership predicate the {Person} and the unit.
 #
-# - A tenant admin or an Org Graph editor may change anything but the
-#   taxonomy, whose shape only a tenant admin may change.
-# - A unit's owners may change it and every unit beneath it. Owning any unit
-#   up the chain counts, so a unit with no owner of its own inherits its
-#   parent's.
+# - A tenant admin or an Org Graph editor may change anything.
+# - A unit's owners, and everyone above them in the current reporting line,
+#   may change that unit and every unit beneath it, its structure included
+#   ({Reach}). Owning any unit up the chain counts.
 # - A person's manager chain may change that person's memberships, in units
-#   they don't own.
+#   they have no rights over.
 #
 # The whole tenant can see the Org Graph.
 #
@@ -35,20 +34,20 @@ class OrgGraphPolicy < ApplicationPolicy
   # @return [Boolean]
   def edit_settings? = tenant_admin?
 
-  # Add a level to the taxonomy, rename one or change their order. Admins
-  # only: every unit sits at a level, so the taxonomy's shape is a bigger call
-  # than any one unit.
+  # Add a type to the organisation's structure, rename one or say where it
+  # may sit.
   #
   # @return [Boolean]
-  def edit_taxonomy? = tenant_admin?
+  def edit_taxonomy? = edit_structure_of?(nil)
 
   # Declare, withdraw or edit the structure a unit gives the units beneath it
-  # (#494), or, given nil, the top structure. Admins only until the rights
-  # step of #390 widens it; nothing else names who may.
+  # (#494), or, given nil, the organisation's own.
   #
-  # @param _unit [OrgUnit, nil] the declaring unit, nil for the top structure
+  # @param unit [OrgUnit, nil] the declaring unit, nil for the organisation's
   # @return [Boolean]
-  def edit_structure_of?(_unit) = edit_taxonomy?
+  def edit_structure_of?(unit)
+    edit_structure? || (unit.present? && active_member? && reach.covers?(unit))
+  end
 
   # The providers, units at the root, and people's facts.
   #
@@ -63,7 +62,7 @@ class OrgGraphPolicy < ApplicationPolicy
   #   which only an admin or an editor may name
   # @return [Boolean]
   def edit_unit?(unit)
-    edit_structure? || (tenant_member? && unit.present? && unit.owned_by?(person))
+    edit_structure? || (active_member? && reach.covers?(unit))
   end
 
   # @param parent [OrgUnit, nil] nil for a unit at the root
@@ -81,11 +80,13 @@ class OrgGraphPolicy < ApplicationPolicy
     edit_unit?(unit) && create_unit?(new_parent)
   end
 
-  # A unit's type decides what may sit beneath it, which is the organisation's
-  # structure, so an owner who may move a unit may not retype it.
+  # A unit's type is part of the structure in force where it sits, so
+  # retyping it needs the right to change that structure.
   #
+  # @param structure_unit [OrgUnit, nil] the unit whose structure is in force,
+  #   nil for the organisation's
   # @return [Boolean]
-  def change_unit_kind? = edit_structure?
+  def change_unit_kind?(structure_unit) = edit_structure_of?(structure_unit)
 
   # @param units [Enumerable<OrgUnit>] every predecessor and successor
   # @return [Boolean]
@@ -99,7 +100,15 @@ class OrgGraphPolicy < ApplicationPolicy
   # @param unit [OrgUnit]
   # @return [Boolean]
   def edit_membership?(member, unit)
-    edit_structure? || (member.present? && (manages?(member) || edit_unit?(unit)))
+    edit_structure? || (member.present? && place?(member, unit))
+  end
+
+  # @param member [Person]
+  # @param unit [OrgUnit]
+  # @return [Boolean] whether the caller's rights over the unit, or over the
+  #   member as their manager, let them place the member there
+  def place?(member, unit)
+    edit_unit?(unit) || manages?(member)
   end
 
   # @param member [Person]
@@ -112,7 +121,13 @@ class OrgGraphPolicy < ApplicationPolicy
 
   private
 
+  def active_member? = tenant_member? && person&.status == "active"
+
+  def reach
+    @reach ||= OrgGraphPolicy::Reach.new(person)
+  end
+
   def manages?(member)
-    tenant_member? && person&.status == "active" && member.present? && member.managed_by?(person)
+    active_member? && member.present? && member.managed_by?(person)
   end
 end

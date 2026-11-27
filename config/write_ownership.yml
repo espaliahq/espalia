@@ -37,6 +37,11 @@ evidence_links:
   owner: person_development/evidence_collection
 evidence_placement_suggestions:
   owner: person_development/evidence_suggestions
+  reason: >-
+    The projection's own pre-deploy reconcile closes the pending rows of people forgotten before it
+    handled PersonForgotten (https://github.com/espaliahq/espalia/issues/590).
+  writers:
+    - app/contexts/person_development/projections/evidence_suggestions.rb
 evidence_requests:
   owner: person_development/evidence_requests
 person_development_comments:
