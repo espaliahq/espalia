@@ -61,15 +61,35 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       assert_equal 1, changes_for(user).count
     end
 
-    should "record a stale copy's save that does change the stored flag" do
+    should "record a demotion saved by a copy reloaded after the promotion" do
       user = create(:user)
-      stale = User.find(user.id)
+      copy = User.find(user.id)
 
       user.update!(global_admin: true, global_admin_source: "console")
-      stale.reload
-      stale.update!(global_admin: false, global_admin_source: "console")
+      copy.reload
+      copy.update!(global_admin: false, global_admin_source: "console")
 
       assert_equal [ [ true, "console" ], [ false, "console" ] ], changes_for(user).pluck(:global_admin, :source)
+    end
+
+    should "not carry the stored flag from a failed save into a copy" do
+      user = create(:user)
+      user.assign_attributes(global_admin: true, global_admin_source: "console")
+      user.instance_variable_set(:@global_admin_stored, true)
+
+      copy = user.dup
+      copy.assign_attributes(email: "copy@example.com", global_admin_source: "console")
+      copy.save!
+
+      assert_equal [ [ true, "console" ] ], changes_for(copy).pluck(:global_admin, :source)
+    end
+
+    should "refuse to record a change for an account deleted before the save" do
+      user = create(:user)
+      User.where(id: user.id).delete_all
+
+      assert_raises(ActiveRecord::RecordNotFound) { user.update!(global_admin: true, global_admin_source: "console") }
+      assert_empty changes_for(user)
     end
 
     should "lock the account's row while it changes the flag" do

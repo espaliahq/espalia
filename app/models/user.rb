@@ -49,7 +49,7 @@ class User < ApplicationRecord
 
   # `update_column(s)`, `update_all`, `insert_all`, `upsert_all` and raw SQL skip these; see docs/architecture/domain-models.md.
   before_save :require_global_admin_source, if: :will_save_change_to_global_admin?
-  before_save :lock_global_admin, if: -> { persisted? && will_save_change_to_global_admin? }
+  before_save :read_stored_global_admin, if: :will_save_change_to_global_admin?
   after_save :record_global_admin_change
 
   # Auto follows the operating system. Personal and cross-tenant: a tenant
@@ -214,9 +214,14 @@ class User < ApplicationRecord
   end
 
   # A copy loaded before another save changed the flag still sees its own change. Locking the row
-  # until commit makes a second writer wait and read the flag the first one wrote.
-  def lock_global_admin
+  # until commit makes a second writer wait and read the flag the first one wrote. Set on every
+  # save that changes the flag, so a value read by a failed save can't reach the next one.
+  def read_stored_global_admin
+    @global_admin_stored = nil
+    return if new_record?
+
     @global_admin_stored = self.class.where(id:).lock.pick(:global_admin)
+    raise ActiveRecord::RecordNotFound.new("#{self.class} #{id} no longer exists", self.class.name, :id, id) if @global_admin_stored.nil?
   end
 
   # Records only a change to the stored flag. Clears the source after every save, so a source
