@@ -97,10 +97,6 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 **The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
-#### Recorded: `person_development/evidence_suggestions` v2 (forgetting closes a person's suggestions, [#590](https://github.com/espaliahq/espalia/issues/590))
-
-Path A: `REBUILD_ON_DEPLOY=person_development/evidence_suggestions`, removed once the deploy is live. The projection now handles `OrgGraph::Events::PersonForgotten` and closes the forgotten person's pending rows. A deployment that forgot people before this release holds those events already, so the rebuild closes their pending rows; nothing else changes. The rebuild reads the suggestion and forgetting events in the order they were written, and nothing is suggested for a person after they are forgotten, so it closes exactly the rows the live handler would have. The catch-up that put the table's rows on the streams ([#539](https://github.com/espaliahq/espalia/issues/539) c3) skipped people already forgotten, so some of their rows have no event to rebuild from. The reset keeps those rows, as they were, and closes the pending ones among them. Until it runs, `verify` fails and the previous release keeps serving. While it runs, the hub shows no suggestions for any tenant.
-
 #### Recorded: planning inputs stop the catch-up, then drop `updated_by_id` ([#539](https://github.com/espaliahq/espalia/issues/539) a4 and a4b), 2026-11-25
 
 No rebuild and no `CODE_VERSION` bump. a4 changes what commands do, not what the projection writes from an event.
