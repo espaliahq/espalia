@@ -86,6 +86,16 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
     end
   end
 
+  should "never end a day before the day ahead of it, when the zone moves by more than a day" do
+    travel_to Time.utc(2026, 3, 1, 12)
+    tenant = create(:tenant, time_zone: "Pacific/Pago_Pago")
+    travel_to Time.utc(2026, 4, 11, 5)
+    tenant.update!(time_zone: "Pacific/Kiritimati")
+
+    ends = (Date.new(2026, 4, 9)..Date.new(2026, 4, 12)).map { tenant.end_of_day_then(it) }
+    assert_equal ends.sort, ends
+  end
+
   should "read today's zone for a tenant with no rows at all" do
     tenant = create(:tenant, time_zone: "Europe/Paris")
     TenantSettingChange.where(tenant_id: tenant.id).delete_all

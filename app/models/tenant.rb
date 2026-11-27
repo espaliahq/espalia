@@ -234,10 +234,12 @@ class Tenant < ApplicationRecord
 
   # The last moment of a past day where the tenant worked then: in the zone in
   # force at the end of that day, so a later change of zone doesn't move it.
+  # Never before the end of the day before, as a zone moved by more than a day
+  # would otherwise end a day before the one ahead of it.
   #
   # @param date [Date]
   # @return [ActiveSupport::TimeWithZone]
-  def end_of_day_then(date) = date.in_time_zone(zone_then(date)).end_of_day
+  def end_of_day_then(date) = [ end_in_zone_then(date.prev_day), end_in_zone_then(date) ].max
 
   # Drops the setting history read before, so the next read sees changes made since.
   #
@@ -578,6 +580,8 @@ class Tenant < ApplicationRecord
     zone = rows.reverse.find { |row| row.changed_at <= date.in_time_zone(known_zone(row.value)).end_of_day }&.value
     known_zone(zone || rows.first&.value || time_zone)
   end
+
+  def end_in_zone_then(date) = date.in_time_zone(zone_then(date)).end_of_day
 
   def known_zone(name) = self.class.time_zone_known?(name) ? name : "UTC"
 
