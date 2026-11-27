@@ -266,7 +266,7 @@ class Tenant < ApplicationRecord
   # @param time [Time]
   # @return [Integer]
   def min_group_size_at(time)
-    [ Integer(setting_at("min_group_size", time), exception: false).to_i, ComparisonConfig::LOWEST_MIN_GROUP_SIZE ].max
+    [ Integer(setting_at("min_group_size", time), 10, exception: false).to_i, ComparisonConfig::LOWEST_MIN_GROUP_SIZE ].max
   end
 
   # The current tenant's today, for code that runs inside a tenant.

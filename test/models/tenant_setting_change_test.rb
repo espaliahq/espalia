@@ -96,6 +96,13 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
     assert_equal ends.sort, ends
   end
 
+  should "read a recorded size in base ten" do
+    tenant = create(:tenant)
+    ActsAsTenant.with_tenant(tenant) { tenant.setting_changes.create!(setting: "min_group_size", value: "08", changed_at: 1.second.from_now) }
+
+    assert_equal 8, tenant.reload.min_group_size_at(1.minute.from_now)
+  end
+
   should "read today's zone for a tenant with no rows at all" do
     tenant = create(:tenant, time_zone: "Europe/Paris")
     TenantSettingChange.where(tenant_id: tenant.id).delete_all
