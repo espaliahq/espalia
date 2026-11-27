@@ -6,8 +6,10 @@ class OrgGraph::PersonCandidates
   LIMIT = 12
 
   # @param query [String, nil] words that must each match a name or email
+  # @param titles [Boolean] whether each entry names the person's job title,
+  #   a fact for admins and editors only
   # @return [Array<Hash>] `{ person:, subtitle: }`, name-ordered
-  def search(query, limit: LIMIT)
+  def search(query, titles:, limit: LIMIT)
     tokens = query.to_s.strip.split(/\s+/).first(5)
     return [] if tokens.empty?
 
@@ -15,6 +17,6 @@ class OrgGraph::PersonCandidates
       pattern = "%#{ActiveRecord::Base.sanitize_sql_like(token)}%"
       people.where("people.name ILIKE :q OR people.email ILIKE :q", q: pattern)
     end
-    scope.order(:name).limit(limit).map { |person| { person:, subtitle: person.job_title.presence } }
+    scope.order(:name).limit(limit).map { |person| { person:, subtitle: (person.job_title.presence if titles) } }
   end
 end

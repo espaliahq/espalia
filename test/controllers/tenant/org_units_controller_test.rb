@@ -283,7 +283,31 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       frame = Nokogiri::HTML5(response.body).at_css("turbo-frame#owner-candidates")
       assert_includes frame.text, "Ezra Pell"
+      assert_includes frame.text, "Analyst"
       assert_not_includes frame.text, "Faye Lumen"
+    end
+  end
+
+  context "as the owner of Payments, who is neither an admin nor an editor" do
+    setup do
+      owner_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        owner = create(:person, tenant: @tenant, name: "Gale Orrin")
+        create(:tenant_user, tenant: @tenant, user: owner_user, person: owner, role: :member)
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        structure.add_unit_owner(@org[:payments], owner.id, effective_on: "2026-01-01")
+        structure.add_unit_owner(@org[:platform], @org[:ezra].id, effective_on: "2026-01-01")
+      end
+      sign_in owner_user
+    end
+
+    should "find people by name and email, without their job titles" do
+      get candidates_tenant_org_unit_path(@org[:payments], q: "e")
+
+      frame = Nokogiri::HTML5(response.body).at_css("turbo-frame#member-candidates")
+      assert_includes frame.text, "Ezra Pell"
+      assert_not_includes frame.text, "Analyst"
+      assert_not_includes frame.text, "Engineer"
     end
   end
 
