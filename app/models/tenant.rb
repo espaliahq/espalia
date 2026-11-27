@@ -253,21 +253,19 @@ class Tenant < ApplicationRecord
   # @param closed_at [Time, nil] when the cycle closed, nil while it is open
   # @return [Integer]
   def comparison_floor(closed_at:)
-    now = comparison_config.min_group_size
+    now = ComparisonConfig.floor_for(comparison_config.min_group_size)
     return now unless closed_at
 
     # Which rule applies to a closed cycle awaits a ruling: the larger of then and now, or then exactly.
     [ min_group_size_at(closed_at), now ].max
   end
 
-  # The smallest comparison group in force at an instant, never below the
-  # least an admin may set, so a stray row can't open the floor.
+  # The smallest comparison group in force at an instant, through
+  # {ComparisonConfig.floor_for}, so a stray row can't open the floor.
   #
   # @param time [Time]
   # @return [Integer]
-  def min_group_size_at(time)
-    [ Integer(setting_at("min_group_size", time), 10, exception: false).to_i, ComparisonConfig::LOWEST_MIN_GROUP_SIZE ].max
-  end
+  def min_group_size_at(time) = ComparisonConfig.floor_for(setting_at("min_group_size", time))
 
   # The current tenant's today, for code that runs inside a tenant.
   #

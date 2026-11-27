@@ -14,6 +14,13 @@ class ComparisonConfig
   HIGHEST_MIN_GROUP_SIZE = 100
   SNAPSHOT_INTERVALS = [ 1, 3, 6 ].freeze
 
+  # The size a floor applies, never below the least an admin may set, so a
+  # value the validation would refuse can't open it.
+  #
+  # @param size [Integer, String, nil] a size as stored or recorded
+  # @return [Integer]
+  def self.floor_for(size) = [ Integer(size.to_s, 10, exception: false).to_i, LOWEST_MIN_GROUP_SIZE ].max
+
   attribute :enabled, :boolean, default: true
   # The fewest people a group needs before its scores show on the comparison
   # tab, and in the capability attainment report to a viewer who can't open

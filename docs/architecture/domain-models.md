@@ -73,7 +73,7 @@ Two settings change answers about the past, so every change to them leaves a row
 
 A time before a tenant's first row reads the first row's value, as that is what was known to be in force. The migration that created the table wrote each tenant's values that day, dated from the tenant's creation. Today's value is read only for a tenant with no rows at all. Reads of today, level comparisons among them, use today's value.
 
-A size must be a whole number: the model and a check constraint refuse anything else. `Tenant#min_group_size_at` never reads below the least an admin may set, so a stray row can't open the floor.
+A size must be a whole number: the model and a check constraint refuse anything else. A floor, today's or a closed cycle's, reads through `ComparisonConfig.floor_for`, never below the least an admin may set, so a stray row or a stored value the validation would refuse can't open it.
 
 **The limit.** `update_column`, `update_all` and raw SQL that change either setting skip the callback and leave no row, so past answers would read the old value for the new one's time. The recorded write check and the `Espalia/WritesMustBeDeclared` cop guard those, and nothing else does (see [direct-writes.md](direct-writes.md)).
 

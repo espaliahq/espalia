@@ -119,6 +119,12 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
       travel_to Time.utc(2026, 4, 1, 12)
     end
 
+    should "never fall below the smallest size an admin may set, though today's stored size would" do
+      Tenant.where(id: @tenant.id).update_all(%(comparison_config = '{"min_group_size": "five"}'::jsonb))
+
+      assert_equal ComparisonConfig::LOWEST_MIN_GROUP_SIZE, @tenant.reload.comparison_floor(closed_at: nil)
+    end
+
     should "be today's size while the cycle is open" do
       smallest_group(@tenant, 4)
 
