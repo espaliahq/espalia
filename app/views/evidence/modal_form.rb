@@ -100,6 +100,13 @@ class Views::Evidence::ModalForm < Views::Base
 
   private
 
+  def linked_feedback
+    author = @evidence&.author
+    return "feedback from a former member" if author&.forgotten?
+
+    "#{author&.name || "someone else"}'s feedback"
+  end
+
   def header
     div(class: "flex items-center justify-between mb-3") do
       h2(class: "text-base font-semibold text-default") { title }
@@ -224,7 +231,7 @@ class Views::Evidence::ModalForm < Views::Base
   def content_fields
     unless @content_editable
       p(class: "text-xs text-warning") do
-        "You're linking #{@evidence&.author&.name || "someone else"}'s feedback — the content can't be edited here, only where it applies."
+        "You're linking #{linked_feedback} — the content can't be edited here, only where it applies."
       end
     end
     type_field

@@ -283,7 +283,12 @@ class OrgGraph::Forgetting
   # row, so none waits on an erase in a cycle. The grants lock comes last, so
   # an erase holds it only for the unlink and the commit.
   # A suggestion write holds the person's row key-share before its own locks
-  # (PersonDevelopment::SuggestionWrites), none of which an erase takes.
+  # (PersonDevelopment::SuggestionWrites). The erase's PersonForgotten event
+  # closes the person's pending suggestion rows after the Org Graph stream,
+  # still inside this transaction, and no suggestion command reaches those rows
+  # without first waiting on the person's row. A framework publish re-keys the
+  # rows without it; should the two deadlock, Postgres cancels one, and its
+  # whole transaction rolls back.
   def erase(person_id, on:, reason:, requested_by_id: nil, scheduled: false)
     within_tenant do
       Person.transaction do
