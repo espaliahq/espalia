@@ -164,9 +164,10 @@ Pundit's `authorize` passes none.
 | Action | Who |
 |--------|-----|
 | See the Org Graph (`show?`) | Any tenant member |
-| The Units view, its activity sidebar (a unit's, or the organisation's own) and change it back, and `org_graph_units`, `org_graph_activity`, `org_graph_change_back` and `org_graph_change_back_group` (`show_units?`; a change-back also needs the rights to make the inverse change) | A tenant admin, until the Org Graph's screens are finished; it then opens to `show?` |
+| The Units view, a unit's activity sidebar, and `org_graph_units` and `org_graph_activity` for a unit (`show_units?`, [#537](https://github.com/espaliahq/espalia/issues/537)) | A tenant admin, an Org Graph editor, anyone who owns a live unit or whose reach covers one, or anyone with an active direct report. An admin sees it in the admin layout, anyone else in the app's, under "Organisation" |
+| The organisation's own activity, a person's drawer and `org_graph_person_get`, stale facts and `org_graph_stale_facts`, and change it back, with `org_graph_change_back` and `org_graph_change_back_group` (`edit_structure?`; a change-back also needs the rights to make the inverse change) | A tenant admin or an Org Graph editor. Anyone else `show_units?` admits sees no stale flags, opens no person, and over MCP reads each change as one they can't change back |
 | Add, rename or remove a type in the organisation's structure, or say where it can sit (`edit_taxonomy?`, which is `edit_structure_of?(nil)`) | A tenant admin or an Org Graph editor |
-| Give a unit a structure of its own, withdraw it, change its types, or move a unit into it (`edit_structure_of?(unit)`, [#494](https://github.com/espaliahq/espalia/issues/494)) | A tenant admin, an Org Graph editor, or anyone whose reach covers the unit. A move in also needs `move_unit?`, and its refusal names no structure |
+| Give a unit a structure of its own, withdraw it, change its types, or move a unit into it (`edit_structure_of?(unit)`, [#494](https://github.com/espaliahq/espalia/issues/494)), and the structure's own page at `/tenant/org_graph/structures/:unit_id/edit` with `org_graph_unit_structure` ([#537](https://github.com/espaliahq/espalia/issues/537)) | A tenant admin, an Org Graph editor, or anyone whose reach covers the unit. A move in also needs `move_unit?`, and its refusal names no structure |
 | Providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
 | Rename, retire or own a unit, or add a unit beneath it (`edit_unit?`, `create_unit?(parent)`) | The above, or anyone whose reach covers the unit |
 | Change a unit's type (`change_unit_kind?(structure_unit)`), or change that back | Rights over the structure in force where the unit sits. An owner of the unit alone can't, since its type belongs to the structure above it |
@@ -327,8 +328,7 @@ They refuse only a person whose accounts are all admins and carry no grant.
 `org_graph_editors`, `team_planning_planners` and their add and remove tools
 give each holder `since`, `added_by` and `already_held` from the stream. Editor
 grants also show in the Org Graph's organisation activity
-(`org_graph_activity` with no `unit_id`), behind `show_units?` like a unit's
-feed. They can't be changed back there: the refusal points to the settings.
+(`org_graph_activity` with no `unit_id`), behind `edit_structure?`. They can't be changed back there: the refusal points to the settings.
 
 ## Policy Conventions
 
