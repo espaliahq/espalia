@@ -6,6 +6,10 @@
 # {EvidencePolicy#add_link?} authorisation and
 # {PersonDevelopment::CommandHandler#add_evidence_link} dispatch.
 #
+# A forgotten person's links stay as they were when they were forgotten: a
+# link about them is refused with "this person has been forgotten", as a
+# ParameterError ({PersonDevelopment::ForgottenSubject}).
+#
 # Write — :mcp_client approval. Linking is additive context (it doesn't
 # grant permissions or change other people's data); the same friction as
 # recording evidence is appropriate.
