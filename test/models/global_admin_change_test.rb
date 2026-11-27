@@ -139,6 +139,7 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
 
     assert_raises(ActiveRecord::ReadOnlyRecord) { row.update!(source: "console") }
     assert_raises(ActiveRecord::ReadOnlyRecord) { row.destroy! }
+    assert_raises(ActiveRecord::ReadOnlyRecord) { row.delete }
     assert_equal "seed", row.reload.source
   end
 

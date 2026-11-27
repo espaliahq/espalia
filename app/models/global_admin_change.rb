@@ -18,4 +18,13 @@ class GlobalAdminChange < ApplicationRecord
   def readonly?
     persisted? || super
   end
+
+  # Rails lets `delete` remove a read-only row, so a saved row refuses it here.
+  #
+  # @raise [ActiveRecord::ReadOnlyRecord] once saved
+  def delete
+    raise ActiveRecord::ReadOnlyRecord, "#{self.class} is append-only" if persisted?
+
+    super
+  end
 end
