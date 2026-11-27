@@ -219,7 +219,8 @@ raises `ArgumentError`, so a screen that forgets to pass one fails instead of
 skipping the check. Pass `SYSTEM` only where no person drives the write.
 `SYSTEM` may change the organisation's own structure. It can't give a unit a
 structure of its own, change one, or move a unit between structures: those are
-a person's call. The move needs the right to change both structures, and its
+a person's call. It may still change a unit's type inside one, though no
+system write does. The move needs the right to change both structures, and its
 refusal names neither.
 `TenantUser#ensure_person!` records a new person's stream as `SYSTEM` even when
 an admin triggers it, since provisioning a person for an account is the
