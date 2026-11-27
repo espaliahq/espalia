@@ -243,14 +243,22 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
   end
 
   should "check a structure change again under the structure's lock, refusing an owner removed while it waited" do
+    engineering = @org[:engineering]
     {
-      "a new type" => ->(handler) { handler.add_level(SecureRandom.uuid_v7, "Pod", structure_unit_id: @org[:engineering], **ON) },
-      "a withdrawal" => ->(handler) { handler.withdraw_structure(@org[:engineering], **ON) }
-    }.each do |change, command|
-      as_tenant { system.add_unit_owner(@org[:engineering], @engineering_owner.id, **ON) } unless change == "a new type"
+      "a new type" => ->(handler) { handler.add_level(SecureRandom.uuid_v7, "Pod", structure_unit_id: engineering, **ON) },
+      "a type's parents" => ->(handler) { handler.set_kind_parents(@lane, parent_ids: [ @group ], top: false, structure_unit_id: engineering, **ON) },
+      "a type removed" => ->(handler) { handler.remove_level(@lane, structure_unit_id: engineering, **ON) },
+      "a withdrawal" => ->(handler) { handler.withdraw_structure(engineering, **ON) },
+      "a declaration" => ->(handler) { handler.declare_structure(@org[:checkout], levels: [], conversion: {}, **ON) },
+      "a declaration changed back" => ->(handler) { handler.change_declaration_back(engineering, kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON) },
+      "a withdrawal changed back" => lambda { |handler|
+        handler.change_withdrawal_back(engineering, levels: [], kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON)
+      }
+    }.each_with_index do |(change, command), index|
+      as_tenant { system.add_unit_owner(engineering, @engineering_owner.id, **ON) } unless index.zero?
       events_after_revoke = nil
       revoke = lambda do
-        system.remove_unit_owner(@org[:engineering], @engineering_owner.id, **ON)
+        system.remove_unit_owner(engineering, @engineering_owner.id, **ON)
         events_after_revoke = Rails.configuration.event_store.read.count
       end
       handler = OrgGraph::StructureCommandHandler.new(actor: as(@engineering_owner),
