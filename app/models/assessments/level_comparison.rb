@@ -29,7 +29,7 @@ class Assessments::LevelComparison
   def enabled? = config.enabled
 
   # @return [Integer]
-  def min_group_size = config.min_group_size
+  def min_group_size = config.floor
 
   # @return [Date, nil] when the group scores were taken; nil before the first snapshot
   def taken_on = snapshot&.taken_on

@@ -69,6 +69,16 @@ class Assessments::LevelComparisonTest < ActiveSupport::TestCase
     assert_equal 4, comparison.min_group_size
   end
 
+  should "withhold a group under the smallest size an admin may set, whatever is stored" do
+    group(2, 3)
+    Tenant.where(id: @tenant.id).update_all(%(comparison_config = '{"min_group_size": "five"}'::jsonb))
+    @tenant.reload
+
+    assert_nil comparison.group_at(2)
+    assert_not comparison.levels.find(&:own).available
+    assert_equal ComparisonConfig::LOWEST_MIN_GROUP_SIZE, comparison.min_group_size
+  end
+
   should "suggest the nearest level that has enough people when the person's own has too few" do
     group(1, 6)
     group(3, 9)

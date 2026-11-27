@@ -46,6 +46,27 @@ class AdminCreateTaskTest < ActiveSupport::TestCase
     assert_includes output, "Created global admin new-admin@example.com."
   end
 
+  context "the audit" do
+    should "record a promotion and a new admin as admin_task" do
+      user = create(:user, email: "member@example.com")
+
+      run_task("EMAIL" => "member@example.com", "PASSWORD" => nil)
+      run_task("EMAIL" => "new-admin@example.com", "PASSWORD" => "new-password-2")
+
+      created = User.find_by!(email: "new-admin@example.com")
+      assert_equal [ [ true, "admin_task" ] ], GlobalAdminChange.where(user_id: user.id).pluck(:global_admin, :source)
+      assert_equal [ [ true, "admin_task" ] ], GlobalAdminChange.where(user_id: created.id).pluck(:global_admin, :source)
+    end
+
+    should "record nothing when the account is already an admin" do
+      create(:user, email: "member@example.com", global_admin: true)
+
+      assert_no_difference -> { GlobalAdminChange.count } do
+        run_task("EMAIL" => "member@example.com", "PASSWORD" => "new-password-2")
+      end
+    end
+  end
+
   should "refuse to create a user without a password" do
     assert_raises(SystemExit) { run_task("EMAIL" => "new-admin@example.com", "PASSWORD" => nil) }
 

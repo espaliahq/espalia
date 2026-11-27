@@ -39,7 +39,7 @@ class SeedAdmin
 
     if (user = email && User.find_by(email: email))
       unless user.global_admin?
-        user.update!(global_admin: true)
+        user.update!(global_admin: true, global_admin_source: "seed")
         output.puts "Promoted #{user.email} to global admin"
       end
       output.puts "Admin user #{user.email} already exists"
@@ -52,7 +52,7 @@ class SeedAdmin
     end
 
     output.puts "Creating admin user: #{email}"
-    user = User.create!(email: email, global_admin: true, password: password, password_confirmation: password)
+    user = User.create!(email: email, global_admin: true, global_admin_source: "seed", password: password, password_confirmation: password)
     # A supplied password is never printed, whatever the environment — only
     # the fixed, documented dev default is safe to echo.
     if dev_default_password
