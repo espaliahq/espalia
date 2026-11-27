@@ -179,12 +179,8 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       assert_not @policy.edit_structure?
     end
 
-    should "see the Units view while a report is active" do
-      assert @policy.show_units?
-
-      as_tenant { @report.update!(status: "inactive") }
-
-      assert_not policy_for(context_for(@lead)).show_units?
+    should "not see the Units view on a report alone, with nothing there to do" do
+      assert_not @policy.show_units?
     end
 
     should "lose the rights once they leave" do

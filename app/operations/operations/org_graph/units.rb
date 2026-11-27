@@ -11,9 +11,8 @@ class Operations::OrgGraph::Units < Operations::Base
               "the organisation's structure). Also returns the organisation's unit types, top first, each with the " \
               "type ids it can sit under (parent_ids) and whether it can sit at the top; the same for each " \
               "unit with a structure of its own (structures, by unit_id and name); and the ids of active people in no live " \
-              "unit. For a tenant admin, an Org Graph editor, a person who owns a unit or reports to someone " \
-              "who does, and anyone with an active direct report. Every unit shows, not only the ones the " \
-              "caller can change."
+              "unit. For a tenant admin, an Org Graph editor, and a person who owns a unit or reports to someone " \
+              "who does. Every unit shows, not only the ones the caller can change."
   category :read
   approval :none
 

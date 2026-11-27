@@ -202,6 +202,13 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
       assert policy_for(as(@owner)).show_units?
       assert policy_for(as(@manager)).show_units?
     end
+
+    should "keep the Units view from a manager whose reports own no unit" do
+      lead = as_tenant { create(:person, tenant: @tenant) }
+      as_tenant { create(:person, tenant: @tenant, manager: lead) }
+
+      assert_not policy_for(as(lead)).show_units?
+    end
   end
 
   context "a move between structures" do

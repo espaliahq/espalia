@@ -23,13 +23,12 @@ class OrgGraphPolicy < ApplicationPolicy
   def show? = tenant_member?
 
   # The Units view, its drawers and its MCP reads, for anyone who holds a
-  # right in the Org Graph: an admin, an editor, an active person whose
-  # {Reach} covers a unit, or one with an active direct report to place.
-  # Opening it to {#show?} is a later decision (#80).
+  # right in the Org Graph: an admin, an editor, or an active person whose
+  # {Reach} covers a unit. Opening it to {#show?} is a later decision (#80).
   #
   # @return [Boolean]
   def show_units?
-    edit_structure? || (active_member? && (reach.owned_unit_ids.any? || person.direct_reports.active.exists?))
+    edit_structure? || (active_member? && reach.owned_unit_ids.any?)
   end
 
   # The settings screen: sources, levels, freshness, forgetting and who may

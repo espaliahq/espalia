@@ -7,7 +7,7 @@
 > ([#52](https://github.com/espaliahq/espalia/issues/52)) and membership
 > ([#54](https://github.com/espaliahq/espalia/issues/54)), which nothing writes to yet. The
 > units view ([#80](https://github.com/espaliahq/espalia/issues/80)) shows them at
-> `/tenant/org_graph` to admins, Org Graph editors, unit owners and managers
+> `/tenant/org_graph` to admins, Org Graph editors, unit owners and the people above them
 > ([#537](https://github.com/espaliahq/espalia/issues/537)); MCP clients read the same tree
 > through `org_graph_units`.
 > [The index](README.md) lists the companion designs, the mockups and the plan.
