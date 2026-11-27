@@ -63,6 +63,41 @@ class Tenant::OrgGraphSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "as Checkout's owner, who is not an admin" do
+    setup do
+      @owner_user = FactoryBot.create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        FactoryBot.create(:tenant_user, tenant: @tenant, user: @owner_user, person: @org[:ada], role: :member)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .add_unit_owner(@org[:checkout], @org[:ada].id, effective_on: Date.current)
+      end
+    end
+
+    should "reach the Units view from Organisation in the app's own navigation, at desktop width" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@owner_user)
+
+      click_link_with_js_fallback "Organisation", expect_selector: "#org-graph-unit"
+      screenshot("owner_units_view")
+
+      assert_no_text "Tenant administration"
+      assert_no_selector "a", text: "Settings"
+      within("#unit-#{@org[:platform]}") { assert_text "Ada Quill" }
+      assert_no_selector "#org-graph-unit a[href*='/org_graph/people/']"
+    end
+
+    should "see the Units view stacked, with no sideways scroll, at phone width" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@owner_user)
+      visit tenant_org_graph_path(unit: @org[:checkout])
+
+      assert_selector "#org-graph-unit", text: "Checkout"
+      screenshot("owner_units_view_phone")
+      assert_no_text "Tenant administration"
+      assert_no_sideways_overflow
+    end
+  end
+
   context "at phone width" do
     setup { page.driver.browser.manage.window.resize_to(*MOBILE_SIZE) }
 
