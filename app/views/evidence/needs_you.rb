@@ -76,7 +76,7 @@ class Views::Evidence::NeedsYou < Views::Base
           removed ? "Place feedback #{about}" : "Place #{first_name(item.author)}'s feedback #{about}"
         end
         span(class: "block text-xs text-muted") do
-          parts = [ *(Person::REMOVED if removed), "Given #{time_ago_in_words(item.recorded_at)} ago" ]
+          parts = [ *(Person::FORMER_MEMBER if removed), "Given #{time_ago_in_words(item.recorded_at)} ago" ]
           parts << "#{count} #{count == 1 ? "suggestion" : "suggestions"}" if count.positive?
           parts << "imported" if item.external_reference&.imported?
           parts.join(" · ")

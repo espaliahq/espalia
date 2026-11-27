@@ -142,7 +142,7 @@ class EvidenceModalControllerTest < ActionDispatch::IntegrationTest
       assert_select "textarea[name='evidence[content]']:not([disabled])"
     end
 
-    should "say a forgotten peer's feedback came from a removed person" do
+    should "say a forgotten peer's feedback came from a former member" do
       peer_feedback_id = SecureRandom.uuid_v7
       ActsAsTenant.with_tenant(@tenant) do
         peer = create(:person, tenant: @tenant, name: "Pat Peer", manager: @manager)
@@ -154,8 +154,8 @@ class EvidenceModalControllerTest < ActionDispatch::IntegrationTest
       sign_in @author_user
       get evidence_modal_path(mode: "edit", evidence_id: peer_feedback_id, return_to: "assessment:#{@assignment.id}")
       assert_response :success
-      assert_select "p", text: /You're linking feedback from a removed person/
-      assert_no_match "Former member", response.body
+      assert_select "p", text: /You're linking feedback from a former member/
+      assert_no_match "Former member's", response.body
     end
 
     should "say where an imported item was given, with no reference fields to change it" do

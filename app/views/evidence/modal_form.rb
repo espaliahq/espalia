@@ -102,7 +102,7 @@ class Views::Evidence::ModalForm < Views::Base
 
   def linked_feedback
     author = @evidence&.author
-    return "feedback from a removed person" if author&.forgotten?
+    return "feedback from a former member" if author&.forgotten?
 
     "#{author&.name || "someone else"}'s feedback"
   end

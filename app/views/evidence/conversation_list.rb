@@ -125,7 +125,7 @@ class Views::Evidence::ConversationList < Views::Base
 
       r.requested_by_id == @viewer_id ? "You asked for feedback" : "#{first_name(r.requester)} asked you for feedback"
     when :declined then "#{who(message.request.requestee_person_id, message.request.requestee)} declined"
-    else "#{byline(message.item.author_id, message.item.author)}: #{Prose.to_plain(message.item.content).truncate(90)}"
+    else "#{who(message.item.author_id, message.item.author)}: #{Prose.to_plain(message.item.content).truncate(90)}"
     end
   end
 end

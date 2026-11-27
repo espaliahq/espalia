@@ -19,7 +19,7 @@ The reason someone gives for dismissing an evidence suggestion follows the same 
 Forgetting also settles evidence placement suggestions ([#590](https://github.com/espaliahq/espalia/issues/590)):
 
 - **The person the feedback is about.** Their pending suggestions close inside the erase, through the `PersonForgotten` event, and leave every screen and MCP read. One already accepted or dismissed keeps its decision. No new suggestion is made for them, and every command on an old one is refused. The development stream still holds the closed ones as pending; the refusal keeps the two from drifting.
-- **Only the author.** The suggestion stays open, and the person it is about can still accept or dismiss it. Where the author's name was, the hub shows "Person removed".
+- **Only the author.** The suggestion stays open, and the person it is about can still accept or dismiss it. Where the author's name was, the hub shows "Former member", the label used everywhere else.
 
 A rationale or a dismissal reason is text someone wrote, so it stays, as above.
 
