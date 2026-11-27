@@ -217,9 +217,10 @@ a retirement moving its members, the HRIS fact claim, a rake task. Nobody is
 acting, so nothing is checked. A handler built with no actor, or with `nil`,
 raises `ArgumentError`, so a screen that forgets to pass one fails instead of
 skipping the check. Pass `SYSTEM` only where no person drives the write.
-`SYSTEM` can't move a unit between structures or change a structure: those
-are a person's call, and no sync or task makes one. The move needs the right to
-change both structures, and its refusal names neither.
+`SYSTEM` may change the organisation's own structure. It can't give a unit a
+structure of its own, change one, or move a unit between structures: those are
+a person's call. The move needs the right to change both structures, and its
+refusal names neither.
 `TenantUser#ensure_person!` records a new person's stream as `SYSTEM` even when
 an admin triggers it, since provisioning a person for an account is the
 system's act and must never fail a member's sign-in.
