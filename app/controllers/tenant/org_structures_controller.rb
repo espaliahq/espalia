@@ -8,6 +8,7 @@ class Tenant::OrgStructuresController < ApplicationController
 
   # GET /tenant/org_graph/structures/:unit_id/edit
   def edit
+    authorize :org_graph, :show_units?
     unit = OrgUnit.live.find_by!(id: params[:unit_id].to_s.downcase)
     authorize_structure_of!(unit)
     structure = Operations::OrgGraph::UnitStructure.call(context: pundit_user, params: { unit_id: unit.id })

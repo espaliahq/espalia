@@ -378,6 +378,15 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       sign_in @member_user
     end
 
+    should "get the same refusal for the structure page of a real unit and of one the Org Graph doesn't hold" do
+      [ @payments_id, SecureRandom.uuid ].each do |unit_id|
+        get edit_tenant_org_structure_path(unit_id)
+
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+    end
+
     should "refuse to add, rule or remove a unit type, in either structure, changing nothing" do
       [ {}, { structure_unit_id: @payments_id } ].each do |structure|
         [ -> { post tenant_org_graph_settings_levels_path, params: { name: "Guild", **structure } },
