@@ -195,6 +195,16 @@ This is invisible while the aggregate is only a write-side validator (handlers' 
 
 Whenever you touch an aggregate handler or an event payload, audit both ends.
 
+## A forgotten person's stream takes no new facts
+
+Open a Person Development stream for writing only through
+`PersonDevelopment::Repository#with_person_development`. It refuses a forgotten
+subject before it loads the aggregate. To let a write through anyway, pass
+`forgotten:` with a reason from `Repository::FORGOTTEN_ALLOWED`, and only for an
+event that carries nothing about the person, since it can land after the erase.
+Never free text. See
+[person-development-aggregate.md → Writes to a forgotten person's stream](../architecture/person-development-aggregate.md#writes-to-a-forgotten-persons-stream).
+
 ## Production data rules
 
 **Production data is live.** Any destructive operation requires:

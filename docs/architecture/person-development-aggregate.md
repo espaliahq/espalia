@@ -386,6 +386,33 @@ Framework migration:
 
 ---
 
+## Writes to a forgotten person's stream
+
+`PersonDevelopment::Repository#with_person_development` is the one door for
+writes. It runs in `Person.transaction`, takes the person's row `FOR KEY SHARE`
+through `PersonDevelopment::ForgottenSubject.refuse!`, and only then loads the
+aggregate. A forgotten subject is refused with
+`ForgottenSubject::Forgotten`, which `Operations::Base` reports as a
+`ParameterError`. An erase takes the same row `FOR UPDATE`, so it either
+commits first and the command sees it, or waits for the command's events.
+
+A call skips the refusal only by passing `forgotten:` with a reason from
+`Repository::FORGOTTEN_ALLOWED`; any other reason raises `ArgumentError`.
+Today the list holds two:
+
+- `:framework_migration`: `migrate_framework_version`, so a publish moves every
+  stream alike.
+- `:cycle_ending`: `leave_cycle` and `conclude_cycle`, so a cycle closes cleanly
+  around a forgotten member. `join_cycle` is refused.
+
+An exception takes no lock, so its append can land after the erase. Its events
+must carry nothing about the person: `FrameworkVersionMigrated` holds the
+framework's mappings, `AssessmentCycleConcluded` the cycle id, and
+`LeftAssessmentCycle` the cycle id and a reason from
+`AssessmentCycles::Aggregate::UNENROLL_REASONS`. Adding a reason to the list is
+a reviewed decision; `forgotten_subject_writes_test.rb` walks every command and
+fails on one that opens the stream any other way.
+
 ## Projections
 
 All projection read models have `tenant_id` and `acts_as_tenant :tenant`.
