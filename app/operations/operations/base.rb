@@ -711,7 +711,7 @@ class Operations::Base
     policy_check
     forbid_impersonated_write!
     AuditMetadata.wrap_event_store { perform }
-  rescue ProjectionVersion::Rebuilding => e
+  rescue ProjectionVersion::Rebuilding, Frameworks::Aggregate::UnstorableDecimal => e
     raise ParameterError, e.message
   end
 
