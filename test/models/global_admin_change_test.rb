@@ -55,6 +55,14 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       assert_raises(User::GlobalAdminSourceMissing) { user.update!(global_admin: false) }
       assert user.reload.global_admin?
     end
+
+    should "not carry a source named for a save that left the flag alone" do
+      user = create(:user, global_admin: true)
+      user.update!(global_admin: true, global_admin_source: "seed")
+
+      assert_raises(User::GlobalAdminSourceMissing) { user.update!(global_admin: false) }
+      assert user.reload.global_admin?
+    end
   end
 
   should "refuse baseline and any source outside the list" do
@@ -65,6 +73,14 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       assert_not user.reload.global_admin?
     end
     assert_empty changes_for(user)
+  end
+
+  should "say why a plain save refuses a source outside the list" do
+    user = create(:user)
+
+    assert_not user.update(global_admin: true, global_admin_source: "Console")
+    assert_includes user.errors.attribute_names, :global_admin_source
+    assert_not user.reload.global_admin?
   end
 
   should "refuse a baseline row written through the model" do
