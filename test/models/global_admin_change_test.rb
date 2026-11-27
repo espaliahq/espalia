@@ -48,6 +48,19 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       assert_empty changes_for(user)
     end
 
+    should "write nothing when a caller rescues the refusal inside its own transaction" do
+      user = create(:user)
+
+      User.transaction do
+        user.update!(global_admin: true)
+      rescue User::GlobalAdminSourceMissing
+        nil
+      end
+
+      assert_not user.reload.global_admin?
+      assert_empty changes_for(user)
+    end
+
     should "need naming again for each change" do
       user = create(:user)
       user.update!(global_admin: true, global_admin_source: "console")

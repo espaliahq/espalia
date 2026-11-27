@@ -36,7 +36,8 @@ class User < ApplicationRecord
   validates :global_admin_source, inclusion: { in: GlobalAdminChange::RECORDABLE_SOURCES },
                                   allow_nil: true, if: :will_save_change_to_global_admin?
 
-  # `update_column`, `update_all` and raw SQL skip this; see docs/architecture/domain-models.md.
+  # `update_column`, `update_all` and raw SQL skip these; see docs/architecture/domain-models.md.
+  before_save :require_global_admin_source, if: :will_save_change_to_global_admin?
   after_save :record_global_admin_change
 
   # Auto follows the operating system. Personal and cross-tenant: a tenant
@@ -184,18 +185,19 @@ class User < ApplicationRecord
 
   private
 
+  # Raises before the write, so a caller that rescues it inside its own transaction can't commit the flag unrecorded.
+  def require_global_admin_source
+    return if global_admin_source.present?
+
+    raise GlobalAdminSourceMissing,
+          "Name where this change to global_admin comes from: set global_admin_source to one of " \
+          "#{GlobalAdminChange::RECORDABLE_SOURCES.join(', ')} before saving (console for a change made by hand)."
+  end
+
   # Clears the source after every save, so a source named for a save that left the flag alone
   # can't be recorded against a later change.
   def record_global_admin_change
-    return unless saved_change_to_global_admin?
-
-    if global_admin_source.blank?
-      raise GlobalAdminSourceMissing,
-            "Name where this change to global_admin comes from: set global_admin_source to one of " \
-            "#{GlobalAdminChange::RECORDABLE_SOURCES.join(', ')} before saving (console for a change made by hand)."
-    end
-
-    GlobalAdminChange.create!(user_id: id, global_admin:, source: global_admin_source)
+    GlobalAdminChange.create!(user_id: id, global_admin:, source: global_admin_source) if saved_change_to_global_admin?
   ensure
     self.global_admin_source = nil
   end
