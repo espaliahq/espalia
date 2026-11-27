@@ -398,18 +398,24 @@ commits first and the command sees it, or waits for the command's events.
 
 A call skips the refusal only by passing `forgotten:` with a reason from
 `Repository::FORGOTTEN_ALLOWED`; any other reason raises `ArgumentError`.
-Today the list holds two:
+Today the list holds three:
 
 - `:framework_migration`: `migrate_framework_version`, so a publish moves every
   stream alike.
 - `:cycle_ending`: `leave_cycle` and `conclude_cycle`, so a cycle closes cleanly
   around a forgotten member. `join_cycle` is refused.
+- `:offboarding`: `offboard_from_framework`, which only the HiBob sync's leaver
+  pass calls. It unassigns with the fixed reason `left_company` and no actor,
+  so a person forgotten before the sync reached them still leaves the
+  framework. An admin's `unassign_from_framework` takes a free-text reason and
+  stays refused.
 
 An exception takes no lock, so its append can land after the erase. Its events
 must carry nothing about the person: `FrameworkVersionMigrated` holds the
 framework's mappings, `AssessmentCycleConcluded` the cycle id, and
 `LeftAssessmentCycle` the cycle id and a reason from
-`AssessmentCycles::Aggregate::UNENROLL_REASONS`. Adding a reason to the list is
+`AssessmentCycles::Aggregate::UNENROLL_REASONS`, and the offboarding
+`PersonUnassignedFromFramework` the framework id and `left_company`. Adding a reason to the list is
 a reviewed decision; `forgotten_subject_writes_test.rb` walks every command and
 fails on one that opens the stream any other way.
 
