@@ -24,7 +24,7 @@ class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
     return back_with_alert(changed_meanwhile) unless result
 
     back_with_notice "Saved where #{result[:name]} can sit.", anchor:
-  rescue Operations::Base::ParameterError => e
+  rescue Operations::Base::ParameterError, OrgGraph::Authorization::Refused => e
     back_with_refusal "#{type_name}'s place did not change", e, anchor:
   end
 

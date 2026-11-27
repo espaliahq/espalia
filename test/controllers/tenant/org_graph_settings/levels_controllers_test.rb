@@ -301,6 +301,16 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       assert_predicate flash[:alert], :present?
     end
 
+    should "land a refusal from the write back on the structure page, naming it" do
+      refusal = OrgGraph::Authorization::Refused.new("You can't change the structure beneath Payments.")
+      Operations::OrgGraph::AddLevel.stub(:call, ->(**) { raise refusal }) do
+        post tenant_org_graph_settings_levels_path, params: { name: "Guild", structure_unit_id: @payments_id, back: "structure" }
+      end
+
+      assert_redirected_to edit_tenant_org_structure_path(@payments_id)
+      assert_equal "The unit type could not be added: You can't change the structure beneath Payments.", flash[:alert]
+    end
+
     should "not open the structure page of a unit they don't own" do
       get edit_tenant_org_structure_path(@commerce_id)
 
