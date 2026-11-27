@@ -255,7 +255,16 @@ class Tenant < ApplicationRecord
     return now unless closed_at
 
     # Which rule applies to a closed cycle awaits a ruling: the larger of then and now, or then exactly.
-    [ setting_at("min_group_size", closed_at).to_i, now ].max
+    [ min_group_size_at(closed_at), now ].max
+  end
+
+  # The smallest comparison group in force at an instant, never below the
+  # least an admin may set, so a stray row can't open the floor.
+  #
+  # @param time [Time]
+  # @return [Integer]
+  def min_group_size_at(time)
+    [ Integer(setting_at("min_group_size", time), exception: false).to_i, ComparisonConfig::LOWEST_MIN_GROUP_SIZE ].max
   end
 
   # The current tenant's today, for code that runs inside a tenant.

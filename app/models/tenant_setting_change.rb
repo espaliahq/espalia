@@ -13,6 +13,7 @@ class TenantSettingChange < ApplicationRecord
 
   validates :setting, inclusion: { in: SETTINGS }
   validates :value, :changed_at, presence: true
+  validates :value, format: { with: /\A\d+\z/, message: "must be a whole number" }, if: -> { setting == "min_group_size" }
 
   # @return [Boolean] true once saved, so a row can't be updated or destroyed
   def readonly?

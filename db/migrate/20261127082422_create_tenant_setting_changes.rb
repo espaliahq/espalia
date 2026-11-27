@@ -14,6 +14,8 @@ class CreateTenantSettingChanges < ActiveRecord::Migration[8.1]
     add_index :tenant_setting_changes, %i[tenant_id setting changed_at]
     add_check_constraint :tenant_setting_changes, "setting IN ('time_zone', 'min_group_size')",
                          name: "tenant_setting_changes_setting"
+    add_check_constraint :tenant_setting_changes, "setting <> 'min_group_size' OR value ~ '^[0-9]+$'",
+                         name: "tenant_setting_changes_min_group_size_whole"
 
     # Each tenant's values today, dated from its creation: what we know was in force.
     # Postgres 16 has no uuidv7(), so the ids come from Ruby.

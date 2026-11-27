@@ -1288,6 +1288,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_082422) do
     t.string "value", null: false
     t.datetime "changed_at", null: false
     t.index ["tenant_id", "setting", "changed_at"], name: "idx_on_tenant_id_setting_changed_at_01e4d5d272"
+    t.check_constraint "setting::text <> 'min_group_size'::text OR value::text ~ '^[0-9]+$'::text", name: "tenant_setting_changes_min_group_size_whole"
     t.check_constraint "setting::text = ANY (ARRAY['time_zone'::character varying, 'min_group_size'::character varying]::text[])", name: "tenant_setting_changes_setting"
   end
 

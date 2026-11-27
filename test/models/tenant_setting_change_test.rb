@@ -47,6 +47,21 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
     assert_raises(ActiveRecord::ReadOnlyRecord) { row.destroy! }
   end
 
+  context "a size" do
+    setup { @tenant = create(:tenant) }
+
+    should "be refused unless it is a whole number, by the model and by the database" do
+      ActsAsTenant.with_tenant(@tenant) do
+        [ "", "five", "4.5" ].each do |value|
+          assert_raises(ActiveRecord::RecordInvalid) { @tenant.setting_changes.create!(setting: "min_group_size", value:, changed_at: Time.current) }
+        end
+        assert_raises(ActiveRecord::StatementInvalid) do
+          TenantSettingChange.insert_all!([ { id: SecureRandom.uuid_v7, tenant_id: @tenant.id, setting: "min_group_size", value: "five", changed_at: Time.current } ])
+        end
+      end
+    end
+  end
+
   context "the zone a past day ends in" do
     setup do
       travel_to Time.utc(2026, 3, 1, 12)
@@ -97,6 +112,12 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
       smallest_group(@tenant, 4)
 
       assert_equal 6, @tenant.comparison_floor(closed_at: @closed_at)
+    end
+
+    should "never fall below the smallest size an admin may set, whatever a row holds" do
+      ActsAsTenant.with_tenant(@tenant) { @tenant.setting_changes.create!(setting: "min_group_size", value: "0", changed_at: Time.utc(2026, 3, 5)) }
+
+      assert_equal ComparisonConfig::LOWEST_MIN_GROUP_SIZE, @tenant.reload.min_group_size_at(@closed_at)
     end
 
     # The rule for a size raised since awaits a ruling; this asserts the larger of then and now.
