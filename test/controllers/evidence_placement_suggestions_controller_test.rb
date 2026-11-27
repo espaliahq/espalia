@@ -319,6 +319,27 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       end
     end
 
+    should "store nothing when a kept suggestion on an already-linked cell is about a forgotten person" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.add_evidence_link(@alex.id, @framework_id, @item.id,
+          capability_stable_id: @ownership.stable_id, level_ordinal: 3, linked_by_id: @alex.id, valence: "demonstrated")
+        @alex.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      sign_in @jordan_user
+      cell = "#{@ownership.stable_id}|3"
+      patch evidence_item_path(@item), params: { return_to: "hub", evidence: {
+        evidence_id: @item.id, assignment_id: @assignment.id, desired_links: [ cell ],
+        link_valences: { cell => "demonstrated" }, suggestion_ids: [ @ownership_suggestion.id ],
+        evidence_type: "peer_feedback", content: "Rewritten"
+      } }
+
+      assert_equal "this person has been forgotten", flash[:alert]
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "Alex owned the outage follow-up end to end and kept everyone informed.", @item.reload.content
+        assert @ownership_suggestion.reload.pending?
+      end
+    end
+
     should "refuse the whole save, writing nothing, when a staged cell left the role" do
       ActsAsTenant.with_tenant(@tenant) do
         FrameworkState::CapabilityRoleBinding.where(capability_id: @ownership.capability_id).delete_all
