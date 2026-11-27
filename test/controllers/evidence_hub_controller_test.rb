@@ -317,6 +317,23 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "offer the requester Cancel but no Nudge once the person asked is forgotten" do
+      request = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_request, tenant: @tenant, requester: @manager, requestee: @peer, person_id: @assessee.id,
+                                  framework_id: @framework_id, requested_at: 3.days.ago)
+      end
+      sign_in @manager_user
+      get evidence_conversation_path(@peer.id)
+      assert_select "##{request.dom_id} button", text: "Send a nudge"
+
+      forget!(@peer)
+      get evidence_conversation_path(@peer.id)
+      assert_select "##{request.dom_id}", text: /Waiting on Former member/ do
+        assert_select "a", text: "Cancel request"
+        assert_select "button", text: "Send a nudge", count: 0
+      end
+    end
+
     should "open an empty thread with someone the viewer hasn't talked to" do
       sign_in @assessee_user
       get evidence_conversation_path(@manager.id)

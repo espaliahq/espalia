@@ -295,6 +295,21 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse a nudge to a forgotten requestee, record no reminder, and still let the requester cancel" do
+      age_request!(3.days.ago)
+      ActsAsTenant.with_tenant(@tenant) do
+        @peer.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+        err = assert_raises(Operations::Base::ParameterError) do
+          Operations::Assessments::NudgeEvidenceRequest.call(context: @report_ctx, params: { request_id: @request_id })
+        end
+        assert_match(/former member/i, err.message)
+        assert_empty EvidenceRequest.find(@request_id).reminder_history
+
+        Operations::Assessments::CancelEvidenceRequest.call(context: @report_ctx, params: { request_id: @request_id })
+        assert_equal "cancelled", EvidenceRequest.find(@request_id).status
+      end
+    end
+
     should "reject nudging a resolved request" do
       age_request!(3.days.ago)
       ActsAsTenant.with_tenant(@tenant) do

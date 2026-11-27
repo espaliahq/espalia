@@ -309,6 +309,22 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     end
   end
 
+  should "offer the requester Cancel but no Nudge once the person asked is forgotten" do
+    request_id = make_request!
+    ActsAsTenant.with_tenant(@tenant) do
+      EvidenceRequest.find(request_id).update_column(:requested_at, 3.days.ago)
+      @peer.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+
+    sign_in_as(@report_user)
+    visit evidence_conversation_path(@peer.id)
+    within("##{EvidenceRequest.dom_id(request_id)}") do
+      assert_text "Waiting on Former member"
+      assert_link "Cancel request"
+      assert_no_button "Send a nudge"
+    end
+  end
+
   should "let the requester nudge a stale open request" do
     make_request!
     ActsAsTenant.with_tenant(@tenant) do
