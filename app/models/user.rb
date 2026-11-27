@@ -24,17 +24,19 @@ class User < ApplicationRecord
 
   COLOR_SCHEMES = { auto: "auto", light: "light", dark: "dark" }.freeze
 
-  # Raised by a save that changes `global_admin` without naming where the change comes from.
+  # Raised by a save that skips validation and changes `global_admin` without naming an allowed
+  # source. A validated save fails on `global_admin_source` instead.
   class GlobalAdminSourceMissing < StandardError; end
 
   # Where the next change to `global_admin` comes from: one of
-  # {GlobalAdminChange::RECORDABLE_SOURCES}. Cleared once the change is recorded.
+  # {GlobalAdminChange::RECORDABLE_SOURCES}. Cleared after every save, by a validation that finds
+  # an error, and by one run while the flag is unchanged: name it just before the save it is for.
   #
   # @return [String, nil]
   attr_accessor :global_admin_source
 
   validates :global_admin_source, inclusion: { in: GlobalAdminChange::RECORDABLE_SOURCES },
-                                  allow_nil: true, if: :will_save_change_to_global_admin?
+                                  allow_blank: true, if: :will_save_change_to_global_admin?
   validates :global_admin_source, presence: {
     message: "must name where this change to global_admin comes from: one of " \
              "#{GlobalAdminChange::RECORDABLE_SOURCES.join(', ')} (console for a change made by hand)"
@@ -45,7 +47,7 @@ class User < ApplicationRecord
   before_validation -> { self.global_admin_source = nil }, unless: :will_save_change_to_global_admin?
   after_validation -> { self.global_admin_source = nil }, if: -> { errors.any? }
 
-  # `update_column`, `update_all` and raw SQL skip these; see docs/architecture/domain-models.md.
+  # `update_column(s)`, `update_all`, `insert_all`, `upsert_all` and raw SQL skip these; see docs/architecture/domain-models.md.
   before_save :require_global_admin_source, if: :will_save_change_to_global_admin?
   after_save :record_global_admin_change
 
@@ -198,6 +200,12 @@ class User < ApplicationRecord
   # write, so the row can't fail after the flag is written and leave an outer transaction to commit it.
   def require_global_admin_source
     return if GlobalAdminChange::RECORDABLE_SOURCES.include?(global_admin_source)
+
+    if global_admin_source.present?
+      raise GlobalAdminSourceMissing,
+            "#{global_admin_source.inspect} is not a source the audit records: set global_admin_source to one of " \
+            "#{GlobalAdminChange::RECORDABLE_SOURCES.join(', ')} before saving (console for a change made by hand)."
+    end
 
     raise GlobalAdminSourceMissing,
           "Name where this change to global_admin comes from: set global_admin_source to one of " \

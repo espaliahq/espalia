@@ -105,12 +105,27 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
 
     should "not carry a source past a save that failed on another attribute, even without a reload" do
       user = create(:user)
-      assert_not user.update(global_admin_source: "seed", email: "")
+      assert_not user.update(global_admin: true, global_admin_source: "seed", email: "")
 
-      assert_not user.update(global_admin: true, email: "kept@example.com")
+      assert_not user.update(email: "kept@example.com")
       assert_includes user.errors.attribute_names, :global_admin_source
       assert_not user.reload.global_admin?
       assert_empty changes_for(user)
+    end
+
+    should "report a blank source once" do
+      user = create(:user)
+
+      assert_not user.update(global_admin: true, global_admin_source: "")
+      assert_match(/one of admin_task, seed, console/, user.errors[:global_admin_source].sole)
+    end
+
+    should "say a named source is not one the audit records when a save skips validation" do
+      user = create(:user)
+      user.assign_attributes(global_admin: true, global_admin_source: "baseline")
+
+      error = assert_raises(User::GlobalAdminSourceMissing) { user.save(validate: false) }
+      assert_match(/"baseline" is not a source the audit records/, error.message)
     end
 
     should "not carry a source named for a save that left the flag alone" do

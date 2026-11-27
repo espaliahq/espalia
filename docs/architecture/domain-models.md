@@ -105,9 +105,9 @@ A save that changes the flag must name its source first. Without one, a validate
 
 A saved row is read-only, so the model can't change, destroy or delete it. A row holds no tenant, name or email, and no foreign key, so it outlives its account. Forgetting a person unlinks their account in that tenant but keeps the global `users` row, so the audit still points at it and adds nothing of its own. Devise's cancel-account route (`DELETE /users`) deletes an account, as does a delete by hand; either way its rows keep an id that names nobody.
 
-**The limit.** `update_column`, `update_all` and raw SQL skip the callback and leave no row. Three things guard them, and nothing else does. The recorded write check fails on a write to `users` from a file `config/write_ownership.yml` doesn't name. The `Espalia/WritesMustBeDeclared` cop flags a persistence call in an undeclared file (see [direct-writes.md](direct-writes.md)). Neither can tell which column a declared file writes. A database check constraint refuses any `source` outside the list, so raw SQL that writes a row can't invent one.
+**The limit.** `update_column`, `update_columns`, `update_all`, `insert_all`, `upsert_all` and raw SQL skip the callbacks and leave no row. Three things guard them, and nothing else does. The recorded write check fails on a write to `users` from a file `config/write_ownership.yml` doesn't name. The `Espalia/WritesMustBeDeclared` cop flags a persistence call in an undeclared file (see [direct-writes.md](direct-writes.md)). Neither can tell which column a declared file writes. A database check constraint refuses any `source` outside the list, so raw SQL that writes a row can't invent one.
 
-The same holds for the audit table itself. The class-level `delete_all` and `update_all`, and raw SQL, on `global_admin_changes` skip the read-only guard. Only the write-ownership check and the cop stand in their way, as `app/models/user.rb` is the one declared writer.
+The same holds for the audit table itself. The class-level `delete`, `delete_by`, `delete_all`, `update_all`, `insert_all` and `upsert_all`, and raw SQL, on `global_admin_changes` skip the read-only guard. Only the write-ownership check and the cop stand in their way, as `app/models/user.rb` is the one declared writer.
 
 ---
 
