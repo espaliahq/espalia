@@ -296,7 +296,7 @@ hris_sync_issues:
     - app/models/hris_sync_issue.rb
 hris_unit_parent_proposals:
   owner: plain
-  reason: Each sync rebuilds them from what the HRIS reports; a to-do list, not a record. LevelMirror's retirement drop stays until https://github.com/espaliahq/espalia/issues/573 removes it.
+  reason: Each sync rebuilds them from what the HRIS reports; a to-do list, not a record.
   writers:
     - app/integrations/hris/level_mirror.rb
 feedback_drafts:
