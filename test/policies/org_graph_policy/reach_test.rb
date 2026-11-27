@@ -273,11 +273,58 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     end
   end
 
+  should "check a move between structures and a unit's retyping again under the lock against the caller as it stands" do
+    {
+      "an editor's grant removed" => [ editor, ->(tenant_user) { tenant_user.update!(org_graph_editor: false) },
+                                       ->(tenant_user) { tenant_user.update!(org_graph_editor: true) } ],
+      "an admin demoted" => [ admin, ->(tenant_user) { tenant_user.update!(role: :member) },
+                              ->(tenant_user) { tenant_user.update!(role: :admin) } ]
+    }.each do |revocation, (context, revoke, restore)|
+      cross_structure_changes.each do |change, command|
+        assert_refused_under_the_lock("#{change}, #{revocation}", command, context) { revoke.call(TenantUser.find(context.tenant_user.id)) }
+      ensure
+        as_tenant { restore.call(TenantUser.find(context.tenant_user.id)) }
+      end
+    end
+  end
+
   should "let the system change the organisation's types under the lock, with no person to read again" do
     level_id = SecureRandom.uuid_v7
     as_tenant { system.add_level(level_id, "Pod", **ON) }
 
     assert as_tenant { OrgTaxonomyLevel.exists?(id: level_id) }
+  end
+
+  should "give an owner, and the people above them, nothing through a unit once it retires" do
+    ledger, newcomer = SecureRandom.uuid_v7, as_tenant { create(:person, tenant: @tenant) }
+    later = { effective_on: "2026-03-01" }
+    as_tenant do
+      system.create_unit(ledger, "Ledger", level_id: @lane, parent_id: @org[:checkout], **ON)
+      system.add_unit_owner(ledger, @owner.id, **ON)
+      system.retire_unit(ledger, **later)
+    end
+
+    [ @owner, @manager ].each do |person|
+      assert_equal [ @org[:payments] ].to_set, reach_of(person).owned_unit_ids, "Payments, still live, stays in reach"
+      context = as(person)
+      assert_not as_tenant { policy_for(context).edit_unit?(unit(ledger)) }
+      assert_not policy_for(context).show_units?
+      handler = structure(context)
+      {
+        "a rename" => -> { handler.rename_unit(ledger, "Ledger 2", **later) },
+        "a retirement" => -> { handler.retire_unit(ledger, **later) },
+        "an owner added" => -> { handler.add_unit_owner(ledger, newcomer.id, **later) },
+        "an owner removed" => -> { handler.remove_unit_owner(ledger, @owner.id, **later) },
+        "a unit beneath it" => -> { handler.create_unit(SecureRandom.uuid_v7, "Pod", level_id: @lane, parent_id: ledger, **later) },
+        "a structure declared" => -> { handler.declare_structure(ledger, levels: [], conversion: {}, **later) },
+        "a type added to it" => -> { handler.add_level(SecureRandom.uuid_v7, "Pod", structure_unit_id: ledger, **later) },
+        "a member placed" => -> { people(context).set_membership(newcomer.id, ledger, provider: "espalia", allocation: 1, **later) }
+      }.each do |write, command|
+        assert_raises(OrgGraph::Authorization::Refused, "#{write} by #{person.id}") { command.call }
+      end
+    end
+    error = assert_raises(RuntimeError) { structure(as(admin)).move_unit(@org[:payments], ledger, **later) }
+    assert_equal "Parent unit is retired", error.message, "so no live unit sits beneath a retired one"
   end
 
   should "A person who is an owner but inactive has no reach" do
@@ -358,6 +405,16 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
       "a withdrawal changed back" => lambda { |handler|
         handler.change_withdrawal_back(engineering, levels: [], kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON)
       }
+    }
+  end
+
+  def cross_structure_changes
+    {
+      "a move between structures" => ->(handler) { handler.move_unit(@org[:payments], nil, conversion: { @lane => @org[:squad] }, **ON) },
+      "a move between structures changed back" => lambda { |handler|
+        handler.change_move_back(@org[:payments], nil, kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON)
+      },
+      "a unit retyped" => ->(handler) { handler.change_unit_kind(@org[:checkout], @lane, **ON) }
     }
   end
 

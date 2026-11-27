@@ -175,9 +175,9 @@ Pundit's `authorize` passes none.
 | Set, end or confirm a membership (`edit_membership?(member, unit)`, through `place?(member, unit)`) | Anyone in the member's manager chain, or whoever holds rights over the unit |
 | Move a membership (`move_membership?(member, from, to)`) | The manager chain, or rights over both units |
 
-A caller's **reach** (`OrgGraphPolicy::Reach`) is every unit owned by an
+A caller's **reach** (`OrgGraphPolicy::Reach`) is every live unit owned by an
 active person in their subtree, themselves included, and every unit beneath
-those. So an owner's manager, and their manager's manager, hold the owner's
+those. A retired unit keeps its owners but gives them nothing. So an owner's manager, and their manager's manager, hold the owner's
 rights. Ownership is always stated on a unit, never derived from the
 reporting line; only the rights follow the line. Rights inherit downward:
 owning Payments gives rights over every squad beneath it, even one with owners
@@ -185,9 +185,10 @@ of its own. A caller who has left reaches nothing, and an owner who has left
 drops out of their managers' reach. A manager in between who has left doesn't
 break the line. A request builds the reach once; a command builds it for
 each check, so its check under the structure's lock sees the line as it
-stands. The seven commands that change a structure itself (declare,
-withdraw, both change-backs, and adding, reparenting or removing a type) also
-read the caller again before that check. So a caller deactivated, demoted,
+stands. Every check under that lock also reads the caller again: the seven
+commands that change a structure itself (declare, withdraw, both change-backs,
+and adding, reparenting or removing a type), a move between structures and its
+change-back, and a unit's retyping. So a caller deactivated, demoted,
 unlinked from their person or stripped of the editor grant while the command
 waited is refused. A check builds one however many units it names, so a command builds at
 most three (a move between structures checks the move and each structure), and
