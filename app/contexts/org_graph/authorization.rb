@@ -166,6 +166,19 @@ module OrgGraph::Authorization
     raise Refused, yield(checked)
   end
 
+  # Runs the block's checks against the actor as the database holds it now:
+  # a check under a lock must see a grant, role or status changed while the
+  # command waited for it.
+  def with_actor_reread
+    return yield if system?
+
+    actor = @actor
+    @actor = actor.reread
+    yield
+  ensure
+    @actor = actor if actor
+  end
+
   # Names the actor in the event, unless the caller already named someone.
   def attributed(options, key)
     actor_id = @actor.person&.id unless system?

@@ -338,11 +338,12 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
-  # Checks the right again under the structure's lock, so an owner removed
-  # while the command waited for it is refused.
+  # Checks the right again under the structure's lock, so an owner removed,
+  # or a caller deactivated, demoted or stripped of a grant, while the
+  # command waited for it is refused.
   def with_structure_of(unit_id, plan, grouped: false)
     with_structure(plan, grouped:) do |structure|
-      authorize_structure_of!(unit_id)
+      with_actor_reread { authorize_structure_of!(unit_id) }
       yield structure
     end
   end

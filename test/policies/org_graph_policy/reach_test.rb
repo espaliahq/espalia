@@ -244,29 +244,38 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
 
   should "check a structure change again under the structure's lock, refusing an owner removed while it waited" do
     engineering = @org[:engineering]
-    {
-      "a new type" => ->(handler) { handler.add_level(SecureRandom.uuid_v7, "Pod", structure_unit_id: engineering, **ON) },
-      "a type's parents" => ->(handler) { handler.set_kind_parents(@lane, parent_ids: [ @group ], top: false, structure_unit_id: engineering, **ON) },
-      "a type removed" => ->(handler) { handler.remove_level(@lane, structure_unit_id: engineering, **ON) },
-      "a withdrawal" => ->(handler) { handler.withdraw_structure(engineering, **ON) },
-      "a declaration" => ->(handler) { handler.declare_structure(@org[:checkout], levels: [], conversion: {}, **ON) },
-      "a declaration changed back" => ->(handler) { handler.change_declaration_back(engineering, kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON) },
-      "a withdrawal changed back" => lambda { |handler|
-        handler.change_withdrawal_back(engineering, levels: [], kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON)
-      }
-    }.each_with_index do |(change, command), index|
+    structure_changes.each_with_index do |(change, command), index|
       as_tenant { system.add_unit_owner(engineering, @engineering_owner.id, **ON) } unless index.zero?
-      events_after_revoke = nil
-      revoke = lambda do
-        system.remove_unit_owner(engineering, @engineering_owner.id, **ON)
-        events_after_revoke = Rails.configuration.event_store.read.count
-      end
-      handler = OrgGraph::StructureCommandHandler.new(actor: as(@engineering_owner),
-                                                      repository: RevokingRepository.new(OrgGraph::Repository.new, revoke))
 
-      assert_raises(OrgGraph::Authorization::Refused, change) { StructureHandler.new(@tenant, handler).then { command.call(it) } }
-      assert_equal events_after_revoke, Rails.configuration.event_store.read.count, change
+      assert_refused_under_the_lock(change, command, as(@engineering_owner)) do
+        system.remove_unit_owner(engineering, @engineering_owner.id, **ON)
+      end
     end
+  end
+
+  should "check a structure change again under the structure's lock against the caller as it stands, not as it started" do
+    lead = as_tenant { create(:person, tenant: @tenant).tap { @engineering_owner.update!(manager: it) } }
+    {
+      "a manager of the owner deactivated" => [ as(lead), ->(id) { Person.find(id).update!(status: "inactive") },
+                                                ->(id) { Person.find(id).update!(status: "active") } ],
+      "an editor's grant removed" => [ editor, ->(_) { TenantUser.find(editor.tenant_user.id).update!(org_graph_editor: false) },
+                                       ->(_) { TenantUser.find(editor.tenant_user.id).update!(org_graph_editor: true) } ],
+      "an admin demoted" => [ admin, ->(_) { TenantUser.find(admin.tenant_user.id).update!(role: :member) },
+                              ->(_) { TenantUser.find(admin.tenant_user.id).update!(role: :admin) } ]
+    }.each do |revocation, (context, revoke, restore)|
+      structure_changes.each do |change, command|
+        as_tenant { restore.call(context.person.id) }
+
+        assert_refused_under_the_lock("#{change}, #{revocation}", command, context) { revoke.call(context.person.id) }
+      end
+    end
+  end
+
+  should "let the system change the organisation's types under the lock, with no person to read again" do
+    level_id = SecureRandom.uuid_v7
+    as_tenant { system.add_level(level_id, "Pod", **ON) }
+
+    assert as_tenant { OrgTaxonomyLevel.exists?(id: level_id) }
   end
 
   should "A person who is an owner but inactive has no reach" do
@@ -333,6 +342,36 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     def method_missing(name, ...) = repository.public_send(name, ...)
 
     def respond_to_missing?(name, include_private = false) = repository.respond_to?(name, include_private) || super
+  end
+
+  def structure_changes
+    engineering = @org[:engineering]
+    {
+      "a new type" => ->(handler) { handler.add_level(SecureRandom.uuid_v7, "Pod", structure_unit_id: engineering, **ON) },
+      "a type's parents" => ->(handler) { handler.set_kind_parents(@lane, parent_ids: [ @group ], top: false, structure_unit_id: engineering, **ON) },
+      "a type removed" => ->(handler) { handler.remove_level(@lane, structure_unit_id: engineering, **ON) },
+      "a withdrawal" => ->(handler) { handler.withdraw_structure(engineering, **ON) },
+      "a declaration" => ->(handler) { handler.declare_structure(@org[:checkout], levels: [], conversion: {}, **ON) },
+      "a declaration changed back" => ->(handler) { handler.change_declaration_back(engineering, kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON) },
+      "a withdrawal changed back" => lambda { |handler|
+        handler.change_withdrawal_back(engineering, levels: [], kinds: {}, changed_back_id: SecureRandom.uuid_v7, **ON)
+      }
+    }
+  end
+
+  # Runs the command as the caller, taking the right away between its first
+  # check and the lock, and asserts it is refused and writes nothing.
+  def assert_refused_under_the_lock(change, command, context)
+    events_after_revoke = nil
+    revoke = lambda do
+      yield
+      events_after_revoke = Rails.configuration.event_store.read.count
+    end
+    handler = OrgGraph::StructureCommandHandler.new(actor: context,
+                                                    repository: RevokingRepository.new(OrgGraph::Repository.new, revoke))
+
+    assert_raises(OrgGraph::Authorization::Refused, change) { StructureHandler.new(@tenant, handler).then { command.call(it) } }
+    assert_equal events_after_revoke, Rails.configuration.event_store.read.count, change
   end
 
   def unit(id) = as_tenant { OrgUnit.find(id) }

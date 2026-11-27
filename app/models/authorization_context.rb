@@ -39,6 +39,18 @@ class AuthorizationContext
     tenant_user&.org_graph_editor? || false
   end
 
+  # The same identity as the database holds it now. A record since deleted
+  # comes back nil, so it grants nothing.
+  #
+  # @return [AuthorizationContext]
+  def reread
+    ActsAsTenant.without_tenant do
+      self.class.new(user: user && User.find_by(id: user.id),
+                     tenant_user: tenant_user && TenantUser.find_by(id: tenant_user.id),
+                     person: person && Person.find_by(id: person.id))
+    end
+  end
+
   # Whether the membership carries the planner grant, which lets someone
   # create Team Planning plans without being an admin.
   #

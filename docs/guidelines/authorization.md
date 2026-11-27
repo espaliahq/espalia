@@ -185,7 +185,9 @@ of its own. A caller who has left reaches nothing, and an owner who has left
 drops out of their managers' reach. A manager in between who has left doesn't
 break the line. A request builds the reach once; a command builds it for
 each check, so its check under the structure's lock sees the line as it
-stands. A check builds one however many units it names, so a command builds at
+stands. For a change to a structure, that check also reads the caller again
+first: their status, role and grants, so one deactivated, demoted or stripped
+of the editor grant while the command waited is refused. A check builds one however many units it names, so a command builds at
 most three (a move between structures checks the move and each structure), and
 a screen asking which changes it may change back shares one across them all. A unit or person the Org Graph
 doesn't hold is left to admins and editors, except that the manager chain can
