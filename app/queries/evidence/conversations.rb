@@ -169,7 +169,8 @@ class Evidence::Conversations
   end
 
   # Whether a request still waits on someone. One about a forgotten person
-  # stays pending in the data (#627) but nobody can answer it.
+  # stays pending in the data until
+  # https://github.com/espaliahq/espalia/issues/627, but nobody can answer it.
   #
   # @param request [EvidenceRequest]
   # @return [Boolean]

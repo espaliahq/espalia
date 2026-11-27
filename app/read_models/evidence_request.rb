@@ -50,7 +50,8 @@ class EvidenceRequest < ApplicationRecord
   scope :pending, -> { where(status: "pending") }
   scope :resolved, -> { where.not(status: "pending") }
   # Pending and still answerable: a request about a forgotten person stays
-  # pending until #627 cancels it, but nobody can answer it.
+  # pending until https://github.com/espaliahq/espalia/issues/627 cancels it,
+  # but nobody can answer it.
   scope :open, -> { pending.where.not(person_id: Person.forgotten.select(:id)) }
   scope :reminder_candidates, -> { pending.where(requested_at: MAX_REMINDER_REQUEST_AGE.ago..MIN_REMINDER_REQUEST_AGE.ago) }
   # Stalest first: least recently touched (requested or reminded) at the top,
