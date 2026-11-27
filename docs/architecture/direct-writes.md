@@ -138,7 +138,9 @@ Each section names the writers the run saw and recommends one of two things: **k
 | `person_development_fed_at` | `OrgGraph::PersonDevelopmentCutover#feed!`, `#revert!` |
 | rows | the example and stress seeds; the evidence evaluation (rolled back) |
 
-**Recommendation.** Keep credentials, connection settings, theme, time zone and the operational stamps as plain state: they configure the tenant and their past values have no use. Move the retention period and scheduled forgetting (`org_graph_config`) to events, since they decide when people's data is deleted and an admin may need to show who changed them and when. The scoring vocabulary and comparisons are borderline; they change what people read, not what is kept, so keep them unless 2b finds a reader for their history.
+`tenant_setting_changes` records each change to `time_zone` and to `comparison_config`'s smallest group. `Tenant#record_setting_changes` writes it in the save that makes the change, and the migration that created it wrote a baseline row per tenant ([#553](https://github.com/espaliahq/espalia/issues/553); see [domain-models.md](domain-models.md#settings-past-answers-read)).
+
+**Recommendation.** Keep credentials, connection settings, theme, time zone and the operational stamps as plain state: they configure the tenant. The time zone's past values are kept in `tenant_setting_changes`, as past Org Graph reads use them. Move the retention period and scheduled forgetting (`org_graph_config`) to events, since they decide when people's data is deleted and an admin may need to show who changed them and when. The scoring vocabulary and comparisons are borderline; they change what people read, not what is kept, so keep them unless 2b finds a reader for their history.
 
 ### `people`
 

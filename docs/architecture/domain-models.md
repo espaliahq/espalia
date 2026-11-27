@@ -62,6 +62,19 @@ end
 
 A tenant's theme is Default, the Bento preset, or Custom (ADR-23). Custom stores values only for the roles it overrides; a blank role, light or dark, falls back to Default's. The roles it can set are the ones `theme/roles.css` reads a `--tenant-*` hook for (`Themeable::CUSTOM_ROLES`). The font applies to Custom only; presets carry their own. Additional JSONB columns for `sso_config`, `hris_config`, and `notification_config` are planned for V1 integrations but not yet implemented.
 
+### Settings past answers read
+
+Two settings change answers about the past, so every change to them leaves a row in `tenant_setting_changes`: the setting, its new value and when. `Tenant` writes the row in the save that changes the setting, so the two commit together. Rows are never changed; a saved row is read-only.
+
+| Setting | Read by |
+|---|---|
+| `time_zone` | `OrgFactPeriod.known_on` and `OrgGraph::ChangesBetween`, through `Tenant#end_of_day_then`: a past day ends in the zone in force at the end of it |
+| `min_group_size` | The capability attainment report of a closed cycle, through `Tenant#comparison_floor`: the size in force when the cycle closed |
+
+A time before a tenant's first row reads the first row's value, as that is what was known to be in force. The migration that created the table wrote each tenant's values that day, dated from the tenant's creation. Today's value is read only for a tenant with no rows at all. Reads of today, level comparisons among them, use today's value.
+
+**The limit.** `update_column`, `update_all` and raw SQL that change either setting skip the callback and leave no row, so past answers would read the old value for the new one's time. The recorded write check and the `Espalia/WritesMustBeDeclared` cop guard those, and nothing else does (see [direct-writes.md](direct-writes.md)).
+
 ---
 
 ## User (Devise — Global Identity)
