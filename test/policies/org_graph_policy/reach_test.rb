@@ -288,6 +288,26 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     end
   end
 
+  should "check a membership change again under the member's lock against the member and the caller as they stand" do
+    manager = as(as_tenant { create(:person, tenant: @tenant).tap { @org[:dot].update!(manager: it) } })
+    {
+      "the member's manager changed" => [ ->(_) { Person.find(@org[:dot].id).update!(manager: @skip) },
+                                          ->(id) { Person.find(@org[:dot].id).update!(manager_id: id) } ],
+      "the caller deactivated" => [ ->(id) { Person.find(id).update!(status: "inactive") },
+                                    ->(id) { Person.find(id).update!(status: "active") } ],
+      "the caller unlinked from their account" => [ ->(_) { TenantUser.find(manager.tenant_user.id).update!(person_id: nil) },
+                                                    ->(id) { TenantUser.find(manager.tenant_user.id).update!(person_id: id) } ]
+    }.each do |revocation, (revoke, restore)|
+      membership_changes.each do |change, command|
+        assert_refused_under_the_lock("#{change}, #{revocation}", command, manager, handler: OrgGraph::CommandHandler) do
+          revoke.call(manager.person.id)
+        end
+      ensure
+        as_tenant { restore.call(manager.person.id) }
+      end
+    end
+  end
+
   should "let the system change the organisation's types under the lock, with no person to read again" do
     level_id = SecureRandom.uuid_v7
     as_tenant { system.add_level(level_id, "Pod", **ON) }
@@ -380,7 +400,7 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     def respond_to_missing?(name, include_private = false) = handler.respond_to?(name, include_private) || super
   end
 
-  # Takes a right away after the handler's first check and before it takes the structure's lock.
+  # Takes a right away after the handler's first check and before it takes its lock.
   RevokingRepository = Struct.new(:repository, :revoke) do
     def with_structure(...)
       revoking { repository.with_structure(...) }
@@ -388,6 +408,10 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
 
     def lock_structure
       revoking { repository.lock_structure }
+    end
+
+    def with_person(...)
+      revoking { repository.with_person(...) }
     end
 
     def revoking
@@ -435,6 +459,17 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     }
   end
 
+  # Changes to Dot's membership of Payments, which the caller may make only as Dot's manager.
+  def membership_changes
+    dot, payments, espalia = @org[:dot].id, @org[:payments], { provider: OrgGraph::StructureAggregate::ESPALIA }
+    {
+      "a membership's terms set" => ->(handler) { handler.set_membership(dot, payments, allocation: 0.5, **espalia, **ON) },
+      "a membership ended" => ->(handler) { handler.end_membership(dot, payments, **espalia, **ON) },
+      "a membership moved" => ->(handler) { handler.move_membership(dot, payments, @product, **ON) },
+      "a membership confirmed" => ->(handler) { handler.confirm_fact(dot, "membership", unit_id: payments, **ON) }
+    }
+  end
+
   def provider_changes
     {
       "the organisation's types defined" => ->(handler) { handler.define_taxonomy([], **ON) },
@@ -461,14 +496,13 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
   #
   # A command that runs in its own transaction rolls the revocation back with
   # it, so the check is that no event appeared beyond those the revocation wrote.
-  def assert_refused_under_the_lock(change, command, context)
+  def assert_refused_under_the_lock(change, command, context, handler: OrgGraph::StructureCommandHandler)
     events_after_revoke = nil
     revoke = lambda do
       yield
       events_after_revoke = event_ids
     end
-    handler = OrgGraph::StructureCommandHandler.new(actor: context,
-                                                    repository: RevokingRepository.new(OrgGraph::Repository.new, revoke))
+    handler = handler.new(actor: context, repository: RevokingRepository.new(OrgGraph::Repository.new, revoke))
 
     assert_raises(OrgGraph::Authorization::Refused, change) { StructureHandler.new(@tenant, handler).then { command.call(it) } }
     assert_empty event_ids - events_after_revoke, change

@@ -190,7 +190,11 @@ each check, so its check under the structure's lock sees the line as it
 stands. Every structure command checks again under that lock, against the
 caller as the database holds them then. So an owner removed, or a caller
 deactivated, demoted, unlinked from their person or stripped of the editor
-grant while the command waited, is refused. A check builds one however many
+grant while the command waited, is refused. A membership command checks
+again under the member's lock, so a manager taken off the member while it
+waited is refused. That lock doesn't hold the managers further up the line or
+the unit's owners, so a change to those is read again but can still land
+between the check and the write. A check builds one however many
 units it names, so a command's check under the lock builds at most three (a
 move between structures checks the move and each structure), and
 a screen asking which changes it may change back shares one across them all. A unit or person the Org Graph
