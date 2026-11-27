@@ -62,6 +62,12 @@ class PersonDevelopment::Aggregate
     @self_ratings = {}    # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
     @aligned_ratings = {} # [stable_id, level_ordinal] => frequency
+    # Every cell CurrentAssessment holds a rating row for, cleared sides
+    # included: a migration's re-key collides on these, not on the maps.
+    @rated_cells = Set.new
+    # Whether the home alignment of the cycle the maps hold is completed,
+    # which freezes them from migration as the projection freezes the rows.
+    @ratings_frozen = false
     @evidence = {}       # evidence_id => { links: { [capability_stable_id, level_ordinal] => valence, ... }, ever_linked: Set, status: }
     @evidence_requests = {} # request_id => { status:, requestee_person_id:, capability_stable_id:, level_ordinal: }
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, evidence_id:, parent_id:, author_id:, status: }
@@ -1736,7 +1742,7 @@ class PersonDevelopment::Aggregate
     # an evidence-link thread whose capability was evolved would arrive
     # with the survivor stable_id and fail the ever-linked / parent-cell
     # checks against the pre-migration id still held here.
-    event.data[:mappings].each do |mapping|
+    (event.data[:mappings] || []).each do |mapping|
       next unless %w[same evolved].include?(mapping[:mapping_type])
       next if mapping[:to_stable_id].nil?
 
@@ -1764,6 +1770,23 @@ class PersonDevelopment::Aggregate
         alignment[:cells] = alignment[:cells].to_set { |cap, ordinal| [ cap == from ? to : cap, ordinal ] }
       end
       rekey_suggestions(from, to) unless from == to
+      rekey_ratings(from, to) unless from == to || @ratings_frozen
+    end
+  end
+
+  # Mirrors CurrentAssessment#rekey_ratings cell by cell: a rated cell moves to
+  # the survivor unless the survivor already holds a row at that level, and
+  # then it stays under the retiring id, as the merged row does.
+  def rekey_ratings(from, to)
+    @rated_cells.select { |cap, _ordinal| cap == from }.each do |cell|
+      target = [ to, cell.last ]
+      next if @rated_cells.include?(target)
+
+      @rated_cells.delete(cell)
+      @rated_cells << target
+      [ @self_ratings, @manager_ratings, @aligned_ratings ].each do |ratings|
+        ratings[target] = ratings.delete(cell) if ratings.key?(cell)
+      end
     end
   end
 
@@ -1790,6 +1813,8 @@ class PersonDevelopment::Aggregate
     @self_ratings = {}
     @manager_ratings = {}
     @aligned_ratings = {}
+    @rated_cells = Set.new
+    @ratings_frozen = false
   end
 
   on PersonDevelopment::Events::LeftAssessmentCycle do |_event|
@@ -1810,11 +1835,13 @@ class PersonDevelopment::Aggregate
       completed: false,
       cells: cell_keys ? cell_keys.to_set { |stable_id, ordinal| [ stable_id, ordinal ] } : :all
     }
+    @ratings_frozen = false if home_alignment_event?(event)
   end
 
   on PersonDevelopment::Events::FullAlignmentCompleted do |event|
     alignment = @alignments[event.data[:role_id] || @home_role_id]
     alignment[:completed] = true if alignment
+    @ratings_frozen = true if home_alignment_event?(event)
   end
 
   on PersonDevelopment::Events::AlignmentReopened do |event|
@@ -1822,6 +1849,12 @@ class PersonDevelopment::Aggregate
     # deliberately left intact so the manager resumes where they left off.
     alignment = @alignments[event.data[:role_id] || @home_role_id]
     alignment[:completed] = false if alignment
+    @ratings_frozen = false if home_alignment_event?(event)
+  end
+
+  # The projection's test for an alignment event about the home lifecycle.
+  def home_alignment_event?(event)
+    event.data[:role_id].nil? || event.data[:role_id] == @home_role_id
   end
 
   on PersonDevelopment::Events::RatingSeedSkipped do |_event|
@@ -1830,36 +1863,43 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::SelfRated do |event|
     key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @rated_cells << key
     @self_ratings[key] = event.data[:frequency]
   end
 
   on PersonDevelopment::Events::SelfRatingRevised do |event|
     key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @rated_cells << key
     @self_ratings[key] = event.data[:frequency]
   end
 
   on PersonDevelopment::Events::SelfRatingCleared do |event|
     key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @rated_cells << key
     @self_ratings.delete(key)
   end
 
   on PersonDevelopment::Events::ManagerRated do |event|
     key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @rated_cells << key
     @manager_ratings[key] = event.data[:frequency]
   end
 
   on PersonDevelopment::Events::ManagerRatingRevised do |event|
     key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @rated_cells << key
     @manager_ratings[key] = event.data[:frequency]
   end
 
   on PersonDevelopment::Events::ManagerRatingCleared do |event|
     key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @rated_cells << key
     @manager_ratings.delete(key)
   end
 
   on PersonDevelopment::Events::AssessmentAligned do |event|
     key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @rated_cells << key
     @aligned_ratings[key] = event.data[:aligned_frequency]
     # An agreement made against a role counts the cell as that role's —
     # absent on every event before per-role alignment.
