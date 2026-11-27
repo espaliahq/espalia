@@ -308,19 +308,22 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
   end
 
   should "give an owner, and the people above them, nothing through a unit once it retires" do
-    ledger, newcomer = SecureRandom.uuid_v7, as_tenant { create(:person, tenant: @tenant) }
+    ledger, newcomer, sole = SecureRandom.uuid_v7, *as_tenant { create_list(:person, 2, tenant: @tenant) }
     later = { effective_on: "2026-03-01" }
     as_tenant do
       system.create_unit(ledger, "Ledger", level_id: @lane, parent_id: @org[:checkout], **ON)
       system.add_unit_owner(ledger, @owner.id, **ON)
+      system.add_unit_owner(ledger, sole.id, **ON)
       system.retire_unit(ledger, **later)
     end
+    assert_empty reach_of(sole).owned_unit_ids
+    assert_not policy_for(as(sole)).show_units?, "an owner of nothing live has no Units view"
 
     [ @owner, @manager ].each do |person|
       assert_equal [ @org[:payments] ].to_set, reach_of(person).owned_unit_ids, "Payments, still live, stays in reach"
       context = as(person)
       assert_not as_tenant { policy_for(context).edit_unit?(unit(ledger)) }
-      assert_not policy_for(context).show_units?
+      assert policy_for(context).show_units?, "Payments keeps the Units view open"
       handler = structure(context)
       {
         "a rename" => -> { handler.rename_unit(ledger, "Ledger 2", **later) },
