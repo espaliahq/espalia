@@ -484,4 +484,30 @@ class Assessments::CommentsControllerTest < ActionDispatch::IntegrationTest
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }
   end
+
+  context "on a forgotten assessee" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @assessee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      @params = { comment: { capability_stable_id: @cap.stable_id, level_ordinal: 2, body: "Following up." } }
+    end
+
+    should "refuse the manager's comment with a message, not a 500" do
+      sign_in @manager_user
+      post assessment_comments_path(@assignment), params: @params
+
+      assert_response :redirect
+      assert_equal "Could not post comment: this person has been forgotten", flash[:alert]
+      assert_not ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.exists?(person_id: @assessee.id) }
+    end
+
+    should "give a peer with no right on the assessment the ordinary refusal" do
+      sign_in @peer_user
+      post assessment_comments_path(@assignment), params: @params
+
+      assert_response :redirect
+      assert_not_includes flash[:alert].to_s, "forgotten"
+    end
+  end
 end

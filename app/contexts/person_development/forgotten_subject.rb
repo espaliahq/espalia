@@ -8,8 +8,9 @@
 # row FOR UPDATE before it writes `forgotten_at`, so it either commits first
 # and the refusal sees it, or waits until this command's events are stored.
 # Key share doesn't block an ordinary update of the row, so a sync carries
-# on. Take it before the stream is opened, and outside any savepoint, whose
-# rollback would release it.
+# on. `PersonDevelopment::Repository#with_person_development` takes it before
+# it opens the stream, so every write holds it. Inside a caller's savepoint a
+# rollback releases it, and the retry takes it again as it reopens the stream.
 module PersonDevelopment::ForgottenSubject
   # The person was forgotten, so nothing more is written about them.
   class Forgotten < PersonDevelopment::Aggregate::CommandError
@@ -24,16 +25,5 @@ module PersonDevelopment::ForgottenSubject
   # @return [void]
   def self.refuse!(person_id)
     raise Forgotten if Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:forgotten_at)
-  end
-
-  # Runs the block in a transaction that holds the person's row first.
-  #
-  # @param person_id [String]
-  # @return [Object] the block's value
-  def self.writing(person_id)
-    Person.transaction do
-      refuse!(person_id)
-      yield
-    end
   end
 end

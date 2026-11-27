@@ -15,16 +15,10 @@ class PersonDevelopment::ForgottenSubjectLockingTest < ActiveSupport::TestCase
       @opened = []
     end
 
-    def with_person_development(person_id, framework_id)
+    def with_aggregate(_aggregate, _stream)
       @opened << @on_open.call
     end
   end
-
-  LINK_COMMANDS = {
-    add_evidence_link: { capability_stable_id: "cap", level_ordinal: 2, linked_by_id: "someone", valence: "demonstrated" },
-    set_evidence_link_valence: { capability_stable_id: "cap", level_ordinal: 2, valence: "growth_area", changed_by_id: "someone" },
-    remove_evidence_link: { capability_stable_id: "cap", level_ordinal: 2, removed_by_id: "someone" }
-  }.freeze
 
   setup do
     @tenant = create(:tenant)
@@ -37,26 +31,31 @@ class PersonDevelopment::ForgottenSubjectLockingTest < ActiveSupport::TestCase
     @tenant&.delete
   end
 
-  should "hold the person's row before each link command opens the stream" do
+  should "hold the person's row before the stream opens for writing" do
     probe = StreamProbe.new { erase_can_lock? }
-    handler = PersonDevelopment::CommandHandler.new(repository: probe)
 
-    ActsAsTenant.with_tenant(@tenant) do
-      LINK_COMMANDS.each { |command, args| handler.public_send(command, @person.id, @framework_id, "evidence", **args) }
-    end
+    ActsAsTenant.with_tenant(@tenant) { open_stream(probe) }
 
-    assert_equal [ false, false, false ], probe.opened
+    assert_equal [ false ], probe.opened
     assert erase_can_lock?
   end
 
-  should "refuse a link command that waited on an erase which then committed" do
+  should "take no lock on the row for a named exception" do
+    probe = StreamProbe.new { erase_can_lock? }
+
+    ActsAsTenant.with_tenant(@tenant) { open_stream(probe, forgotten: :framework_migration) }
+
+    assert_equal [ true ], probe.opened
+  end
+
+  should "refuse a write that waited on an erase which then committed" do
     probe = StreamProbe.new { :opened }
     erase = erase_session
     erase.exec("BEGIN")
     erase.exec_params("SELECT 1 FROM people WHERE id = $1 FOR UPDATE", [ @person.id ])
     erase.exec_params("UPDATE people SET forgotten_at = now(), name = $2, email = NULL WHERE id = $1",
                       [ @person.id, Person::FORMER_MEMBER ])
-    command = Thread.new { add_link(probe) }
+    command = Thread.new { write_behind_erase(probe) }
     wait_until_waiting(command, behind: erase)
     erase.exec("COMMIT")
 
@@ -69,12 +68,15 @@ class PersonDevelopment::ForgottenSubjectLockingTest < ActiveSupport::TestCase
 
   private
 
-  def add_link(probe)
+  def open_stream(probe, **opts)
+    repository = PersonDevelopment::Repository.new
+    repository.instance_variable_set(:@repository, probe)
+    repository.with_person_development(@person.id, @framework_id, **opts) { }
+  end
+
+  def write_behind_erase(probe)
     ActiveRecord::Base.connection_pool.with_connection do
-      ActsAsTenant.with_tenant(@tenant) do
-        PersonDevelopment::CommandHandler.new(repository: probe)
-          .add_evidence_link(@person.id, @framework_id, "evidence", **LINK_COMMANDS[:add_evidence_link])
-      end
+      ActsAsTenant.with_tenant(@tenant) { open_stream(probe) }
     end
   rescue PersonDevelopment::ForgottenSubject::Forgotten
     :refused

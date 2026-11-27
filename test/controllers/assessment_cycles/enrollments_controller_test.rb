@@ -187,14 +187,14 @@ class AssessmentCycles::EnrollmentsControllerTest < ActionDispatch::IntegrationT
         end
       end
 
-      should "withdraw the participant" do
+      should "withdraw the participant as a manual removal, whatever reason is posted" do
         sign_in @admin_user
-        delete assessment_cycle_enrollment_path(@cycle, @participant), params: { reason: "left_company" }
+        delete assessment_cycle_enrollment_path(@cycle, @participant), params: { reason: "she asked to leave" }
 
         assert_redirected_to assessment_cycle_path(@cycle)
         ActsAsTenant.with_tenant(@tenant) do
           assert_equal "withdrawn", @participant.reload.status
-          assert_equal "left_company", @participant.withdrawal_reason
+          assert_equal "manual", @participant.withdrawal_reason
         end
       end
     end
