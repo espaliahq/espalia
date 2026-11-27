@@ -363,6 +363,8 @@ class EvidenceHubController < ApplicationController
       return { self_thread: true, own_assessment_path: own && assessment_path(own) }
     end
 
+    return { closed: true } if partner.forgotten?
+
     partner_assignments = PersonFrameworkAssignment.where(person_id: partner.id).order(:created_at, :id).to_a
     # A request is about one assessment; with several, the newest is the one in use.
     ask_assignment = report_thread ? partner_assignments.last : own

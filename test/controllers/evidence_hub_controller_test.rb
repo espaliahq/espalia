@@ -39,6 +39,12 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
     Noticed::Notification.create!(type: "FeedbackReceivedNotifier::Notification", event: event, recipient: user)
   end
 
+  def forget!(person)
+    ActsAsTenant.with_tenant(@tenant) do
+      person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+  end
+
   def unplaced_item = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(@unplaced_id) }
 
   def feedback_about_manager!
@@ -260,6 +266,27 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select item
       assert_select "#{item} button", text: "Edit", count: 0
       assert_select "#{item} button", text: "Withdraw", count: 0
+    end
+
+    should "offer Give and Ask in a thread, until the other person is forgotten" do
+      sign_in @peer_user
+      get evidence_conversation_path(@assessee.id)
+      assert_select "[data-conversation-thread-target='composer'] button", text: "Give Alex feedback"
+
+      forget!(@assessee)
+      get evidence_conversation_path(@assessee.id)
+      assert_select "[data-conversation-thread-target='composer']", text: /A former member takes no new feedback/
+      assert_select "[data-conversation-thread-target='composer'] button", count: 0
+    end
+
+    should "offer a manager no Ask about a report once the report is forgotten" do
+      sign_in @manager_user
+      get evidence_report_conversation_path(@assessee.id)
+      assert_select "[data-conversation-thread-target='composer'] button", text: "Ask someone about Alex"
+
+      forget!(@assessee)
+      get evidence_report_conversation_path(@assessee.id)
+      assert_select "[data-conversation-thread-target='composer'] button", count: 0
     end
 
     should "open an empty thread with someone the viewer hasn't talked to" do
