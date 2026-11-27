@@ -197,7 +197,7 @@ class OrgGraph::StructureCommandHandler
   def change_move_back(unit_id, parent_id, **options)
     authorize_move_unit!(unit_id, parent_id)
     with_structure(OrgGraph::PlanReference.new, grouped: true) do |structure|
-      authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id))
+      with_actor_reread { authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id)) }
       unless_kinds_rebuilding { structure.change_move_back(unit_id, parent_id, **attributed(options, :moved_by_id)) }
     end
   end
@@ -206,7 +206,7 @@ class OrgGraph::StructureCommandHandler
   def change_unit_kind(unit_id, level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     with_structure(plan) do |structure|
-      authorize_unit_kind!(unit_id, structure.structure_left_by(unit_id))
+      with_actor_reread { authorize_unit_kind!(unit_id, structure.structure_left_by(unit_id)) }
       structure.change_unit_kind(unit_id, level_id, **attributed(options, :kind_changed_by_id))
     end
   end
@@ -283,7 +283,7 @@ class OrgGraph::StructureCommandHandler
 
   def move_across_structures(unit_id, parent_id, plan, options)
     with_structure(plan, grouped: true) do |structure|
-      authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id))
+      with_actor_reread { authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id)) }
       unless_kinds_rebuilding { structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
     end
   end

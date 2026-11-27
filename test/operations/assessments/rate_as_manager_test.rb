@@ -21,7 +21,7 @@ class Operations::Assessments::RateAsManagerTest < ActiveSupport::TestCase
       framework_id = SecureRandom.uuid_v7
       create(:framework_state, framework_id: framework_id, name: "Eng")
       rf = create(:framework_role_family, framework_id: framework_id, name: "Eng")
-      role  = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
+      @role = role = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
       level = create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Mid", code: "E2")
       cat = create(:framework_capability_category, framework_id: framework_id, name: "Thinking", ordinal: 1)
       @cap = create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
@@ -45,13 +45,13 @@ class Operations::Assessments::RateAsManagerTest < ActiveSupport::TestCase
     @context = AuthorizationContext.new(user: @manager_user, tenant_user: @tenant_user, person: @manager)
   end
 
-  def call_op(frequency:, comment: nil)
+  def call_op(frequency:, comment: nil, capability: @cap)
     ActsAsTenant.with_tenant(@tenant) do
       Operations::Assessments::RateAsManager.call(
         context: @context,
         params: {
           assignment_id: @report_assignment.id,
-          capability_stable_id: @cap.stable_id,
+          capability_stable_id: capability.stable_id,
           level_ordinal: 2,
           frequency: frequency,
           comment: comment
@@ -139,6 +139,40 @@ class Operations::Assessments::RateAsManagerTest < ActiveSupport::TestCase
       assert observed, "expected ManagerRated event to be published"
       assert_equal "mcp",     observed[:acting_via]
       assert_equal "app-xyz", observed[:client_application_id]
+    end
+  end
+
+  # #606: the merged row stays under the retiring id, and stays frozen.
+  context "when a publish during alignment merges a rated capability into this one" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @retiring = create(:framework_capability, category_id: @cap.category_id, name: "Old Thinking")
+        create(:framework_capability_role_binding, capability_id: @retiring.capability_id, role_id: @role.role_id, weight: 1.0)
+        create(:framework_behavioural_expectation, capability_id: @retiring.capability_id, level_ordinal: 2, description: "Reasons")
+      end
+      call_op(frequency: "some", capability: @retiring)
+      call_op(frequency: "some")
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.start_alignment(@report.id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      end
+    end
+
+    should "refuse a rating on the retiring capability before the publish and after it" do
+      assert_raises(Pundit::NotAuthorizedError) { call_op(frequency: "consistent", capability: @retiring) }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @retiring.update!(status: "archived")
+        PersonDevelopment::CommandHandler.new.migrate_framework_version(@report.id, @framework_id, 1, 2, [
+          { from_stable_id: @retiring.stable_id, to_stable_id: @cap.stable_id, mapping_type: "evolved", requires_reassessment: false }
+        ])
+      end
+
+      assert_raises(Operations::Base::ParameterError) { call_op(frequency: "consistent", capability: @retiring) }
+      assert_raises(Pundit::NotAuthorizedError) { call_op(frequency: "consistent") }
+      ActsAsTenant.with_tenant(@tenant) do
+        rows = AssessmentLevelRating.across_all_roles.where(person_id: @report.id, level_ordinal: 2)
+        assert_equal({ @retiring.stable_id => "some", @cap.stable_id => "some" }, rows.to_h { |r| [ r.capability_stable_id, r.manager_rated_frequency ] })
+      end
     end
   end
 end

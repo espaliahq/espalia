@@ -51,13 +51,13 @@ class Operations::Assessments::AlignTest < ActiveSupport::TestCase
     @context = AuthorizationContext.new(user: @manager_user, tenant_user: @tenant_user, person: @manager)
   end
 
-  def call_op(frequency:, comment: nil)
+  def call_op(frequency:, comment: nil, capability: @cap)
     ActsAsTenant.with_tenant(@tenant) do
       Operations::Assessments::Align.call(
         context: @context,
         params: {
           assignment_id: @report_assignment.id,
-          capability_stable_id: @cap.stable_id,
+          capability_stable_id: capability.stable_id,
           level_ordinal: 2,
           frequency: frequency,
           comment: comment
@@ -113,6 +113,29 @@ class Operations::Assessments::AlignTest < ActiveSupport::TestCase
             }
           )
         end
+      end
+    end
+  end
+
+  # #606: once a publish retires a capability, its cell takes no agreed value.
+  context "after a publish during alignment merges a capability into this one" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @retiring = create(:framework_capability, category_id: @cap.category_id, name: "Old Thinking", status: "archived")
+        PersonDevelopment::CommandHandler.new.migrate_framework_version(@report.id, @framework_id, 1, 2, [
+          { from_stable_id: @retiring.stable_id, to_stable_id: @cap.stable_id, mapping_type: "evolved", requires_reassessment: false }
+        ])
+      end
+    end
+
+    should "refuse an agreed value on the retiring capability and accept one on the survivor" do
+      assert_raises(Operations::Base::ParameterError) { call_op(frequency: "consistent", capability: @retiring) }
+
+      call_op(frequency: "consistent")
+
+      ActsAsTenant.with_tenant(@tenant) do
+        row = AssessmentLevelRating.across_all_roles.find_by!(person_id: @report.id, capability_stable_id: @cap.stable_id, level_ordinal: 2)
+        assert_equal "consistent", row.aligned_frequency
       end
     end
   end
