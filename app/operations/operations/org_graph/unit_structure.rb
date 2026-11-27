@@ -17,11 +17,15 @@ class Operations::OrgGraph::UnitStructure < Operations::Base
 
   parameter :unit_id, String, required: true, allow_blank: false, schema: { format: "uuid" }
 
+  # Only an admin or editor learns that a unit is unknown or retired; anyone
+  # else gets the one refusal, so an id outside their reach tells them nothing.
+  #
   # @raise [Pundit::NotAuthorizedError] unless the caller may change the unit's structure
   def policy_check
     authorize :org_graph, :show_units?
     policy = Pundit.policy!(context, :org_graph)
-    return if policy.edit_structure_of?(unit)
+    return if policy.edit_structure?
+    return if policy.edit_structure_of?(OrgUnit.live.find_by(id: params[:unit_id].to_s.downcase))
 
     raise Pundit::NotAuthorizedError, query: :edit_structure_of?, record: :org_graph, policy:
   end

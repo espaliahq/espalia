@@ -26,6 +26,13 @@ class Operations::OrgGraph::UnitStructureTest < ActiveSupport::TestCase
 
   def context(tenant_user) = AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: tenant_user.person)
 
+  def retire_payments
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new(actor: context(@admin)).withdraw_structure(@payments, conversion: {}, effective_on: Date.current)
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).retire_unit(@payments, effective_on: Date.current)
+    end
+  end
+
   def call(tenant_user, unit_id)
     ActsAsTenant.with_tenant(@tenant) do
       Operations::OrgGraph::UnitStructure.call(context: context(tenant_user), params: { unit_id: })
@@ -51,9 +58,26 @@ class Operations::OrgGraph::UnitStructureTest < ActiveSupport::TestCase
       assert_raises(Pundit::NotAuthorizedError) { call(@member, @payments) }
     end
 
-    should "refuse a unit the Org Graph doesn't hold" do
+    should "name an unknown or retired unit to an admin" do
       error = assert_raises(Operations::Base::ParameterError) { call(@admin, SecureRandom.uuid_v7) }
       assert_includes error.message, "names no unit"
+
+      retire_payments
+      assert_equal "Payments is retired", assert_raises(Operations::Base::ParameterError) { call(@admin, @payments) }.message
+    end
+
+    should "give an owner the same refusal for a unit out of reach, an unknown one and their own once retired" do
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        ledger = SecureRandom.uuid_v7
+        structure.create_unit(ledger, "Ledger", level_id: OrgUnit.find(@billing).level_id, effective_on: "2026-01-01")
+        structure.add_unit_owner(ledger, @owner.person.id, effective_on: "2026-01-01")
+      end
+      retire_payments
+      refusals = [ @billing, SecureRandom.uuid_v7, @payments ].map do |unit_id|
+        assert_raises(Pundit::NotAuthorizedError) { call(@owner, unit_id) }.message
+      end
+      assert_equal 1, refusals.uniq.size
     end
   end
 end
