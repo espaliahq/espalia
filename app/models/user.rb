@@ -24,6 +24,18 @@ class User < ApplicationRecord
 
   COLOR_SCHEMES = { auto: "auto", light: "light", dark: "dark" }.freeze
 
+  # Raised by a save that changes `global_admin` without naming where the change comes from.
+  class GlobalAdminSourceMissing < StandardError; end
+
+  # Where the next change to `global_admin` comes from: one of
+  # {GlobalAdminChange::RECORDABLE_SOURCES}. Cleared once the change is recorded.
+  #
+  # @return [String, nil]
+  attr_accessor :global_admin_source
+
+  # `update_column`, `update_all` and raw SQL skip this; see docs/architecture/domain-models.md.
+  after_save :record_global_admin_change, if: :saved_change_to_global_admin?
+
   # Auto follows the operating system. Personal and cross-tenant: a tenant
   # can't lock it.
   enum :color_scheme, COLOR_SCHEMES, default: :auto, prefix: true, validate: true
@@ -159,4 +171,17 @@ class User < ApplicationRecord
   end
 
   private_class_method :google_email_verified?, :provision_from_person!, :link_provisioned
+
+  private
+
+  def record_global_admin_change
+    if global_admin_source.blank?
+      raise GlobalAdminSourceMissing,
+            "Name where this change to global_admin comes from: set global_admin_source to one of " \
+            "#{GlobalAdminChange::RECORDABLE_SOURCES.join(', ')} before saving (console for a change made by hand)."
+    end
+
+    GlobalAdminChange.create!(user_id: id, global_admin:, source: global_admin_source)
+    self.global_admin_source = nil
+  end
 end

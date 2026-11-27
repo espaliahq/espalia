@@ -203,6 +203,13 @@ tenant_users:
     - app/notifiers/slack_delivery_method.rb
     - lib/tasks/example_seed.rb
     - lib/tasks/stress_seed.rb
+global_admin_changes:
+  owner: plain
+  reason: >-
+    The audit of users.global_admin, which stays plain state as it is global and no tenant stream fits
+    (https://github.com/espaliahq/espalia/issues/539). User records a row in the save that changes the flag.
+  writers:
+    - app/models/user.rb
 users:
   owner: plain
   reason: Devise's sign-in identity, shared across tenants.
