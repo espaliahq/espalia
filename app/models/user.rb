@@ -49,6 +49,7 @@ class User < ApplicationRecord
 
   # `update_column(s)`, `update_all`, `insert_all`, `upsert_all` and raw SQL skip these; see docs/architecture/domain-models.md.
   before_save :require_global_admin_source, if: :will_save_change_to_global_admin?
+  before_save :lock_global_admin, if: -> { persisted? && will_save_change_to_global_admin? }
   after_save :record_global_admin_change
 
   # Auto follows the operating system. Personal and cross-tenant: a tenant
@@ -212,11 +213,20 @@ class User < ApplicationRecord
           "#{GlobalAdminChange::RECORDABLE_SOURCES.join(', ')} before saving (console for a change made by hand)."
   end
 
-  # Clears the source after every save, so a source named for a save that left the flag alone
-  # can't be recorded against a later change.
+  # A copy loaded before another save changed the flag still sees its own change. Locking the row
+  # until commit makes a second writer wait and read the flag the first one wrote.
+  def lock_global_admin
+    @global_admin_stored = self.class.where(id:).lock.pick(:global_admin)
+  end
+
+  # Records only a change to the stored flag. Clears the source after every save, so a source
+  # named for a save that left the flag alone can't be recorded against a later change.
   def record_global_admin_change
-    GlobalAdminChange.create!(user_id: id, global_admin:, source: global_admin_source) if saved_change_to_global_admin?
+    return unless saved_change_to_global_admin? && @global_admin_stored != global_admin
+
+    GlobalAdminChange.create!(user_id: id, global_admin:, source: global_admin_source)
   ensure
+    @global_admin_stored = nil
     self.global_admin_source = nil
   end
 end

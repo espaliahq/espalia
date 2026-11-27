@@ -30,6 +30,59 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       end
     end
 
+    should "record one change when a stale copy saves the same flag" do
+      user = create(:user)
+      stale = User.find(user.id)
+
+      user.update!(global_admin: true, global_admin_source: "console")
+      stale.update!(global_admin: true, global_admin_source: "console")
+
+      assert_equal [ [ true, "console" ] ], changes_for(user).pluck(:global_admin, :source)
+    end
+
+    should "record one change when a stale copy saves the same demotion" do
+      user = create(:user, global_admin: true)
+      stale = User.find(user.id)
+
+      user.update!(global_admin: false, global_admin_source: "console")
+      stale.update!(global_admin: false, global_admin_source: "console")
+
+      assert_equal [ [ true, "seed" ], [ false, "console" ] ], changes_for(user).pluck(:global_admin, :source)
+    end
+
+    should "still refuse a stale copy's change that names no source" do
+      user = create(:user)
+      stale = User.find(user.id)
+      user.update!(global_admin: true, global_admin_source: "console")
+
+      assert_raises(ActiveRecord::RecordInvalid) { stale.update!(global_admin: true) }
+      stale.global_admin = true
+      assert_raises(User::GlobalAdminSourceMissing) { stale.save(validate: false) }
+      assert_equal 1, changes_for(user).count
+    end
+
+    should "record a stale copy's save that does change the stored flag" do
+      user = create(:user)
+      stale = User.find(user.id)
+
+      user.update!(global_admin: true, global_admin_source: "console")
+      stale.reload
+      stale.update!(global_admin: false, global_admin_source: "console")
+
+      assert_equal [ [ true, "console" ], [ false, "console" ] ], changes_for(user).pluck(:global_admin, :source)
+    end
+
+    should "lock the account's row while it changes the flag" do
+      user = create(:user)
+      user.assign_attributes(global_admin: true, global_admin_source: "console")
+
+      queries = []
+      callback = ->(*, payload) { queries << payload[:sql] }
+      ActiveSupport::Notifications.subscribed(callback, "sql.active_record") { user.save! }
+
+      assert queries.any? { it.match?(/FROM "users".*FOR UPDATE/m) }
+    end
+
     should "record nothing for an account created without the flag" do
       assert_no_difference -> { GlobalAdminChange.count } do
         create(:user)
