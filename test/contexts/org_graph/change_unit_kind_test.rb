@@ -209,7 +209,7 @@ class OrgGraph::ChangeUnitKindTest < ActiveSupport::TestCase
       error = assert_raises(OrgGraph::Authorization::Refused) do
         structure(owner).change_unit_kind(@payments, @crew, effective_on: "2026-12-10")
       end
-      assert_equal "Only a tenant admin or an Org Graph editor can change a unit's type", error.message
+      assert_equal "Only a tenant admin or an Org Graph editor can change Payments's type", error.message
       assert OrgGraphPolicy.new(owner, :org_graph).move_unit?(OrgUnit.find(@payments), OrgUnit.find(@commerce))
     end
 

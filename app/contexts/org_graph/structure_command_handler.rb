@@ -47,7 +47,7 @@ class OrgGraph::StructureCommandHandler
   def declare_structure(unit_id, **options)
     authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.declare_structure(unit_id, **attributed(options, :defined_by_id)) }
+      with_structure_of(unit_id, OrgGraph::PlanReference.new, grouped: true) { |structure| structure.declare_structure(unit_id, **attributed(options, :defined_by_id)) }
     end
   end
 
@@ -56,7 +56,7 @@ class OrgGraph::StructureCommandHandler
   def withdraw_structure(unit_id, **options)
     authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.withdraw_structure(unit_id, **attributed(options, :withdrawn_by_id)) }
+      with_structure_of(unit_id, OrgGraph::PlanReference.new, grouped: true) { |structure| structure.withdraw_structure(unit_id, **attributed(options, :withdrawn_by_id)) }
     end
   end
 
@@ -65,7 +65,7 @@ class OrgGraph::StructureCommandHandler
   def change_declaration_back(unit_id, **options)
     authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.change_declaration_back(unit_id, **attributed(options, :withdrawn_by_id)) }
+      with_structure_of(unit_id, OrgGraph::PlanReference.new, grouped: true) { |structure| structure.change_declaration_back(unit_id, **attributed(options, :withdrawn_by_id)) }
     end
   end
 
@@ -74,7 +74,7 @@ class OrgGraph::StructureCommandHandler
   def change_withdrawal_back(unit_id, **options)
     authorize_structure_of!(unit_id)
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new, grouped: true) { |structure| structure.change_withdrawal_back(unit_id, **attributed(options, :defined_by_id)) }
+      with_structure_of(unit_id, OrgGraph::PlanReference.new, grouped: true) { |structure| structure.change_withdrawal_back(unit_id, **attributed(options, :defined_by_id)) }
     end
   end
 
@@ -83,7 +83,7 @@ class OrgGraph::StructureCommandHandler
   def add_level(level_id, name, **options)
     authorize_structure_of!(options[:structure_unit_id])
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new) { |structure| structure.add_level(level_id, name, **attributed(options, :defined_by_id)) }
+      with_structure_of(options[:structure_unit_id], OrgGraph::PlanReference.new) { |structure| structure.add_level(level_id, name, **attributed(options, :defined_by_id)) }
     end
   end
 
@@ -92,7 +92,7 @@ class OrgGraph::StructureCommandHandler
   def set_kind_parents(level_id, **options)
     authorize_structure_of!(options[:structure_unit_id])
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new) { |structure| structure.set_kind_parents(level_id, **attributed(options, :defined_by_id)) }
+      with_structure_of(options[:structure_unit_id], OrgGraph::PlanReference.new) { |structure| structure.set_kind_parents(level_id, **attributed(options, :defined_by_id)) }
     end
   end
 
@@ -102,7 +102,7 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_structure_of!(options[:structure_unit_id])
     unless_kinds_rebuilding do
-      with_structure(plan) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
+      with_structure_of(options[:structure_unit_id], plan) { |structure| structure.remove_level(level_id, **attributed(options, :defined_by_id)) }
     end
   end
 
@@ -197,7 +197,7 @@ class OrgGraph::StructureCommandHandler
   def change_move_back(unit_id, parent_id, **options)
     authorize_move_unit!(unit_id, parent_id)
     with_structure(OrgGraph::PlanReference.new, grouped: true) do |structure|
-      authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id))
+      with_actor_reread { authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id)) }
       unless_kinds_rebuilding { structure.change_move_back(unit_id, parent_id, **attributed(options, :moved_by_id)) }
     end
   end
@@ -205,8 +205,10 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#change_unit_kind
   def change_unit_kind(unit_id, level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
-    authorize_unit_kind!
-    with_structure(plan) { |structure| structure.change_unit_kind(unit_id, level_id, **attributed(options, :kind_changed_by_id)) }
+    with_structure(plan) do |structure|
+      with_actor_reread { authorize_unit_kind!(unit_id, structure.structure_left_by(unit_id)) }
+      structure.change_unit_kind(unit_id, level_id, **attributed(options, :kind_changed_by_id))
+    end
   end
 
   # Runs in one transaction with {OrgGraph::SyncHandlers::RetiredUnitMemberships},
@@ -281,7 +283,7 @@ class OrgGraph::StructureCommandHandler
 
   def move_across_structures(unit_id, parent_id, plan, options)
     with_structure(plan, grouped: true) do |structure|
-      authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id))
+      with_actor_reread { authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id)) }
       unless_kinds_rebuilding { structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
     end
   end
@@ -333,6 +335,16 @@ class OrgGraph::StructureCommandHandler
       on = OrgGraph::SyncHandlers::RetiredUnitMemberships.leaving_on(membership, on: effective_on, repository: @repository)
       people.move_membership(membership.person_id, membership.unit_id, successor_id,
                              effective_on: on, moved_by_id: moved_by_id, **plan.to_h)
+    end
+  end
+
+  # Checks the right again under the structure's lock, against the caller as
+  # the database holds them now. So an owner removed while the command waited
+  # is refused, and so is a caller deactivated, demoted or stripped of a grant.
+  def with_structure_of(unit_id, plan, grouped: false)
+    with_structure(plan, grouped:) do |structure|
+      with_actor_reread { authorize_structure_of!(unit_id) }
+      yield structure
     end
   end
 
