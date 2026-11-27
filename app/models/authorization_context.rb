@@ -40,14 +40,17 @@ class AuthorizationContext
   end
 
   # The same identity as the database holds it now. A record since deleted
-  # comes back nil, so it grants nothing.
+  # comes back nil, and so does a person the account no longer links to, so
+  # neither grants anything.
   #
   # @return [AuthorizationContext]
   def reread
     ActsAsTenant.without_tenant do
+      fresh_tenant_user = tenant_user && TenantUser.find_by(id: tenant_user.id)
+      still_linked = person && (tenant_user.nil? || fresh_tenant_user&.person_id == person.id)
       self.class.new(user: user && User.find_by(id: user.id),
-                     tenant_user: tenant_user && TenantUser.find_by(id: tenant_user.id),
-                     person: person && Person.find_by(id: person.id))
+                     tenant_user: fresh_tenant_user,
+                     person: still_linked ? Person.find_by(id: person.id) : nil)
     end
   end
 

@@ -254,19 +254,21 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
   end
 
   should "check a structure change again under the structure's lock against the caller as it stands, not as it started" do
-    lead = as_tenant { create(:person, tenant: @tenant).tap { @engineering_owner.update!(manager: it) } }
+    lead = as(as_tenant { create(:person, tenant: @tenant).tap { @engineering_owner.update!(manager: it) } })
     {
-      "a manager of the owner deactivated" => [ as(lead), ->(id) { Person.find(id).update!(status: "inactive") },
+      "a manager of the owner deactivated" => [ lead, ->(id) { Person.find(id).update!(status: "inactive") },
                                                 ->(id) { Person.find(id).update!(status: "active") } ],
+      "a manager of the owner unlinked from their account" => [ lead, ->(_) { TenantUser.find(lead.tenant_user.id).update!(person_id: nil) },
+                                                                ->(id) { TenantUser.find(lead.tenant_user.id).update!(person_id: id) } ],
       "an editor's grant removed" => [ editor, ->(_) { TenantUser.find(editor.tenant_user.id).update!(org_graph_editor: false) },
                                        ->(_) { TenantUser.find(editor.tenant_user.id).update!(org_graph_editor: true) } ],
       "an admin demoted" => [ admin, ->(_) { TenantUser.find(admin.tenant_user.id).update!(role: :member) },
                               ->(_) { TenantUser.find(admin.tenant_user.id).update!(role: :admin) } ]
     }.each do |revocation, (context, revoke, restore)|
       structure_changes.each do |change, command|
-        as_tenant { restore.call(context.person.id) }
-
         assert_refused_under_the_lock("#{change}, #{revocation}", command, context) { revoke.call(context.person.id) }
+      ensure
+        as_tenant { restore.call(context.person.id) }
       end
     end
   end

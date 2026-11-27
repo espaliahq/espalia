@@ -338,9 +338,9 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
-  # Checks the right again under the structure's lock, so an owner removed,
-  # or a caller deactivated, demoted or stripped of a grant, while the
-  # command waited for it is refused.
+  # Checks the right again under the structure's lock, against the caller as
+  # the database holds them now. So an owner removed while the command waited
+  # is refused, and so is a caller deactivated, demoted or stripped of a grant.
   def with_structure_of(unit_id, plan, grouped: false)
     with_structure(plan, grouped:) do |structure|
       with_actor_reread { authorize_structure_of!(unit_id) }
