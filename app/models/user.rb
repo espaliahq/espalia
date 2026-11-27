@@ -35,6 +35,10 @@ class User < ApplicationRecord
 
   validates :global_admin_source, inclusion: { in: GlobalAdminChange::RECORDABLE_SOURCES },
                                   allow_nil: true, if: :will_save_change_to_global_admin?
+  validates :global_admin_source, presence: {
+    message: "must name where this change to global_admin comes from: one of " \
+             "#{GlobalAdminChange::RECORDABLE_SOURCES.join(', ')} (console for a change made by hand)"
+  }, if: :will_save_change_to_global_admin?
 
   # `update_column`, `update_all` and raw SQL skip these; see docs/architecture/domain-models.md.
   before_save :require_global_admin_source, if: :will_save_change_to_global_admin?
@@ -185,7 +189,8 @@ class User < ApplicationRecord
 
   private
 
-  # Raises before the write, so a caller that rescues it inside its own transaction can't commit the flag unrecorded.
+  # For a save that skips validation. Raises before the write, so a caller that rescues it inside its own
+  # transaction can't commit the flag unrecorded.
   def require_global_admin_source
     return if global_admin_source.present?
 

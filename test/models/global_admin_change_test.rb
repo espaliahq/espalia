@@ -41,9 +41,9 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
     should "refuse, say how to name one, and leave the flag and the audit as they were" do
       user = create(:user)
 
-      error = assert_raises(User::GlobalAdminSourceMissing) { user.update!(global_admin: true) }
+      assert_not user.update(global_admin: true)
 
-      assert_match(/set global_admin_source to one of admin_task, seed, console/, error.message)
+      assert_match(/one of admin_task, seed, console/, user.errors[:global_admin_source].sole)
       assert_not user.reload.global_admin?
       assert_empty changes_for(user)
     end
@@ -53,8 +53,21 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
 
       User.transaction do
         user.update!(global_admin: true)
-      rescue User::GlobalAdminSourceMissing
+      rescue ActiveRecord::RecordInvalid
         nil
+      end
+
+      assert_not user.reload.global_admin?
+      assert_empty changes_for(user)
+    end
+
+    should "refuse a save that skips validation before writing, even when the caller rescues it" do
+      user = create(:user)
+      user.global_admin = true
+
+      User.transaction do
+        error = assert_raises(User::GlobalAdminSourceMissing) { user.save(validate: false) }
+        assert_match(/set global_admin_source to one of admin_task, seed, console/, error.message)
       end
 
       assert_not user.reload.global_admin?
@@ -65,7 +78,7 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       user = create(:user)
       user.update!(global_admin: true, global_admin_source: "console")
 
-      assert_raises(User::GlobalAdminSourceMissing) { user.update!(global_admin: false) }
+      assert_raises(ActiveRecord::RecordInvalid) { user.update!(global_admin: false) }
       assert user.reload.global_admin?
     end
 
@@ -74,7 +87,7 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       assert_not user.update(global_admin: true, global_admin_source: "seed", email: "")
 
       user.reload
-      assert_raises(User::GlobalAdminSourceMissing) { user.update!(global_admin: true) }
+      assert_raises(ActiveRecord::RecordInvalid) { user.update!(global_admin: true) }
       assert_not user.reload.global_admin?
     end
 
@@ -82,7 +95,7 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       user = create(:user, global_admin: true)
       user.update!(global_admin: true, global_admin_source: "seed")
 
-      assert_raises(User::GlobalAdminSourceMissing) { user.update!(global_admin: false) }
+      assert_raises(ActiveRecord::RecordInvalid) { user.update!(global_admin: false) }
       assert user.reload.global_admin?
     end
   end
