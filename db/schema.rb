@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_27_055717) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -675,6 +675,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_130152) do
     t.index ["parent_id"], name: "idx_fw_suggestion_comments_parent", where: "(parent_id IS NOT NULL)"
     t.index ["suggestion_id", "status"], name: "idx_fw_suggestion_comments_thread"
     t.index ["tenant_id"], name: "index_framework_suggestion_comments_on_tenant_id"
+  end
+
+  create_table "global_admin_changes", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.boolean "global_admin", null: false
+    t.string "source", null: false
+    t.datetime "created_at", null: false
+    t.index ["user_id"], name: "index_global_admin_changes_on_user_id"
+    t.check_constraint "source::text = ANY (ARRAY['admin_task'::character varying, 'seed'::character varying, 'console'::character varying, 'baseline'::character varying]::text[])", name: "global_admin_changes_source"
   end
 
   create_table "hris_sync_issues", id: :uuid, default: nil, force: :cascade do |t|

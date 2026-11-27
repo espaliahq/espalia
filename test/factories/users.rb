@@ -6,5 +6,6 @@ FactoryBot.define do
     password { "password123" }
     password_confirmation { "password123" }
     global_admin { false }
+    global_admin_source { "seed" if global_admin }
   end
 end
