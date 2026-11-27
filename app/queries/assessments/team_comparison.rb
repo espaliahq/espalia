@@ -29,10 +29,10 @@ class Assessments::TeamComparison
     return refused(:off) unless config.enabled
     return refused(:no_snapshot) unless taken_on
 
-    short = @level_counts.keys.select { |level| groups[level].nil? || groups[level].group_size < config.min_group_size }.sort
+    short = @level_counts.keys.select { |level| groups[level].nil? || groups[level].group_size < config.floor }.sort
     return refused(:too_few, short_ordinals: short) if short.any? || @level_counts.empty?
 
-    Result.new(reason: nil, taken_on:, min_group_size: config.min_group_size,
+    Result.new(reason: nil, taken_on:, min_group_size: config.floor,
                group_size: @level_counts.keys.sum { |level| groups[level].group_size }, short_ordinals: [],
                medians: weighted_medians)
   end
@@ -42,7 +42,7 @@ class Assessments::TeamComparison
   def config = @tenant.comparison_config
 
   def refused(reason, short_ordinals: [])
-    Result.new(reason:, taken_on:, min_group_size: config.min_group_size, group_size: nil,
+    Result.new(reason:, taken_on:, min_group_size: config.floor, group_size: nil,
                short_ordinals:, medians: {})
   end
 
@@ -70,7 +70,7 @@ class Assessments::TeamComparison
   # A capability some level withholds, or its snapshot predates, is weighted over the levels that have it.
   def weighted_medians
     pairs = @level_counts.flat_map do |level, count|
-      groups[level].capability_medians_shown(config.min_group_size).map { |stable_id, median| [ stable_id, median, count ] }
+      groups[level].capability_medians_shown(config.floor).map { |stable_id, median| [ stable_id, median, count ] }
     end
     pairs.group_by(&:first).transform_values do |rows|
       rows.sum { |_, median, count| median * count } / rows.sum(&:last).to_f
