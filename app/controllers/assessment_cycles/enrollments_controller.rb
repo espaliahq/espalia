@@ -2,8 +2,8 @@
 
 # Manages per-cycle person enrollment / unenrollment.
 #
-# POST creates an enrollment; DELETE withdraws a participant with an optional
-# reason string (defaults to "manual"). Both actions dispatch through
+# POST creates an enrollment; DELETE withdraws a participant with the reason
+# "manual", never one the request supplies. Both actions dispatch through
 # {AssessmentCycles::CommandHandler}, which publishes events that cascade
 # through {AssessmentCycles::SyncHandlers::PersonEnrollmentSync} to the
 # PersonDev stream synchronously.
@@ -69,13 +69,12 @@ class AssessmentCycles::EnrollmentsController < ApplicationController
     authorize @cycle, :unenroll?
 
     enrollment = @cycle.enrollments.find(params.expect(:id))
-    reason = params[:reason].presence || "manual"
 
     ActiveRecord::Base.transaction do
       AssessmentCycles::CommandHandler.new.unenroll(
         @cycle.cycle_id,
         enrollment.person_id,
-        reason,
+        "manual",
         unenrolled_by: current_person&.id
       )
     end

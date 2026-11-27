@@ -158,23 +158,28 @@ class AssessmentCycles::Aggregate
     }))
   end
 
+  # The reasons an unenroll can give. The reason reaches the person's own
+  # stream as `LeftAssessmentCycle`, which is written even after they are
+  # forgotten, so it is never free text. Checked on the command only: an
+  # older event with another reason still loads.
+  UNENROLL_REASONS = %w[manual left_company].freeze
+
   # Removes a person from the cycle.
   #
-  # The reason is free text from the unenrolling admin, EXCEPT the reserved
-  # "cycle_closed" — that would masquerade a person-scoped removal as a cycle
-  # conclusion downstream, so it is rejected here at the entry boundary
-  # (before any event is applied) with a message fit for the admin's flash.
+  # "cycle_closed" is refused by name: it would pass a person-scoped removal
+  # off as a cycle conclusion downstream.
   #
   # @param person_id [String] UUID of the person to unenroll
-  # @param reason [String] why the person is being removed
+  # @param reason [String] one of {UNENROLL_REASONS}
   # @param unenrolled_by [String, nil] optional person_id / tenant_user_id
   # @raise [RuntimeError] if cycle not open, person not enrolled, or the
-  #   reason is the reserved "cycle_closed"
+  #   reason is not one of {UNENROLL_REASONS}
   def unenroll(person_id, reason, unenrolled_by: nil)
     ensure_open!
     if reason.to_s.strip == "cycle_closed"
       raise "\"cycle_closed\" is a reserved reason — describe why this person is being removed instead"
     end
+    raise ArgumentError, "unknown unenroll reason #{reason.inspect}" unless UNENROLL_REASONS.include?(reason)
     raise "Person not enrolled" unless @enrolled_person_ids.include?(person_id)
 
     apply(AssessmentCycles::Events::PersonUnenrolled.new(data: {
