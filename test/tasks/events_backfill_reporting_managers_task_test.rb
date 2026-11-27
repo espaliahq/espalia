@@ -28,10 +28,52 @@ class EventsBackfillReportingManagersTaskTest < ActiveSupport::TestCase
     assert_kind_of PersonDevelopment::Events::PersonAssignedToFramework, last_event(@forgotten)
   end
 
+  context "a person forgotten after the query ran" do
+    setup do
+      @later = assign(create_person(@tenant))
+      @other_tenant = create(:tenant)
+      @elsewhere = ActsAsTenant.with_tenant(@other_tenant) { assign(create_person(@other_tenant)) }
+    end
+
+    should "be skipped and counted, while every later assignment in every tenant is still written" do
+      output, = Person.stub(:forgotten, Person.none) { capture_io { run_backfill } }
+
+      assert_kind_of PersonDevelopment::Events::PersonAssignedToFramework, last_event(@forgotten)
+      assert_kind_of PersonDevelopment::Events::ReportingManagerRecorded, last_event(@later)
+      assert_kind_of PersonDevelopment::Events::ReportingManagerRecorded, last_event(@elsewhere, tenant: @other_tenant)
+      assert_includes output, "Skipped 1 assignment(s)"
+      assert_no_match(/#{@forgotten.id}/, output)
+    end
+
+    should "still stop the task on any other error" do
+      failing = PersonDevelopment::CommandHandler.new
+      failing.define_singleton_method(:record_reporting_manager) { |*, **| raise "store down" }
+
+      error = PersonDevelopment::CommandHandler.stub(:new, failing) do
+        assert_raises(RuntimeError) { capture_io { run_backfill } }
+      end
+
+      assert_equal "store down", error.message
+    end
+  end
+
   private
 
-  def last_event(person)
-    stream = EventStreamNaming.person_development_stream(person.id, @framework_id, tenant: @tenant)
+  def run_backfill(*args) = Rake::Task["events:backfill_reporting_managers"].invoke(*args)
+
+  def create_person(tenant)
+    ActsAsTenant.with_tenant(tenant) { create(:person, tenant: tenant, manager: create(:person, tenant: tenant)) }
+  end
+
+  def assign(person)
+    ActsAsTenant.with_tenant(person.tenant) do
+      PersonDevelopment::CommandHandler.new.assign_to_framework(person.id, @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7)
+    end
+    person
+  end
+
+  def last_event(person, tenant: @tenant)
+    stream = EventStreamNaming.person_development_stream(person.id, @framework_id, tenant: tenant)
     Rails.configuration.event_store.read.stream(stream).last
   end
 end
