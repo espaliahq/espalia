@@ -115,7 +115,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
     should "refuse a unit's structure to someone with no rights over the unit" do
       error = assert_raises(Pundit::NotAuthorizedError) { declare(as: @member) }
 
-      assert_equal "You can change Checkout's structure if you own Checkout or a unit above it, report to someone who does, or are an Org Graph editor", error.message
+      assert_equal "You can change Checkout's structure if you own Checkout or a unit above it, have such an owner below you in your reporting line, or are an Org Graph editor", error.message
       assert_equal @org[:squad], level_of(:payments)
     end
   end
@@ -165,7 +165,7 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       error = assert_raises(Pundit::NotAuthorizedError) do
         call(Operations::OrgGraph::AddLevel, as: @member, name: "Pod", structure_unit_id: @org[:checkout])
       end
-      assert_equal "You can change Checkout's structure if you own Checkout or a unit above it, report to someone who does, or are an Org Graph editor", error.message
+      assert_equal "You can change Checkout's structure if you own Checkout or a unit above it, have such an owner below you in your reporting line, or are an Org Graph editor", error.message
     end
 
     should "withdraw it, converting the units beneath it back" do

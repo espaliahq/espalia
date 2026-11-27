@@ -27,7 +27,7 @@ module OrgGraph::Authorization
     return "Only a tenant admin or an Org Graph editor can change the organisation's structure" unless unit
 
     "You can change #{unit.name}'s structure if you own #{unit.name} or a unit above it, " \
-      "report to someone who does, or are an Org Graph editor"
+      "have such an owner below you in your reporting line, or are an Org Graph editor"
   end
 
   private
@@ -80,7 +80,7 @@ module OrgGraph::Authorization
       next "Only a tenant admin or an Org Graph editor can change #{name}'s type" unless structure_unit_id
 
       "You can change #{name}'s type if you own the unit whose structure it sits in or a unit above that, " \
-        "report to someone who does, or are an Org Graph editor"
+        "have such an owner below you in your reporting line, or are an Org Graph editor"
     end
   end
 

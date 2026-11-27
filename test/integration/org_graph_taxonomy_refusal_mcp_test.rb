@@ -35,7 +35,7 @@ class OrgGraphTaxonomyRefusalMcpTest < ActionDispatch::IntegrationTest
                      "Only a tenant admin or an Org Graph editor can change the organisation's structure"
       assert_refused ask_over_mcp(tool, arguments.merge(structure_unit_id: @payments)),
                      "You can change Payments's structure if you own Payments or a unit above it, " \
-                     "report to someone who does, or are an Org Graph editor"
+                     "have such an owner below you in your reporting line, or are an Org Graph editor"
     end
     assert_equal %w[Squad], ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.top_structure.pluck(:name) }
     assert_empty ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.in_structure(@payments).to_a }

@@ -157,7 +157,7 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
       end
 
       assert_equal "You can change Engineering's structure if you own Engineering or a unit above it, " \
-                   "report to someone who does, or are an Org Graph editor", error.message
+                   "have such an owner below you in your reporting line, or are an Org Graph editor", error.message
     end
 
     should "refuse the owner of a unit its retyping, which is the structure's call" do
@@ -166,7 +166,7 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
       end
 
       assert_equal "You can change Checkout's type if you own the unit whose structure it sits in or a unit above that, " \
-                   "report to someone who does, or are an Org Graph editor", error.message
+                   "have such an owner below you in your reporting line, or are an Org Graph editor", error.message
       assert_equal @group, unit(@org[:checkout]).level_id
     end
 

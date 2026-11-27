@@ -157,7 +157,7 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
 
     should "be left to its owners, those they report to, an Org Graph editor or a tenant admin" do
       refusal = "You can change Engineering's structure if you own Engineering or a unit above it, " \
-                "report to someone who does, or are an Org Graph editor"
+                "have such an owner below you in your reporting line, or are an Org Graph editor"
       error = assert_raises(OrgGraph::Authorization::Refused) { structure(context_for(@report)).declare_structure(@engineering_id, **@declaration) }
       assert_equal refusal, error.message
 
