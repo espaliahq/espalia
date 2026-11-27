@@ -15,7 +15,8 @@ module Projections::Reconcilers
     "account_grants" => { reconciler: "AccountGrants::Reconciliation", adopts: %w[account_grants/account_flags] },
     "account_roles" => { reconciler: "AccountGrants::RoleReconciliation", adopts: %w[account_grants/account_flags] },
     "account_links" => { reconciler: "AccountGrants::LinkReconciliation", adopts: %w[account_grants/account_flags] },
-    "tenant_planning_inputs" => { reconciler: "TenantPlanningInputs::Reconciliation", adopts: %w[tenant_planning_inputs/tables] }
+    "tenant_planning_inputs" => { reconciler: "TenantPlanningInputs::Reconciliation", adopts: %w[tenant_planning_inputs/tables] },
+    "forgotten_suggestions" => { reconciler: "PersonDevelopment::Projections::EvidenceSuggestions::ForgottenReconciliation", adopts: [] }
   }.freeze
 
   # @return [Array<String>] the reconciler names

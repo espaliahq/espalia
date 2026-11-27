@@ -15,7 +15,7 @@ module Views::Evidence::ConversationChrome
   end
 
   def first_name(person)
-    person&.name.to_s.split.first || "A colleague"
+    Person.first_name(person&.name) || "A colleague"
   end
 
   # "About you" / "About Alex".
@@ -29,7 +29,7 @@ module Views::Evidence::ConversationChrome
       span(class: "#{box} shrink-0 rounded-full grid place-items-center font-bold bg-neutral-muted text-default",
            aria: { hidden: "true" }) { "You" }
     else
-      initials = person&.name.to_s.split.first(2).map { |w| w[0] }.join.upcase.presence || "?"
+      initials = person&.forgotten? ? "?" : person&.name.to_s.split.first(2).map { |w| w[0] }.join.upcase.presence || "?"
       span(class: "#{box} shrink-0 rounded-full grid place-items-center font-semibold bg-neutral-subtle text-default",
            aria: { hidden: "true" }) { initials }
     end

@@ -15,7 +15,7 @@
 # backfill skips it; a run that gave up leaves the item for the next one.
 class Evidence::SelfFeedbackBackfill
   DEFAULT_PER_MINUTE = 20
-  SETTLED_STATUSES = [ "pending", *EvidencePlacementSuggestion::DECIDED_STATUSES ].freeze
+  SETTLED_STATUSES = [ "pending", "closed", *EvidencePlacementSuggestion::DECIDED_STATUSES ].freeze
 
   attr_reader :per_minute
 

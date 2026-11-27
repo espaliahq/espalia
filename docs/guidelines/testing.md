@@ -636,6 +636,10 @@ reset and fails if its cookie survives.
 lands on a page the test didn't visit, or finds a session already signed in,
 suspect a response from the previous test before the helpers.
 
+## Only CI Checks Who Writes Each Table
+
+**Precommit doesn't record writes, so only CI's `write_ownership:check` catches a write from a file `config/write_ownership.yml` doesn't list.** To reproduce one, run the tests that make the write with `WRITE_CATALOGUE=1`, then `RAILS_ENV=test bin/rails write_ownership:check`.
+
 ## Autovacuum Is Off in the Test Databases
 
 **`test_helper.rb` turns autovacuum off on every table of every test database
