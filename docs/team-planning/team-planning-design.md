@@ -2118,9 +2118,13 @@ Each leaver's share of a backfill opens the day after they go, and the rest open
 position. That holds in the step they leave in and in every step after, so the hiring lag on
 each share runs from its own day.
 
-Two edges stay as they are. Capacity counts a backfill in full when its leaver leaves on the
-step's last day, while cost prices it 0 days. Budget head counts take a position's FTE
-whatever its start, and the budget treats forecast rows as unfunded.
+Capacity splits a backfill the same way. A leaver is still in post on their last day, so one
+leaving on the step's last day counts in its end state and their backfill doesn't yet; one
+with no date goes with the step, and their backfill counts
+([#476](https://github.com/espaliahq/espalia/issues/476)).
+
+One edge stays as it is. Budget head counts take a position's FTE whatever its start, and
+the budget treats forecast rows as unfunded.
 
 Checks lists each open seat whose target start is before today under **Late hires**, with
 the FTE still open. The map labels an open seat with its status and start, such as

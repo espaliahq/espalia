@@ -192,9 +192,18 @@ class TeamPlanning::Baseline
       position.nil? || TeamPlanning::SeatStart.new(position).started_in?(step)
     end
 
-    # @param position [Position]
-    # @return [Boolean] whether the position's open seat has started by the step's last day
-    def seat_started?(position) = step.nil? || TeamPlanning::SeatStart.new(position).started_in?(step)
+    # A leaver is still in post on their last day, so one leaving on or after
+    # the step's last day counts in its end state; one with no date goes with
+    # the step, as cost has it.
+    #
+    # @param member [Member]
+    # @return [Boolean] whether the person has left by the step's last day
+    def gone_by_end?(member)
+      return false unless member.leaving?
+
+      leaves_on = TeamPlanning::Events::DepartureSet.leaving_date(member.departure[:leaves_on])
+      step.nil? || leaves_on.nil? || leaves_on < step.end
+    end
 
     # The people whose line points at a person or a position. For a vacant
     # manager position, this is the span the open seat carries.

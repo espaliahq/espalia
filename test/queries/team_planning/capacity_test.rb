@@ -94,6 +94,13 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     as_tenant { TeamPlanning::Capacity.split(context: context_for(@planner), plan: TeamPlanningPlan.find(@plan_id), scenario_id:) }
   end
 
+  # Ada's reason and FTE, then her backfill's, at the end of the year's step.
+  def end_state(leaves_on)
+    operation(Operations::TeamPlanning::SetDeparture, scenario_id: @year, person_id: @ada.id, position_id: @backfill, leaves_on:)
+    report = split(@year).report
+    [ @ada.id, @backfill ].map { |id| seat(report, id).then { [ it.places.first.reason, it.seat.fte ] } }
+  end
+
   context "actual, planned and forecast" do
     setup do
       choose(families: { @engineering_family.role_family_id => per_fte })
@@ -346,6 +353,26 @@ class TeamPlanning::CapacityTest < ActiveSupport::TestCase
     working = seat(report, backfill).places.first.figure.working
     assert_equal [ @dee.id ], working.filter_map(&:subject_id)
     assert_equal "Fixed cost of managing at L5", working.second.label
+  end
+
+  context "a backfill in a step" do
+    setup do
+      choose(families: { @engineering_family.role_family_id => per_fte })
+      @year = operation(Operations::TeamPlanning::ForkScenario, scenario_id: nil, relation: "then", name: "2026", ends_on: "2026-12-31")[:scenario_id]
+      @backfill = open_position(unit_id: @engineering)
+    end
+
+    should "count the leaver, not the backfill, when they leave on the step's last day" do
+      assert_equal [ [ nil, 1r ], [ "not_started", 1r ] ], end_state("2026-12-31")
+    end
+
+    should "count the backfill, not the leaver, when they leave the day before" do
+      assert_equal [ [ "leaving", 1r ], [ nil, 1r ] ], end_state("2026-12-30")
+    end
+
+    should "count the backfill, not the leaver, when the leaving date isn't known" do
+      assert_equal [ [ "leaving", 1r ], [ nil, 1r ] ], end_state(nil)
+    end
   end
 
   should "refuse someone who isn't on the plan" do

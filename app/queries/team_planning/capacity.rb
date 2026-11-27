@@ -231,7 +231,7 @@ class TeamPlanning::Capacity
     @overrides = @map.people.to_h { [ it.id, it.capacity_overrides ] }
     @live = @map.units.to_set(&:id)
     people = @map.people.map { person_seat(it) }
-    seats = people + open_positions(people)
+    seats = people + open_positions
     families = family_ids(seats)
     @facts = facts(seats)
     priced = seats.map { |seat, reasons| Seat.new(seat:, places: seat.places.zip(reasons).map { |place, reason| price(seat, place, reason, families) },
@@ -247,7 +247,7 @@ class TeamPlanning::Capacity
     own = member.own_target(titles)
     shares = member.memberships.empty? ? TeamPlanning::Baseline::Membership.shares([ TeamPlanning::Baseline::Membership.new(unit_id: nil, allocation: 1.0, role: nil) ]) : @map.counted_shares(member)
     places, reasons = shares.map { |placement, allocation, known| person_place(placement, allocation, known, own) }.transpose
-    reasons = reasons.map { "leaving" } if member.leaving?
+    reasons = reasons.map { "leaving" } if @map.gone_by_end?(member)
     reasons = reasons.map { "not_started" } unless @map.started?(member)
     (@own_levels ||= {})[member.id] = own.level&.level_id
     [ Model::Seat.new(id: member.id, kind: "person", fte:, fte_known:, places:), reasons ]
@@ -267,20 +267,18 @@ class TeamPlanning::Capacity
 
   # A position counts only for the FTE its occupants leave open, so a filled
   # one is counted once, through the people in it. Capacity is the step's end
-  # state, so an open seat counts in full once it has started by the step's
-  # last day and not at all before ({TeamPlanning::SeatStart}).
-  def open_positions(people)
-    filled = Hash.new(0r)
-    backfill = @map.people.to_h { [ it.id, it.backfill_id ] }
-    people.each { |seat, _| seat.places.each { filled[it.position_id] += seat.fte * it.allocation if it.position_id && it.position_id != backfill[seat.id] } }
-    positions.values.sort_by(&:id).filter_map do |position|
-      open = exact(position.fte) - filled[position.id]
-      next unless open.positive?
-
+  # state, so each open part counts once it has started by the step's last
+  # day, as cost and funding split it: a backfill's leaver's share opens the
+  # day after they go ({TeamPlanning::SeatStart.openings},
+  # [#476](https://github.com/espaliahq/espalia/issues/476)). A seat with no
+  # part started yet shows its whole open FTE as not started.
+  def open_positions
+    TeamPlanning::SeatStart.openings(@map).group_by(&:first).map do |position, parts|
+      started = parts.select { |_, _, start| @map.step.nil? || start.started_in?(@map.step) }.sum(0r) { it[1] }
       place = Model::Place.new(unit_id: position.unit_id, allocation: 1r, allocation_known: true, role_id: position.role_id,
                                level_id: position.level_id, position_id: position.id)
-      [ Model::Seat.new(id: position.id, kind: "position", fte: open, fte_known: true, places: [ place ]),
-        [ ("not_started" unless @map.seat_started?(position)) ] ]
+      fte = started.positive? ? started : parts.sum(0r) { it[1] }
+      [ Model::Seat.new(id: position.id, kind: "position", fte:, fte_known: true, places: [ place ]), [ ("not_started" unless started.positive?) ] ]
     end
   end
 
