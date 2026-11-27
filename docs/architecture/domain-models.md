@@ -75,7 +75,7 @@ A time before a tenant's first row reads the first row's value, as that is what 
 
 A size must be a whole number: the model and a check constraint refuse anything else. A floor, today's or a closed cycle's, reads through `ComparisonConfig.floor_for`, never below the least an admin may set, so a stray row or a stored value the validation would refuse can't open it.
 
-**The limit.** `update_column`, `update_all` and raw SQL that change either setting skip the callback and leave no row, so past answers would read the old value for the new one's time. The recorded write check and the `Espalia/WritesMustBeDeclared` cop guard those, and nothing else does (see [direct-writes.md](direct-writes.md)).
+**The limit.** `update_column`, `update_all` and raw SQL that change either setting skip the callback and leave no row, so past answers would read the old value for the new one's time. The recorded write check and the `Espalia/WritesMustBeDeclared` cop guard those, and nothing else does (see [direct-writes.md](direct-writes.md)). A save that skips validation with no whole size, such as a blank one, fails as a whole: the record refuses the row, and the tenant is left as it was.
 
 ---
 

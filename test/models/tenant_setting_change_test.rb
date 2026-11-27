@@ -68,6 +68,16 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
         end
       end
     end
+
+    should "fail the tenant's save, and leave it unchanged, when no whole size reaches the record" do
+      config = @tenant.comparison_config.dup
+      config.min_group_size = nil
+      @tenant.comparison_config = config
+
+      assert_raises(ActiveRecord::RecordInvalid) { @tenant.save!(validate: false) }
+      assert_equal 5, @tenant.reload.comparison_config.min_group_size
+      assert_equal [ %w[time_zone UTC], %w[min_group_size 5] ], history(@tenant)
+    end
   end
 
   context "the zone a past day ends in" do
