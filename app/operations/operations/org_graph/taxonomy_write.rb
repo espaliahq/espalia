@@ -12,7 +12,8 @@ module Operations::OrgGraph::TaxonomyWrite
   # refuses before the write reads the structure's types, with the command's
   # own sentence.
   #
-  # @raise [Pundit::NotAuthorizedError] unless the caller may change the structure
+  # @raise [OrgGraph::Authorization::Refused] unless the caller may change the structure,
+  #   with the command's own sentence, which names no type
   def policy_check
     authorize :org_graph, :show?
     return if Pundit.policy!(context, :org_graph).edit_structure_of?(structure_unit)
