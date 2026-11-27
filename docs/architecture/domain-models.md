@@ -90,6 +90,23 @@ end
 
 `color_scheme` is the person's own Auto / Light / Dark choice. It lives on User, not the tenant, so it follows them across tenants and no tenant can lock it. Auto follows the operating system; Light or Dark is written to `<html data-scheme>` (ADR-23).
 
+### Global admin audit
+
+`global_admin` makes an account an admin in every tenant. Every change to it leaves a row in `global_admin_changes`: the account's id, the new value, where the change came from and when. `User` writes the row in the save that changes the flag, so the two commit together.
+
+A save that changes the flag must name its source first, or it raises `User::GlobalAdminSourceMissing` and nothing is saved:
+
+| `source` | Set by |
+|---|---|
+| `admin_task` | `bin/rails admin:create` |
+| `seed` | `SeedAdmin.bootstrap!` |
+| `console` | An operator changing the flag by hand: `user.update!(global_admin: false, global_admin_source: "console")` |
+| `baseline` | Only the migration that created the table, one row for each account that held the flag then. The model refuses it. |
+
+Rows are never changed or deleted: a saved row is read-only. A row holds no tenant, name or email, and no foreign key, so it outlives its account. Forgetting a person unlinks their account in that tenant but keeps the global `users` row, so the audit still points at it and adds nothing of its own. Nothing in the app deletes an account; if one is deleted by hand, its rows keep an id that names nobody.
+
+**The limit.** `update_column`, `update_all` and raw SQL skip the callback and leave no row. Two checks guard them, and nothing else does: the recorded write check fails on a write to `users` from a file `config/write_ownership.yml` doesn't name, and the `Espalia/WritesMustBeDeclared` cop flags a persistence call in an undeclared file (see [direct-writes.md](direct-writes.md)). Neither can tell which column a declared file writes.
+
 ---
 
 ## TenantUser (Tenant-scoped Membership)

@@ -105,7 +105,7 @@ Each section names the writers the run saw and recommends one of two things: **k
 | `oauth_access_tokens` | Doorkeeper; `Settings::ConnectedClientsController#destroy`; `Mcp::PruneStaleClientsJob` |
 | `mcp_pending_approvals` | `Mcp::RequestHandler#defer_to_in_app_approval`; `Mcp::ApprovalsController#approve` and `#reject` |
 
-**Keep all five.** Devise and Doorkeeper manage them, and their history is login telemetry, not a domain decision. An approved MCP call already runs through an Operation, whose events carry the provenance. `users.global_admin` is the one column with audit weight; it changes only from a console or seed, so it can wait.
+**Keep all five.** Devise and Doorkeeper manage them, and their history is login telemetry, not a domain decision. An approved MCP call already runs through an Operation, whose events carry the provenance. `users.global_admin` is the one column with audit weight. It stays plain state, and each change leaves a row in `global_admin_changes` ([#551](https://github.com/espaliahq/espalia/issues/551); see [domain-models.md](domain-models.md#global-admin-audit)).
 
 ### `tenant_users`
 
