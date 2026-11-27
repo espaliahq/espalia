@@ -77,4 +77,33 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
 
     assert_equal Time.find_zone("Europe/Paris").local(2026, 3, 15).end_of_day, tenant.reload.end_of_day_then(Date.new(2026, 3, 15))
   end
+
+  context "the floor for a cycle's report" do
+    setup do
+      travel_to Time.utc(2026, 3, 1, 12)
+      @tenant = create(:tenant)
+      smallest_group(@tenant, 6)
+      @closed_at = Time.utc(2026, 3, 10)
+      travel_to Time.utc(2026, 4, 1, 12)
+    end
+
+    should "be today's size while the cycle is open" do
+      smallest_group(@tenant, 4)
+
+      assert_equal 4, @tenant.comparison_floor(closed_at: nil)
+    end
+
+    should "stay the size in force when the cycle closed, though an admin lowers it since" do
+      smallest_group(@tenant, 4)
+
+      assert_equal 6, @tenant.comparison_floor(closed_at: @closed_at)
+    end
+
+    # The rule for a size raised since awaits a ruling; this asserts the larger of then and now.
+    should "follow a size raised since, as the larger of then and now" do
+      smallest_group(@tenant, 9)
+
+      assert_equal 9, @tenant.comparison_floor(closed_at: @closed_at)
+    end
+  end
 end

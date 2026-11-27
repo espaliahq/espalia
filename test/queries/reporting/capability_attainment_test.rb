@@ -224,6 +224,18 @@ class Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
       assert res.roles.find { |g| g.key == @engineer.role_id }.cells[@cap1.stable_id].suppressed
     end
 
+    should "keep a closed cycle's floor at the minimum in force when it closed" do
+      5.times { |i| enroll(create(:person, tenant: @tenant, name: "Eng #{i}"), @engineer) }
+      @tenant.update!(comparison_config: ComparisonConfig.new(min_group_size: 6))
+      @cycle.update!(status: "closed", closed_at: Time.current)
+      travel 1.day
+      @tenant.update!(comparison_config: ComparisonConfig.new(min_group_size: 4))
+
+      res = result(suppress: true)
+      assert_equal 6, res.suppression_floor
+      assert res.roles.find { |g| g.key == @engineer.role_id }.cells[@cap1.stable_id].suppressed
+    end
+
     should "suppress buckets but keep coverage counts under the floor" do
       2.times { |i| enroll(create(:person, tenant: @tenant, name: "Eng #{i}"), @engineer) }
 
