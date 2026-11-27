@@ -261,6 +261,22 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     end
   end
 
+  should "offer the author no Edit or Withdraw on feedback about a forgotten person" do
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+        source: "peer", evidence_type: "peer_feedback", content: "Kept the retro on time.", author_id: @peer.id)
+      @report.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+
+    sign_in_as(@peer_user)
+    visit evidence_conversation_path(@report.id)
+    within("[data-testid='conversation-thread']") do
+      assert_text "Kept the retro on time."
+      assert_no_button "Edit"
+      assert_no_button "Withdraw"
+    end
+  end
+
   should "let the requester nudge a stale open request" do
     make_request!
     ActsAsTenant.with_tenant(@tenant) do

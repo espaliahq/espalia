@@ -264,12 +264,14 @@ class EvidenceHubController < ApplicationController
     items = shown.filter_map(&:item)
     requests = shown.filter_map(&:request).uniq
     can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
-    linkable = linkable_items(conversations, shown)
+    forgotten = Person.forgotten.where(id: items.map(&:person_id).uniq).pluck(:id).to_set
+    linkable = linkable_items(conversations, shown, forgotten)
     decidable = can_regenerate || EvidencePlacementSuggestion.pending.exists? ? linkable : []
 
     {
       messages: shown, hidden_count: hidden_count, shown_ids: shown.to_set(&:dom_id),
-      owed_ids: shown.select { |m| conversations.owes?(m) }.map(&:dom_id).to_set,
+      owed_ids: shown.select { |m| conversations.owes?(m) && !forgotten.include?(m.item&.person_id) }.map(&:dom_id).to_set,
+      closed_ids: items.select { |item| forgotten.include?(item.person_id) }.to_set(&:id),
       cells: Evidence::CellContextResolver.new(requests + items.select(&:capability_stable_id)).by_id,
       links: links_for(items),
       in_situ_paths: in_situ_paths_for(items),
@@ -285,10 +287,8 @@ class EvidenceHubController < ApplicationController
   # Items the viewer may place or link: what they're asked to place, plus
   # anything else the policy lets them link. The same items' suggestions are
   # theirs to decide. Feedback about a forgotten person takes no more links.
-  def linkable_items(conversations, shown)
-    candidates = shown.select(&:item)
-    forgotten = Person.forgotten.where(id: candidates.map { |m| m.item.person_id }).pluck(:id).to_set
-    candidates.select do |m|
+  def linkable_items(conversations, shown, forgotten)
+    shown.select(&:item).select do |m|
       next false if forgotten.include?(m.item.person_id)
 
       conversations.owes?(m) || EvidencePolicy.new(pundit_user, m.item).add_link?

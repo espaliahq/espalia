@@ -232,6 +232,23 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "##{EvidenceItem.dom_id(placed_id)} button", text: "Edit links", count: 0
     end
 
+    should "offer the author Edit and Withdraw on their feedback, until its subject is forgotten" do
+      sign_in @peer_user
+      item = "##{EvidenceItem.dom_id(@unplaced_id)}"
+
+      get evidence_conversation_path(@assessee.id)
+      assert_select "#{item} button", text: "Edit"
+      assert_select "#{item} button", text: "Withdraw"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @assessee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      get evidence_conversation_path(@assessee.id)
+      assert_select item
+      assert_select "#{item} button", text: "Edit", count: 0
+      assert_select "#{item} button", text: "Withdraw", count: 0
+    end
+
     should "open an empty thread with someone the viewer hasn't talked to" do
       sign_in @assessee_user
       get evidence_conversation_path(@manager.id)

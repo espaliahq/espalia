@@ -248,7 +248,7 @@ class Views::Evidence::ConversationMessage < Views::Base
   def item_actions
     owed = @details[:owed_ids].include?(@message.dom_id)
     in_situ = @details[:in_situ_paths][@item.id]
-    mine = @item.author_id == @viewer_id
+    mine = @item.author_id == @viewer_id && !@details[:closed_ids].include?(@item.id)
     edit_links = !mine && !owed && @details[:linkable_ids].include?(@item.id)
     return unless owed || in_situ || mine || edit_links
 
