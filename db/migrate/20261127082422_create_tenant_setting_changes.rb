@@ -18,9 +18,13 @@ class CreateTenantSettingChanges < ActiveRecord::Migration[8.1]
                          name: "tenant_setting_changes_min_group_size_whole"
 
     # Each tenant's values today, dated from its creation: what we know was in force.
+    # A stored size that isn't a whole number reads as the default, as the check would refuse it.
     # Postgres 16 has no uuidv7(), so the ids come from Ruby.
     tenants = select_rows(<<~SQL.squish)
-      SELECT id, time_zone, COALESCE(comparison_config ->> 'min_group_size', '#{DEFAULT_MIN_GROUP_SIZE}'), created_at
+      SELECT id, time_zone,
+        CASE WHEN comparison_config ->> 'min_group_size' ~ '^[0-9]+$' THEN comparison_config ->> 'min_group_size'
+             ELSE '#{DEFAULT_MIN_GROUP_SIZE}' END,
+        created_at
       FROM tenants ORDER BY created_at, id
     SQL
     return if tenants.empty?
