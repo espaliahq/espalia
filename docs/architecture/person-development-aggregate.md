@@ -415,7 +415,8 @@ must carry nothing about the person: `FrameworkVersionMigrated` holds the
 framework's mappings, `AssessmentCycleConcluded` the cycle id, and
 `LeftAssessmentCycle` the cycle id and a reason from
 `AssessmentCycles::Aggregate::UNENROLL_REASONS`, and the offboarding
-`PersonUnassignedFromFramework` the framework id and `left_company`. Adding a reason to the list is
+`PersonUnassignedFromFramework` the previous role and level ids, the reason
+`left_company` and no actor. Adding a reason to the list is
 a reviewed decision; `forgotten_subject_writes_test.rb` walks every command and
 fails on one that opens the stream any other way.
 
