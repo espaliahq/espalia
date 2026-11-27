@@ -270,7 +270,7 @@ class EvidenceHubController < ApplicationController
 
     {
       messages: shown, hidden_count: hidden_count, shown_ids: shown.to_set(&:dom_id),
-      owed_ids: shown.select { |m| conversations.owes?(m) && !forgotten.include?(m.item&.person_id) }.map(&:dom_id).to_set,
+      owed_ids: shown.select { |m| conversations.owes?(m) }.map(&:dom_id).to_set,
       closed_ids: items.select { |item| forgotten.include?(item.person_id) }.to_set(&:id),
       cells: Evidence::CellContextResolver.new(requests + items.select(&:capability_stable_id)).by_id,
       links: links_for(items),

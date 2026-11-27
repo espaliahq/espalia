@@ -249,8 +249,10 @@ class Evidence::Conversations
       .includes(:author).to_a.select { |item| report_keys.include?([ item.person_id, item.framework_id ]) }
   end
 
+  # Feedback about a forgotten person takes no more links, so nobody owes it a place.
   def unplaced_ids
-    @unplaced_ids ||= EvidenceItem.unplaced.where(id: items.map(&:id)).pluck(:id).to_set
+    @unplaced_ids ||= EvidenceItem.unplaced.where(id: items.map(&:id))
+      .where.not(person_id: Person.forgotten.select(:id)).pluck(:id).to_set
   end
 
   # The switch's split, from the query that counts the feedback to place.

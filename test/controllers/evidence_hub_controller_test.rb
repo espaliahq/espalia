@@ -197,6 +197,19 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-testid='group-report'][data-attention='true']"
     end
 
+    should "stop asking a manager to place feedback about a report once the report is forgotten" do
+      sign_in @manager_user
+      get evidence_conversation_path(@peer.id, view: "report")
+      assert_select "##{EvidenceItem.dom_id(@unplaced_id)} button", text: "Place on a capability"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @assessee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      get evidence_conversation_path(@peer.id, view: "report")
+      assert_select "##{EvidenceItem.dom_id(@unplaced_id)}"
+      assert_select "##{EvidenceItem.dom_id(@unplaced_id)} button", text: "Place on a capability", count: 0
+    end
+
     should "open a thread with a place action on owed feedback" do
       sign_in @assessee_user
       get evidence_conversation_path(@peer.id)
