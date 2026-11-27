@@ -280,7 +280,40 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         rows = AssessmentLevelRating.across_all_roles.where(person_id: @person.id, level_ordinal: 2)
         assert_equal({ @retiring.stable_id => "some", @cap.stable_id => "some" }, rows.to_h { |r| [ r.capability_stable_id, r.self_rated_frequency ] })
+        assert_equal "capability_merged", rows.find { |r| r.capability_stable_id == @retiring.stable_id }.reassessment_reason
       end
+    end
+  end
+
+  context "when a publish during alignment merges a rated capability into one new to the role" do
+    setup do
+      call_op(frequency: "some")
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.start_alignment(@person.id, @framework_id, @cycle_id, started_by_id: @person.id)
+        @survivor = create(:framework_capability, category_id: @cap.category_id, name: "Sound Judgement")
+        create(:framework_capability_role_binding, capability_id: @survivor.capability_id, role_id: @role.role_id, weight: 1.0)
+        create(:framework_behavioural_expectation, capability_id: @survivor.capability_id, level_ordinal: 2, description: "Weighs")
+        @cap.update!(status: "archived")
+        PersonDevelopment::CommandHandler.new.migrate_framework_version(@person.id, @framework_id, 1, 2, [
+          { from_stable_id: @cap.stable_id, to_stable_id: @survivor.stable_id, mapping_type: "evolved", requires_reassessment: false }
+        ])
+      end
+    end
+
+    should "carry the rating and its freeze to the survivor" do
+      ActsAsTenant.with_tenant(@tenant) do
+        rows = AssessmentLevelRating.across_all_roles.where(person_id: @person.id, level_ordinal: 2)
+        assert_equal({ @survivor.stable_id => "some" }, rows.to_h { |r| [ r.capability_stable_id, r.self_rated_frequency ] })
+      end
+
+      assert_raises(Pundit::NotAuthorizedError) { call_op(frequency: "consistent", capability: @survivor) }
+      error = assert_raises(RuntimeError) do
+        ActsAsTenant.with_tenant(@tenant) do
+          PersonDevelopment::CommandHandler.new.rate_self(@person.id, @framework_id, @survivor.stable_id,
+            level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+        end
+      end
+      assert_match(/frozen during alignment/, error.message)
     end
   end
 end

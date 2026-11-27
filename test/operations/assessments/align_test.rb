@@ -19,7 +19,7 @@ class Operations::Assessments::AlignTest < ActiveSupport::TestCase
       framework_id = SecureRandom.uuid_v7
       create(:framework_state, framework_id: framework_id, name: "Eng")
       rf = create(:framework_role_family, framework_id: framework_id, name: "Eng")
-      role  = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
+      @role = role = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
       level = create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Mid", code: "E2")
       cat = create(:framework_capability_category, framework_id: framework_id, name: "Thinking", ordinal: 1)
       @cap = create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
@@ -117,25 +117,30 @@ class Operations::Assessments::AlignTest < ActiveSupport::TestCase
     end
   end
 
-  # #606: once a publish retires a capability, its cell takes no agreed value.
-  context "after a publish during alignment merges a capability into this one" do
+  # #606: once a publish retires a capability, its cell takes no agreed value,
+  # and the survivor's agreed value lands on the row its ratings moved to.
+  context "after a publish during alignment merges a capability into one new to the role" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
-        @retiring = create(:framework_capability, category_id: @cap.category_id, name: "Old Thinking", status: "archived")
+        @survivor = create(:framework_capability, category_id: @cap.category_id, name: "Sound Judgement")
+        create(:framework_capability_role_binding, capability_id: @survivor.capability_id, role_id: @role.role_id, weight: 1.0)
+        create(:framework_behavioural_expectation, capability_id: @survivor.capability_id, level_ordinal: 2, description: "Weighs")
+        @cap.update!(status: "archived")
         PersonDevelopment::CommandHandler.new.migrate_framework_version(@report.id, @framework_id, 1, 2, [
-          { from_stable_id: @retiring.stable_id, to_stable_id: @cap.stable_id, mapping_type: "evolved", requires_reassessment: false }
+          { from_stable_id: @cap.stable_id, to_stable_id: @survivor.stable_id, mapping_type: "evolved", requires_reassessment: false }
         ])
       end
     end
 
-    should "refuse an agreed value on the retiring capability and accept one on the survivor" do
-      assert_raises(Operations::Base::ParameterError) { call_op(frequency: "consistent", capability: @retiring) }
+    should "refuse an agreed value on the retiring capability and record one beside the survivor's carried ratings" do
+      assert_raises(Operations::Base::ParameterError) { call_op(frequency: "consistent") }
 
-      call_op(frequency: "consistent")
+      call_op(frequency: "consistent", capability: @survivor)
 
       ActsAsTenant.with_tenant(@tenant) do
-        row = AssessmentLevelRating.across_all_roles.find_by!(person_id: @report.id, capability_stable_id: @cap.stable_id, level_ordinal: 2)
-        assert_equal "consistent", row.aligned_frequency
+        rows = AssessmentLevelRating.across_all_roles.where(person_id: @report.id, level_ordinal: 2)
+        assert_equal [ [ @survivor.stable_id, "some", "consistent", "consistent" ] ],
+          rows.map { |r| [ r.capability_stable_id, r.self_rated_frequency, r.manager_rated_frequency, r.aligned_frequency ] }
       end
     end
   end
