@@ -10,7 +10,9 @@
 # with no actor raises, so a path that forgets one fails instead of skipping
 # the check.
 module OrgGraph::Authorization
-  # A refused command. The message says who may make the change.
+  # A refused command. The message says who may make the change. The web and
+  # the MCP approval page show it to the caller verbatim, so it may name only
+  # what the caller's own request named.
   class Refused < Pundit::NotAuthorizedError; end
 
   # The actor for writes nobody makes in person.
