@@ -54,6 +54,13 @@ class User < ApplicationRecord
     global_admin
   end
 
+  # Drops a source named for a save that never reached the audit, such as one that failed validation.
+  #
+  # @return [User]
+  def reload(*)
+    super.tap { self.global_admin_source = nil }
+  end
+
   # The value for `<html data-scheme>`: the explicit choice, or nil for Auto
   # so the page follows the operating system.
   #

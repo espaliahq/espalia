@@ -56,6 +56,15 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       assert user.reload.global_admin?
     end
 
+    should "not carry a source past a reload after a refused save" do
+      user = create(:user)
+      assert_not user.update(global_admin: true, global_admin_source: "seed", email: "")
+
+      user.reload
+      assert_raises(User::GlobalAdminSourceMissing) { user.update!(global_admin: true) }
+      assert_not user.reload.global_admin?
+    end
+
     should "not carry a source named for a save that left the flag alone" do
       user = create(:user, global_admin: true)
       user.update!(global_admin: true, global_admin_source: "seed")
