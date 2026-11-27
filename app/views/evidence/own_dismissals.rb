@@ -34,7 +34,7 @@ class Views::Evidence::OwnDismissals < Views::Base
 
   def line(dismissal)
     li(class: "text-xs text-muted") do
-      p { "You dismissed the suggestion for #{cell_label(dismissal)} #{when_phrase(dismissal.decided_at)}." }
+      p { "#{[ "You dismissed the suggestion for #{cell_label(dismissal)}", when_phrase(dismissal.decided_at) ].compact.join(" ")}." }
       reason = Prose.to_plain(dismissal.dismiss_reason.to_s).presence
       p(class: "text-default") { "Your reason: “#{reason}”" } if reason
     end
@@ -47,7 +47,7 @@ class Views::Evidence::OwnDismissals < Views::Base
 
   def when_phrase(time)
     date = short_date(time)
-    return "" if date.empty?
+    return if date.empty?
 
     date == "Today" ? "today" : "on #{date}"
   end
