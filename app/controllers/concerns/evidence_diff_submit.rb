@@ -88,6 +88,9 @@ module EvidenceDiffSubmit
     # missing valence on cell N would abort after cells 1..N-1 (and the
     # response itself) had already landed.
     ([ primary ] + extras).each { |cell| valence_for!(valences, cell) }
+    # The link commands refuse a forgotten person; failing on the first would
+    # leave the response stored.
+    PersonDevelopment::ForgottenSubject.refuse!(request.person_id) if extras.any?
 
     result = Operations::Assessments::RespondToEvidenceRequest.call(context: pundit_user, params: {
       request_id: request.id, valence: valences[primary], **content_params(p)
@@ -119,6 +122,7 @@ module EvidenceDiffSubmit
     new_cells.each { |cell| valence_for!(valences, cell) }
     kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
     ensure_staged_cells_exist!(item, kept_suggestions)
+    PersonDevelopment::ForgottenSubject.refuse!(item.person_id) if links_change?(current_valences, desired, valences, p[:staged_suggestion_ids])
 
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {
@@ -170,6 +174,13 @@ module EvidenceDiffSubmit
     return {} if ids.blank?
 
     EvidencePlacementSuggestion.pending.for_evidence(item.id).where(id: ids).index_by(&:cell)
+  end
+
+  # A staged suggestion is accepted or dismissed on save, and both refuse too.
+  def links_change?(current_valences, desired, valences, staged_suggestion_ids)
+    return true if Array(staged_suggestion_ids).any? || desired != current_valences.keys.to_set
+
+    desired.any? { |cell| valences[cell] && valences[cell] != current_valences[cell] }
   end
 
   # A suggestion kept through "Adjust" is accepted with the valence the
