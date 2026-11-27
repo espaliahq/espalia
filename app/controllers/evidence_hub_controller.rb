@@ -279,6 +279,7 @@ class EvidenceHubController < ApplicationController
       people: Person.where(id: items.map(&:person_id).uniq).index_by(&:id),
       answering: answering(shown),
       suggestions: Evidence::PlacementSuggestionRows.for(decidable), decidable_ids: decidable.to_set(&:id),
+      own_dismissals: Evidence::OwnDismissals.for(items, current_person.id),
       linkable_ids: linkable.to_set(&:id),
       can_regenerate: can_regenerate,
       composer: composer_for(conversations, partner)
