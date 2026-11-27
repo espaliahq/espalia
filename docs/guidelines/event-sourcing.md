@@ -164,7 +164,7 @@ Do **not** bump for:
 
 **A pre-deploy reconcile may stand in for a bump, but only when all three hold:**
 
-- It lives in the projection that owns the table, is idempotent, and runs at predeploy (listed in `Projections::Reconcilers::LIST`, so `events:reconcile` runs it) before the new code serves.
+- It lives in the projection that owns the table, is idempotent, and runs at predeploy (listed in `Projections::Reconcilers::LIST`, so `events:reconcile` runs it) before the new code serves. Its writes fall outside the projection's `call` and `reset!`, so `config/write_ownership.yml` lists its file among the table's writers, with the reason.
 - A test proves equality: for a store holding the past events, the table after the reconcile equals the table after a full rebuild with the new code.
 - The PR body names the rule item it answers and says a rebuild remains correct at any later time.
 
