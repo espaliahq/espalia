@@ -613,8 +613,10 @@ Rules, all deliberate:
   about them. An erase that commits while a command waits is seen
   ([#586](https://github.com/espaliahq/espalia/issues/586)). The check lives
   in `PersonDevelopment::ForgottenSubject`, which the three link commands
-  call too, so a forgotten person's links stay as they were when they were
-  forgotten, and "Feedback to place" leaves their items out. Only the subject
+  call too, so the links on a forgotten person's feedback stay as they were
+  when they were forgotten, and "Feedback to place" leaves their items out.
+  `EvidenceDiffSubmit` checks it before its first write, so a modal save that
+  would change one of those links stores nothing. Only the subject
   counts: a forgotten author's feedback about someone here can still be placed
   ([#609](https://github.com/espaliahq/espalia/issues/609)).
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
