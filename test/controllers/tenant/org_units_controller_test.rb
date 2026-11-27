@@ -325,6 +325,58 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_includes drawer.text, "Dot Fennick"
       assert_not_includes drawer.text, "100%"
     end
+
+    should "offer no form to retire, merge, split or move a unit out of reach" do
+      steps = {
+        new_tenant_org_unit_retirement_path(@org[:platform]) => tenant_org_unit_retirement_path(@org[:platform]),
+        new_tenant_org_unit_merge_path(@org[:platform]) => tenant_org_unit_merge_path(@org[:platform]),
+        new_tenant_org_unit_split_path(@org[:platform]) => tenant_org_unit_split_path(@org[:platform]),
+        new_tenant_org_unit_structure_move_path(@org[:platform], parent_id: @org[:checkout]) =>
+          tenant_org_unit_structure_move_path(@org[:platform])
+      }
+      steps.each do |step, action|
+        get step
+
+        assert_response :success, step
+        assert_select "form[action='#{action}']", { count: 0 }, step
+        assert_select "#org-unit-step-blocked", { count: 1 }, step
+      end
+    end
+
+    should "change nothing outside Payments, through any write in the drawer" do
+      writes = [
+        -> { patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { name: "Core" } } },
+        -> { patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { level_id: @org[:squad] } } },
+        -> { patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { parent_id: @org[:checkout] } } },
+        -> { patch tenant_org_unit_path(@org[:payments]), params: { org_unit: { parent_id: @org[:platform] } } },
+        -> { post tenant_org_unit_owners_path(@org[:platform]), params: { person_ids: [ @org[:ada].id ] } },
+        -> { delete tenant_org_unit_owner_path(@org[:platform], @org[:ezra].id) },
+        -> { post tenant_org_unit_members_path(@org[:platform]), params: { person_ids: [ @org[:ezra].id ] } },
+        -> { patch tenant_org_unit_member_path(@org[:checkout], @org[:cyril].id), params: { unit_id: @org[:payments] } },
+        -> { delete tenant_org_unit_member_path(@org[:platform], @org[:ada].id) },
+        -> { post tenant_org_unit_retirement_path(@org[:platform]) },
+        -> { post tenant_org_unit_merge_path(@org[:platform]), params: { into_unit_id: @org[:checkout] } },
+        -> { post tenant_org_unit_split_path(@org[:platform]), params: { names: %w[Core Edge], placements: { @org[:ada].id => "Core" } } },
+        -> { post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } } },
+        -> { post tenant_org_unit_structure_withdrawal_path(@org[:engineering]), params: { conversion: {} } },
+        -> { post tenant_org_unit_structure_move_path(@org[:platform]), params: { parent_id: @org[:checkout], conversion: { @org[:team] => @org[:squad] } } }
+      ]
+      events = -> { Rails.configuration.event_store.read.count }
+      count = events.call
+
+      writes.each_with_index do |write, index|
+        write.call
+        assert_response :redirect, "write #{index}"
+      end
+
+      assert_equal count, events.call
+      assert_equal %w[Checkout Engineering Payments Platform], ActsAsTenant.with_tenant(@tenant) { OrgUnit.live.order(:name).pluck(:name) }
+      assert_equal @org[:checkout], unit(:payments).parent_id
+      assert membership(:ada, :platform)
+      assert membership(:cyril, :checkout)
+      assert_nil membership(:ezra, :platform)
+      assert_nil membership(:cyril, :payments)
+    end
   end
 
   context "as a tenant member" do
