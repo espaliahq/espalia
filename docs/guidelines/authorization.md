@@ -175,9 +175,9 @@ Pundit's `authorize` passes none.
 | Set, end or confirm a membership (`edit_membership?(member, unit)`, through `place?(member, unit)`) | Anyone in the member's manager chain, or whoever holds rights over the unit |
 | Move a membership (`move_membership?(member, from, to)`) | The manager chain, or rights over both units |
 
-A caller's **reach** (`OrgGraphPolicy::Reach`) is every unit owned by an
+A caller's **reach** (`OrgGraphPolicy::Reach`) is every live unit owned by an
 active person in their subtree, themselves included, and every unit beneath
-those. So an owner's manager, and their manager's manager, hold the owner's
+those. A retired unit keeps its owners but gives them nothing. So an owner's manager, and their manager's manager, hold the owner's
 rights. Ownership is always stated on a unit, never derived from the
 reporting line; only the rights follow the line. Rights inherit downward:
 owning Payments gives rights over every squad beneath it, even one with owners

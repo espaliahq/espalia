@@ -295,6 +295,38 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     assert as_tenant { OrgTaxonomyLevel.exists?(id: level_id) }
   end
 
+  should "give an owner, and the people above them, nothing through a unit once it retires" do
+    ledger, newcomer = SecureRandom.uuid_v7, as_tenant { create(:person, tenant: @tenant) }
+    later = { effective_on: "2026-03-01" }
+    as_tenant do
+      system.create_unit(ledger, "Ledger", level_id: @lane, parent_id: @org[:checkout], **ON)
+      system.add_unit_owner(ledger, @owner.id, **ON)
+      system.retire_unit(ledger, **later)
+    end
+
+    [ @owner, @manager ].each do |person|
+      assert_equal [ @org[:payments] ].to_set, reach_of(person).owned_unit_ids, "Payments, still live, stays in reach"
+      context = as(person)
+      assert_not as_tenant { policy_for(context).edit_unit?(unit(ledger)) }
+      assert_not policy_for(context).show_units?
+      handler = structure(context)
+      {
+        "a rename" => -> { handler.rename_unit(ledger, "Ledger 2", **later) },
+        "a retirement" => -> { handler.retire_unit(ledger, **later) },
+        "an owner added" => -> { handler.add_unit_owner(ledger, newcomer.id, **later) },
+        "an owner removed" => -> { handler.remove_unit_owner(ledger, @owner.id, **later) },
+        "a unit beneath it" => -> { handler.create_unit(SecureRandom.uuid_v7, "Pod", level_id: @lane, parent_id: ledger, **later) },
+        "a structure declared" => -> { handler.declare_structure(ledger, levels: [], conversion: {}, **later) },
+        "a type added to it" => -> { handler.add_level(SecureRandom.uuid_v7, "Pod", structure_unit_id: ledger, **later) },
+        "a member placed" => -> { people(context).set_membership(newcomer.id, ledger, provider: "espalia", allocation: 1, **later) }
+      }.each do |write, command|
+        assert_raises(OrgGraph::Authorization::Refused, "#{write} by #{person.id}") { command.call }
+      end
+    end
+    error = assert_raises(RuntimeError) { structure(as(admin)).move_unit(@org[:payments], ledger, **later) }
+    assert_equal "Parent unit is retired", error.message, "so no live unit sits beneath a retired one"
+  end
+
   should "A person who is an owner but inactive has no reach" do
     as_tenant { @owner.update!(status: "inactive") }
     context = as(@owner)
