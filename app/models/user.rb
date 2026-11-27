@@ -194,10 +194,10 @@ class User < ApplicationRecord
 
   private
 
-  # For a save that skips validation. Raises before the write, so a caller that rescues it inside its own
-  # transaction can't commit the flag unrecorded.
+  # For a save that skips validation. Holds the source to the list the audit row accepts, before the
+  # write, so the row can't fail after the flag is written and leave an outer transaction to commit it.
   def require_global_admin_source
-    return if global_admin_source.present?
+    return if GlobalAdminChange::RECORDABLE_SOURCES.include?(global_admin_source)
 
     raise GlobalAdminSourceMissing,
           "Name where this change to global_admin comes from: set global_admin_source to one of " \

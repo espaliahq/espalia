@@ -74,6 +74,18 @@ class GlobalAdminChangeTest < ActiveSupport::TestCase
       assert_empty changes_for(user)
     end
 
+    should "refuse a source outside the list before writing, when a save inside a transaction skips validation" do
+      user = create(:user)
+      user.assign_attributes(global_admin: true, global_admin_source: "baseline")
+
+      User.transaction do
+        assert_raises(User::GlobalAdminSourceMissing) { user.save(validate: false) }
+      end
+
+      assert_not user.reload.global_admin?
+      assert_empty changes_for(user)
+    end
+
     should "need naming again for each change" do
       user = create(:user)
       user.update!(global_admin: true, global_admin_source: "console")

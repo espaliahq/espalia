@@ -92,7 +92,7 @@ end
 
 ### Global admin audit
 
-`global_admin` makes an account an admin in every tenant. Every change to it leaves a row in `global_admin_changes`: the account's id, the new value, where the change came from and when. `User` writes the row in the save that changes the flag, so the two commit together.
+`global_admin` makes an account an admin in every tenant. Every change to it leaves a row in `global_admin_changes`: the account's id, the new value, where the change came from and when. `User` writes the row in the save that changes the flag, so the two commit together. Every check on the source runs before the write, so the row can fail only in the database, and Postgres then aborts the whole transaction, flag included.
 
 A save that changes the flag must name its source first. Without one, a validated save fails with an error on `global_admin_source`, and a save that skips validation raises `User::GlobalAdminSourceMissing`. Either way the refusal comes before the write, so nothing is saved:
 
