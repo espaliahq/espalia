@@ -7,8 +7,10 @@
 # It holds the person's row FOR KEY SHARE to the commit. An erase takes that
 # row FOR UPDATE before it writes `forgotten_at`, so it either commits first
 # and the refusal sees it, or waits until this command's events are stored.
-# Key share doesn't block an ordinary update of the row, so a sync carries
-# on. `PersonDevelopment::Repository#with_person_development` takes it before
+# Key share doesn't block a change to the person's name, manager or HRIS id,
+# so a sync carries on. It does block a change to their email, which a unique
+# index makes a key column: the sync's save waits for the write to commit.
+# `PersonDevelopment::Repository#with_person_development` takes it before
 # it opens the stream, so every write holds it. Inside a caller's savepoint a
 # rollback releases it, and the retry takes it again as it reopens the stream.
 module PersonDevelopment::ForgottenSubject
