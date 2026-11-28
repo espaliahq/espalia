@@ -90,7 +90,7 @@ class Person < ApplicationRecord
         next if forgotten?
 
         account = User.find_or_create_by!(email: email.to_s.downcase) { |u| u.password = SecureRandom.hex(24) }
-        account.replace_credentials! if !account.previously_new_record? && account.lock!.unvouched?
+        account.replace_credentials! if !account.previously_new_record? && account.lock!(User::CREDENTIALS_LOCK).unvouched?
         membership = TenantUser.find_or_initialize_by(tenant: tenant, user: account)
         membership.role ||= :member
         membership.save!

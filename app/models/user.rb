@@ -28,6 +28,10 @@ class User < ApplicationRecord
   # source. A validated save fails on `global_admin_source` instead.
   class GlobalAdminSourceMissing < StandardError; end
 
+  # Row lock for credential changes. Weaker than FOR UPDATE so that inserting an
+  # MCP token or grant, whose foreign key takes FOR KEY SHARE, never waits on it.
+  CREDENTIALS_LOCK = "FOR NO KEY UPDATE"
+
   # Where the next change to `global_admin` comes from: one of
   # {GlobalAdminChange::RECORDABLE_SOURCES}. Cleared after every save, by a validation that finds
   # an error, and by one run while the flag is unchanged: name it just before the save it is for.
@@ -85,13 +89,16 @@ class User < ApplicationRecord
   # @return [void]
   def replace_credentials!(password = SecureRandom.hex(24))
     transaction do
-      lock!
+      lock!(CREDENTIALS_LOCK)
+      # Grants before tokens, so a code exchange holding its grant commits its token
+      # before the tokens are revoked. The account row last, as clearing a unique
+      # column would block that exchange's foreign key check.
+      now = Time.current
+      Mcp::AccessGrant.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+      Mcp::AccessToken.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+      ActsAsTenant.without_tenant { Mcp::PendingApproval.pending.where(user_id: id).update_all(status: :rejected, updated_at: now) }
       update!(password:, password_confirmation: password, remember_created_at: nil,
               reset_password_token: nil, reset_password_sent_at: nil, provider: nil, uid: nil)
-      now = Time.current
-      Mcp::AccessToken.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
-      Mcp::AccessGrant.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
-      ActsAsTenant.without_tenant { Mcp::PendingApproval.pending.where(user_id: id).update_all(status: :rejected, updated_at: now) }
     end
   end
 
@@ -174,7 +181,7 @@ class User < ApplicationRecord
     by_email = find_by(email: email)
     if by_email
       transaction do
-        by_email.replace_credentials! if by_email.lock!.unvouched?
+        by_email.replace_credentials! if by_email.lock!(CREDENTIALS_LOCK).unvouched?
         by_email.update!(provider: auth.provider, uid: auth.uid) if by_email.provider.blank?
       end
       return [ by_email, nil ]

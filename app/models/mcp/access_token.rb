@@ -9,4 +9,19 @@ class Mcp::AccessToken < ApplicationRecord
   self.table_name = "oauth_access_tokens"
 
   include ::Doorkeeper::Orm::ActiveRecord::Mixins::AccessToken
+
+  before_create :refuse_a_refresh_revoked_meanwhile, if: -> { previous_refresh_token.present? }
+
+  private
+
+  # Doorkeeper checks a refresh token's revocation on the row it loaded, without a
+  # lock, so User#replace_credentials! can revoke it before this insert. Waiting on
+  # the lock that method holds, then reading the token again, puts the two in order.
+  # It also refuses a refresh whose token a sibling refresh's first use revoked
+  # meanwhile; that client signs in again.
+  def refuse_a_refresh_revoked_meanwhile
+    User.lock(User::CREDENTIALS_LOCK).find_by(id: resource_owner_id)
+    revoked = self.class.where(refresh_token: previous_refresh_token, revoked_at: ..Time.current).exists?
+    raise Doorkeeper::Errors::InvalidGrantReuse if revoked
+  end
 end
