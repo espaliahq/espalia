@@ -18,7 +18,7 @@ module EvidenceDiffSubmit
 
   TouchedCells = Struct.new(:cells, :evidence_id)
 
-  VERSION_CONFLICT = "Someone else saved a change for this person while you were saving. Nothing was saved; please try again."
+  VERSION_CONFLICT = "Another change for this person landed while you were saving. Nothing was saved; please try again."
 
   private
 

@@ -632,7 +632,7 @@ Rules, all deliberate:
   suggestion lock before it reads the suggestions, in the same order as the
   placement job. Another write to the
   person's stream that lands between the save's reads and one of its appends
-  rolls the save back with "Someone else saved a change for this person while
+  rolls the save back with "Another change for this person landed while
   you were saving", as does a deadlock. A write that arrives
   after the save's first append waits for the save to commit, then fails on
   its own surface ([#624](https://github.com/espaliahq/espalia/issues/624)).
