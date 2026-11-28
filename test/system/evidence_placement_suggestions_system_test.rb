@@ -32,8 +32,8 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
   def row(suggestion) = "li[data-suggestion-id='#{suggestion.id}']"
 
   # The thread holding the item, through the link a notification sends.
-  def open_hub(path = evidence_hub_item_path(@item.id))
-    sign_in_as(@alex_user)
+  def open_hub(path = evidence_hub_item_path(@item.id), as: @alex_user)
+    sign_in_as(as)
     visit path
     assert_text "Adjust in the editor"
     page.execute_script("window.__hubNotReloaded = true")
@@ -91,6 +91,31 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
       end
       assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"),
         "the activity entry must fit the viewport"
+    end
+  end
+
+  { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
+    should "show the author the suggestion they dismissed, with their reason, and no one else, on #{name}" do
+      page.driver.browser.manage.window.resize_to(*size)
+      open_hub(as: @jordan_user)
+      accept_and_dismiss
+
+      own = "##{Views::Evidence::OwnDismissals.dom_id_for(@item.id)}"
+      within(own) do
+        assert_text "You dismissed the suggestion for Collaboration · E4 today."
+        assert_text "Your reason: “This is about the incident, not teamwork”"
+      end
+      assert_no_sideways_overflow("the dismissal line must fit the #{name} viewport")
+
+      visit evidence_hub_item_path(@item.id)
+      assert_selector own, text: "Your reason: “This is about the incident, not teamwork”"
+
+      Capybara.reset_session!
+      sign_in_as(@alex_user)
+      visit evidence_hub_item_path(@item.id)
+      assert_text "Alex owned the outage follow-up"
+      assert_no_text "You dismissed the suggestion"
+      assert_no_text "This is about the incident, not teamwork"
     end
   end
 
