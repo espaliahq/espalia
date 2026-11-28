@@ -581,7 +581,9 @@ Graph could no longer say what it knew before. From it:
   (#469), so for a tenant in Sydney a fact learned that afternoon counts as known that day.
   People come back as
   ids, and callers join names, so a forgotten person reads as a former member. MCP clients
-  read it through `org_graph_as_of`. Beside the live units, the class gives the units
+  read it through `org_graph_as_of`, whose summary names no one; its full mode, with each
+  unit's owners, each person's facts and every membership, is open to tenant admins and
+  Org Graph editors. Beside the live units, the class gives the units
   retired by that day, as each last stood, and the successions recorded, each held apart,
   and the ids of the people who had left by then, whom the roster drops. Team Planning's
   status read uses them; `org_graph_as_of` leaves them out, and
@@ -601,7 +603,8 @@ Graph could no longer say what it knew before. From it:
   its own day or a value a correction replaced, comes back `withdrawn`, and the summary
   counts it apart. A correction to an earlier value leaves a later change standing unless
   it turns that change into another kind or into no change at all. MCP clients read it
-  through `org_graph_changes_between`.
+  through `org_graph_changes_between`, whose summary counts changes by kind; its full
+  mode lists each change and is open to tenant admins and Org Graph editors.
 - The Units view's "Compare with a date" (5.7) reads through `ChangesBetween`, in either
   mode. `OrgGraph::DateComparison` marks units new, renamed, moved, given a new type or succeeded in today's
   tree, lists who joined, left or moved on each unit's card, counts each kind and lists the

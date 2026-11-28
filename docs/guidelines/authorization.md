@@ -164,6 +164,7 @@ Pundit's `authorize` passes none.
 | Action | Who |
 |--------|-----|
 | See the Org Graph (`show?`) | Any tenant member |
+| `org_graph_as_of` and `org_graph_changes_between` in full mode, with each person's facts, memberships and a unit's owners (`edit_structure?`). Summary mode names no one and needs only `show?`. Until [#636](https://github.com/espaliahq/espalia/pull/636) lands, an editor gets full mode but not `org_graph_person_get` | A tenant admin or an Org Graph editor |
 | The Units view, its activity sidebar (a unit's, or the organisation's own) and change it back, and `org_graph_units`, `org_graph_activity`, `org_graph_change_back` and `org_graph_change_back_group` (`show_units?`; a change-back also needs the rights to make the inverse change) | A tenant admin, until the Org Graph's screens are finished; it then opens to `show?` |
 | Add, rename or remove a type in the organisation's structure, or say where it can sit (`edit_taxonomy?`, which is `edit_structure_of?(nil)`) | A tenant admin or an Org Graph editor |
 | Give a unit a structure of its own, withdraw it, change its types, or move a unit into it (`edit_structure_of?(unit)`, [#494](https://github.com/espaliahq/espalia/issues/494)) | A tenant admin, an Org Graph editor, or anyone whose reach covers the unit. A move in also needs `move_unit?`, and its refusal names no structure |
