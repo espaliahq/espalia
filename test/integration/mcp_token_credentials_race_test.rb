@@ -135,7 +135,45 @@ class McpTokenCredentialsRaceTest < ActionDispatch::IntegrationTest
     assert_empty ActsAsTenant.without_tenant { Mcp::PendingApproval.where(user_id: @user.id) }
   end
 
+  should "answer an MCP call like a revoked token, storing no approval, when its token expires before it is stored" do
+    token = live_token
+
+    with_whoami_awaiting_approval do
+      before_insert(Mcp::PendingApproval, -> { Mcp::AccessToken.where(id: token.id).update_all(created_at: 2.hours.ago) }) do
+        call_whoami(token)
+      end
+    end
+
+    assert_response :unauthorized
+    assert_empty ActsAsTenant.without_tenant { Mcp::PendingApproval.where(user_id: @user.id) }
+  end
+
+  should "answer an MCP call like a revoked token, storing no approval, when its token is revoked with a stamp ahead of this clock" do
+    token = live_token
+
+    with_whoami_awaiting_approval do
+      before_insert(Mcp::PendingApproval, -> { Mcp::AccessToken.where(id: token.id).update_all(revoked_at: 1.second.from_now) }) do
+        call_whoami(token)
+      end
+    end
+
+    assert_response :unauthorized
+    assert_empty ActsAsTenant.without_tenant { Mcp::PendingApproval.where(user_id: @user.id) }
+  end
+
+  should "store the approval of an MCP call whose token is still live" do
+    with_whoami_awaiting_approval { call_whoami(live_token) }
+
+    assert_response :success
+    assert_equal 1, ActsAsTenant.without_tenant { Mcp::PendingApproval.where(user_id: @user.id).count }
+  end
+
   private
+
+  def live_token
+    Mcp::AccessToken.create!(application: @application, resource_owner_id: @user.id, tenant_id: @tenant.id,
+                             scopes: "read write", expires_in: 3600)
+  end
 
   def authorization_code
     post oauth_authorization_path, params: {
