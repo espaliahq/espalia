@@ -5,41 +5,42 @@ require "test_helper"
 class DefaultAccountRoutesTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
-  context "self sign-up" do
-    should "create a signed-in account that belongs to no tenant and holds no admin flag" do
-      assert_difference -> { User.count }, 1 do
-        post "/users", params: { user: { email: "new@example.com", password: "password123", password_confirmation: "password123" } }
+  {
+    "self sign-up" => [ [ :get, "/users/sign_up" ], [ :post, "/users" ] ],
+    "edit account" => [ [ :get, "/users/edit" ], [ :patch, "/users" ], [ :put, "/users" ] ],
+    "delete account" => [ [ :get, "/users/cancel" ], [ :delete, "/users" ] ]
+  }.each do |flow, requests|
+    should "not route #{flow}" do
+      requests.each do |verb, path|
+        assert_raises(ActionController::RoutingError, "#{verb.upcase} #{path}") do
+          Rails.application.routes.recognize_path(path, method: verb)
+        end
       end
-
-      user = User.find_by!(email: "new@example.com")
-      assert_not user.global_admin?
-      assert_empty ActsAsTenant.without_tenant { TenantUser.unscoped.where(user:) }
-      assert_redirected_to root_path
     end
   end
 
-  context "edit account" do
-    should "change the password, given the current one" do
-      user = create(:user)
-      sign_in user
+  should "not mount the registration helpers" do
+    helpers = Rails.application.routes.url_helpers
 
-      patch "/users", params: { user: { password: "changed12345", password_confirmation: "changed12345", current_password: "password123" } }
-
-      assert user.reload.valid_password?("changed12345")
+    %i[new_user_registration_path user_registration_path edit_user_registration_path cancel_user_registration_path].each do |helper|
+      assert_not helpers.method_defined?(helper), helper
     end
   end
 
-  context "delete account" do
-    should "delete the account and its memberships, and leave the tenant's people" do
-      tenant_user = create(:tenant_user)
-      person = ActsAsTenant.with_tenant(tenant_user.tenant) { create(:person, tenant: tenant_user.tenant) }
-      sign_in tenant_user.user
+  should "leave an account in place when a signed-in user sends the delete request" do
+    user = create(:user)
+    sign_in user
 
-      delete "/users"
+    delete "/users"
 
-      assert_not User.exists?(tenant_user.user_id)
-      assert_not TenantUser.unscoped.exists?(tenant_user.id)
-      assert Person.unscoped.exists?(person.id)
-    end
+    assert User.exists?(user.id)
+  end
+
+  should "render the sign-in page with no sign-up link" do
+    get new_user_session_path
+
+    assert_response :success
+    assert_select "a", text: "Create an account", count: 0
+    assert_select "a[href=?]", new_user_password_path
   end
 end
