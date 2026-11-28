@@ -28,8 +28,9 @@ class User < ApplicationRecord
   # source. A validated save fails on `global_admin_source` instead.
   class GlobalAdminSourceMissing < StandardError; end
 
-  # Row lock for credential changes. Weaker than FOR UPDATE so that inserting an
-  # MCP token or grant, whose foreign key takes FOR KEY SHARE, never waits on it.
+  # Row lock for credential changes. Weaker than FOR UPDATE so that a foreign key
+  # check, which takes FOR KEY SHARE, never waits on it. Grant, approval and refresh
+  # inserts take this lock on purpose, to queue behind {#replace_credentials!}.
   CREDENTIALS_LOCK = "FOR NO KEY UPDATE"
 
   # Where the next change to `global_admin` comes from: one of

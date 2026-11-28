@@ -30,6 +30,8 @@ class Mcp::PendingApproval < ApplicationRecord
 
   EXPIRY_WINDOW = 24.hours
 
+  before_create :refuse_an_approval_after_replaced_credentials
+
   enum :status, { pending: 0, approved: 1, rejected: 2, expired: 3 }
 
   validates :operation_class, presence: true
@@ -48,5 +50,22 @@ class Mcp::PendingApproval < ApplicationRecord
   # @return [Boolean]
   def resolvable?
     pending? && expires_at > Time.current
+  end
+
+  private
+
+  # An MCP call is authenticated before it stores its approval, so
+  # User#replace_credentials! can revoke the call's token in between, or the
+  # token can expire. Under the lock that method takes, the token must still be
+  # live. Any revocation stamp counts, as another process's clock may run ahead
+  # of this one. With no token set it refuses, so any new path that stores an
+  # approval must set Mcp::RequestCredentials first, as Mcp::ServerController
+  # does today.
+  def refuse_an_approval_after_replaced_credentials
+    User.lock(User::CREDENTIALS_LOCK).find_by(id: user_id)
+    token_id = Mcp::RequestCredentials.access_token_id
+    # Uncached, so a read earlier in the request can't answer for the row after the lock.
+    token = ActiveRecord::Base.uncached { Mcp::AccessToken.find_by(id: token_id, resource_owner_id: user_id, revoked_at: nil) } if token_id
+    raise Mcp::RequestCredentials::Replaced if token.nil? || token.expired?
   end
 end
