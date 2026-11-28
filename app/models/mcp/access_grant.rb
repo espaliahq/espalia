@@ -9,4 +9,20 @@ class Mcp::AccessGrant < ApplicationRecord
   self.table_name = "oauth_access_grants"
 
   include ::Doorkeeper::Orm::ActiveRecord::Mixins::AccessGrant
+
+  before_create :refuse_a_grant_after_replaced_credentials
+
+  private
+
+  # A consent request is authenticated before it stores its grant, so
+  # User#replace_credentials! can commit in between. Under the lock that
+  # method takes, the account's current salt must still be the one the
+  # consenting session holds.
+  def refuse_a_grant_after_replaced_credentials
+    account = User.lock(User::CREDENTIALS_LOCK).find_by(id: resource_owner_id)
+    session_salt = Mcp::RequestCredentials.session_salt
+    return if account && session_salt && account.authenticatable_salt == session_salt
+
+    raise Mcp::RequestCredentials::Replaced
+  end
 end

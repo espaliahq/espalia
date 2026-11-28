@@ -13,6 +13,7 @@ require "test_helper"
 # Whoami is hijacked into a :write + :in_app op so we don't need to ship
 # a real high-stakes Operation purely to exercise this flow.
 class McpInAppApprovalTest < ActionDispatch::IntegrationTest
+  include McpRequestCredentialsHelpers
   include Devise::Test::IntegrationHelpers
 
   # Serializes the Whoami category/approval override within a single
@@ -100,11 +101,11 @@ class McpInAppApprovalTest < ActionDispatch::IntegrationTest
 
   context "GET /mcp/approvals/:id" do
     setup do
-      @approval = Mcp::PendingApproval.create!(
+      @approval = as_mcp_call_by(@user, @application, tenant: @tenant) { Mcp::PendingApproval.create!(
         user: @user, tenant: @tenant, client_application: @application,
         operation_class: "Operations::System::Whoami", arguments: {},
         expires_at: Time.current + 1.hour
-      )
+      ) }
     end
 
     should "render the review page for the requesting user" do
@@ -131,11 +132,11 @@ class McpInAppApprovalTest < ActionDispatch::IntegrationTest
 
   context "POST /mcp/approvals/:id/approve" do
     setup do
-      @approval = Mcp::PendingApproval.create!(
+      @approval = as_mcp_call_by(@user, @application, tenant: @tenant) { Mcp::PendingApproval.create!(
         user: @user, tenant: @tenant, client_application: @application,
         operation_class: "Operations::System::Whoami", arguments: {},
         expires_at: Time.current + 1.hour
-      )
+      ) }
       sign_in @user
     end
 
@@ -153,12 +154,12 @@ class McpInAppApprovalTest < ActionDispatch::IntegrationTest
     # were valid when submitted and aren't now. The blanket rescue would say
     # "Could not execute operation", leaving the user with no idea why.
     should "surface a ParameterError's own message rather than the generic alert" do
-      stale = Mcp::PendingApproval.create!(
+      stale = as_mcp_call_by(@user, @application, tenant: @tenant) { Mcp::PendingApproval.create!(
         user: @user, tenant: @tenant, client_application: @application,
         operation_class: "Operations::Frameworks::AddCollaborator",
         arguments: { framework_id: "fw_1", person_id: "p_1", role: "editor", scope_id: "cap_1" },
         expires_at: Time.current + 1.hour
-      )
+      ) }
 
       post approve_mcp_approval_path(stale)
 
@@ -180,11 +181,11 @@ class McpInAppApprovalTest < ActionDispatch::IntegrationTest
 
   context "POST /mcp/approvals/:id/reject" do
     setup do
-      @approval = Mcp::PendingApproval.create!(
+      @approval = as_mcp_call_by(@user, @application, tenant: @tenant) { Mcp::PendingApproval.create!(
         user: @user, tenant: @tenant, client_application: @application,
         operation_class: "Operations::System::Whoami", arguments: {},
         expires_at: Time.current + 1.hour
-      )
+      ) }
       sign_in @user
     end
 
