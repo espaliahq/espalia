@@ -374,7 +374,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       get tenant_org_graph_path(unit: @org[:payments], activity: "organisation")
 
       assert_response :success
-      assert_select "button", text: /Change back/, count: 0
+      assert_select "form[action='#{change_back_tenant_org_graph_path}']", count: 0
       assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Rowan Grant/, count: 0
       assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Added Dot Fennick/
     end
