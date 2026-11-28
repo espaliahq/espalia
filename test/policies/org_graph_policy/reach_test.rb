@@ -288,6 +288,16 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     end
   end
 
+  should "check a change to a person's facts again under their lock, refusing an editor whose grant was removed meanwhile" do
+    fact_changes.each do |change, command|
+      assert_refused_under_the_lock(change, command, editor, handler: OrgGraph::CommandHandler) do
+        TenantUser.find(editor.tenant_user.id).update!(org_graph_editor: false)
+      end
+    ensure
+      as_tenant { TenantUser.find(editor.tenant_user.id).update!(org_graph_editor: true) }
+    end
+  end
+
   should "check a membership change again under the member's lock, refusing a manager taken off the member through the Org Graph, " \
          "for a tenant cut over to it" do
     as_tenant { @tenant.update!(org_graph_people_projected_at: Time.current) }
@@ -333,6 +343,15 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
       assert_refused_with_the_cache_warm(change, command, context, handler.new(actor: context, repository:))
     ensure
       as_tenant { restore.call }
+    end
+  end
+
+  should "refuse a caller with no right to the units before taking any lock, so they never hold one" do
+    nobody = as(as_tenant { create(:person, tenant: @tenant) })
+    handler = OrgGraph::StructureCommandHandler.new(actor: nobody, repository: LockRefusingRepository.new(OrgGraph::Repository.new))
+
+    structure_changes.merge(unit_changes, cross_structure_changes, provider_changes).each do |change, command|
+      assert_raises(OrgGraph::Authorization::Refused, change) { command.call(StructureHandler.new(@tenant, handler)) }
     end
   end
 
@@ -458,6 +477,17 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     def respond_to_missing?(name, include_private = false) = repository.respond_to?(name, include_private) || super
   end
 
+  # Fails any command that takes a lock before refusing the caller.
+  LockRefusingRepository = Struct.new(:repository) do
+    %i[with_structure lock_structure with_person lock_person].each do |name|
+      define_method(name) { |*, **| raise Minitest::Assertion, "took a lock (#{name}) before refusing" }
+    end
+
+    def method_missing(name, ...) = repository.public_send(name, ...)
+
+    def respond_to_missing?(name, include_private = false) = repository.respond_to?(name, include_private) || super
+  end
+
   def structure_changes
     engineering = @org[:engineering]
     {
@@ -493,6 +523,26 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
   end
 
   # Changes to Dot's membership of Payments, which the caller may make only as Dot's manager.
+  def fact_changes
+    dot, on = @org[:dot].id, { provider: OrgGraph::StructureAggregate::ESPALIA, **ON }
+    {
+      "a person recorded" => ->(handler) { handler.record_person(dot, **on, employment_status: "employed", title: "Lead") },
+      "facts applied" => ->(handler) { handler.apply_facts(dot, **on, title: "Staff") },
+      "a person synced" => ->(handler) { handler.sync_person(dot, **on, employment_status: "employed", title: "Staff") },
+      "a joining" => ->(handler) { handler.join(dot, **on) },
+      "a leaving" => ->(handler) { handler.leave(dot, **on) },
+      "an absence recorded" => ->(handler) { handler.record_absence(dot, **on) },
+      "a return to work" => ->(handler) { handler.return_to_work(dot, **on) },
+      "a title changed" => ->(handler) { handler.change_title(dot, "Staff", **on) },
+      "a level changed" => ->(handler) { handler.change_level(dot, "L4", **on) },
+      "a manager changed" => ->(handler) { handler.change_manager(dot, @owner.id, **on) },
+      "a cost centre changed" => ->(handler) { handler.change_cost_centre(dot, "CC-9", **on) },
+      "a site changed" => ->(handler) { handler.change_site(dot, site: "Harbour", country: "NZ", **on) },
+      "employment changed" => ->(handler) { handler.change_employment(dot, fte: 0.8, employment_type: "part_time", **on) },
+      "every membership ended" => ->(handler) { handler.end_memberships(dot, **ON) }
+    }
+  end
+
   def membership_changes
     dot, payments, espalia = @org[:dot].id, @org[:payments], { provider: OrgGraph::StructureAggregate::ESPALIA }
     {

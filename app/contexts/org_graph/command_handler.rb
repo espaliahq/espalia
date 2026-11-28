@@ -134,6 +134,7 @@ class OrgGraph::CommandHandler
     authorize_structure!
     written = 0
     with_person(person_id, nil, facts: true) do |person|
+      with_actor_reread { authorize_structure! }
       person.leave_when_absent(provider:, effective_on:)
       written = person.unpublished_events.count
       ensure_provides!(person_id, provider, :employment_status) if written.positive?
@@ -253,7 +254,10 @@ class OrgGraph::CommandHandler
   # @param effective_on [Date, String]
   def end_memberships(person_id, effective_on:, **plan)
     authorize_structure!
-    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.end_memberships(effective_on:) }
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) do |person|
+      with_actor_reread { authorize_structure! }
+      person.end_memberships(effective_on:)
+    end
   end
 
   # Moves a person's membership to a live unit, keeping its terms.
@@ -317,9 +321,11 @@ class OrgGraph::CommandHandler
   end
 
   # Who supplies each fact can't change while the shared lock is held, so
-  # every check inside one command reads the stream once.
+  # every check inside one command reads the stream once. Every caller needs
+  # the right to change people's facts, checked again under the lock.
   def with_facts(person_id, plan, provider, *keys)
     with_person(person_id, plan, facts: true) do |person|
+      with_actor_reread { authorize_structure! }
       outer, @fact_providers = @fact_providers, @repository.fact_providers
       ensure_provides!(person_id, provider, *keys)
       yield person
