@@ -29,7 +29,7 @@ module PersonDevelopment::SuggestionWrites
     attempts = 0
     EvidencePlacementSuggestion.transaction do
       PersonDevelopment::ForgottenSubject.refuse!(person_id)
-      evidence_ids.uniq.sort.each { lock_item(it) }
+      lock_items(evidence_ids)
       begin
         attempts += 1
         EvidencePlacementSuggestion.transaction(requires_new: true) do
@@ -46,10 +46,17 @@ module PersonDevelopment::SuggestionWrites
     end
   end
 
-  def self.lock_item(evidence_id)
-    sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
-                                                  "placement-suggestions:#{evidence_id}" ])
-    EvidencePlacementSuggestion.connection.execute(sql)
+  # Holds each item's lock to the commit. A caller that appends to the stream
+  # before running a suggestion command takes it first, or it can deadlock
+  # with a placement job that holds the lock and waits on that append.
+  #
+  # @param evidence_ids [Array<String>]
+  # @return [void]
+  def self.lock_items(evidence_ids)
+    evidence_ids.uniq.sort.each do |evidence_id|
+      sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                                                    "placement-suggestions:#{evidence_id}" ])
+      EvidencePlacementSuggestion.connection.execute(sql)
+    end
   end
-  private_class_method :lock_item
 end

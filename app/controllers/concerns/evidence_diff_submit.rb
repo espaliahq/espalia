@@ -124,6 +124,9 @@ module EvidenceDiffSubmit
     new_cells.each { |cell| valence_for!(valences, cell) }
     kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
     ensure_staged_cells_exist!(item, kept_suggestions)
+    if kept_suggestions.any? || Array(p[:staged_suggestion_ids]).any?
+      PersonDevelopment::SuggestionWrites.lock_items([ item.id ])
+    end
 
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {

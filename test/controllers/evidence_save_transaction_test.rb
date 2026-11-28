@@ -87,6 +87,24 @@ class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
       assert_equal EvidenceDiffSubmit::VERSION_CONFLICT, flash[:alert]
     end
 
+    should "hold the item's suggestion lock before its first write when it decides a suggestion" do
+      suggestion = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_placement_suggestion, tenant: @tenant, item: EvidenceItem.find(@item),
+               capability_stable_id: @cap2.stable_id, level_ordinal: 2)
+      end
+      sign_in @peer_user
+      held = nil
+      record_lock = ->(**) { held = advisory_locks_held; raise PersonDevelopment::Aggregate::CommandError, "stop" }
+
+      Operations::Assessments::UpdateEvidence.stub(:call, record_lock) do
+        patch evidence_item_path(@item), params: { return_to: "hub", evidence: {
+          evidence_id: @item, desired_links: [ @first ], evidence_type: "peer_feedback", content: "After",
+          staged_suggestion_ids: [ suggestion.id ]
+        } }
+      end
+      assert_equal 1, held
+    end
+
     should "refuse a forgotten person's item even when only its text changes" do
       forget(@author)
       sign_in @peer_user
@@ -188,6 +206,12 @@ class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
     count = 0
     ActionCable.server.stub(:broadcast, ->(*, **) { count += 1 }, &)
     count
+  end
+
+  def advisory_locks_held
+    ActiveRecord::Base.connection.select_value(<<~SQL)
+      SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted
+    SQL
   end
 
   def forget(person)
