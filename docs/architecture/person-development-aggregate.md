@@ -398,7 +398,7 @@ commits first and the command sees it, or waits for the command's events.
 
 A call skips the refusal only by passing `forgotten:` with a reason from
 `Repository::FORGOTTEN_ALLOWED`; any other reason raises `ArgumentError`.
-Today the list holds three:
+Today the list holds four:
 
 - `:framework_migration`: `migrate_framework_version`, so a publish moves every
   stream alike.
@@ -409,6 +409,14 @@ Today the list holds three:
   so a person forgotten before the sync reached them still leaves the
   framework. An admin's `unassign_from_framework` takes a free-text reason and
   stays refused.
+- `:author_withdrawal`: `withdraw_own_feedback`, the author hiding their own
+  feedback. The aggregate checks the author against the item's
+  `EvidenceRecorded` and refuses anyone else, an admin included. It takes no
+  reason. `Operations::Assessments::WithdrawEvidence` sends a forgotten
+  subject's withdrawals here and refuses one with a reason; the ordinary
+  `withdraw_evidence` stays refused. An item with no recorded author can't be
+  withdrawn once its subject is forgotten; none exists today, since
+  `evidence_items.author_id` is required.
 
 An exception takes no lock, so its append can land after the erase. Its events
 must carry nothing about the person: `FrameworkVersionMigrated` holds the
@@ -416,7 +424,8 @@ framework's mappings, `AssessmentCycleConcluded` the cycle id, and
 `LeftAssessmentCycle` the cycle id and a reason from
 `AssessmentCycles::Aggregate::UNENROLL_REASONS`, and the offboarding
 `PersonUnassignedFromFramework` the previous role and level ids, the reason
-`left_company` and no actor. Adding a reason to the list is
+`left_company` and no actor, and the author's `EvidenceWithdrawn` the item id,
+the author's id and no reason. Adding a reason to the list is
 a reviewed decision; `forgotten_subject_writes_test.rb` walks every command and
 fails on one that opens the stream any other way.
 

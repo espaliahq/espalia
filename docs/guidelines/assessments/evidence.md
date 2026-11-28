@@ -617,7 +617,10 @@ Rules, all deliberate:
   so the links on a forgotten person's feedback stay as they were when they
   were forgotten, the hub offers no "Edit links" on it, and "Feedback to
   place" leaves their items out.
-  A modal save on a forgotten person's feedback stores nothing. Only the
+  A modal save on a forgotten person's feedback stores nothing. Its author
+  can still withdraw it, with no reason: the hub offers them Withdraw and not
+  Edit, and the withdrawal leaves every active reader, closed cycles' reports
+  included. Only the
   subject counts: a forgotten author's feedback about someone here can still
   be placed ([#609](https://github.com/espaliahq/espalia/issues/609)).
 - **A modal save is one transaction.** `EvidenceDiffSubmit` runs every command
