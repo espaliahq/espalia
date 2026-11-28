@@ -6,9 +6,21 @@
 class Tenant::OrgUnitStructureMovesController < ApplicationController
   include OrgUnitDrawer
 
+  skip_before_action :set_unit, only: :new
+
   # GET /tenant/org_graph/units/:org_unit_id/structure_move/new?parent_id=
+  #
+  # Only an admin or an editor, who sees every unit, hears that one isn't
+  # there. Anyone else is refused alike for a unit out of reach, retired or
+  # made up, so the step doesn't say which units exist.
   def new
     authorize :org_graph, :show_units?
+    @unit = OrgUnit.live.find_by(id: params[:org_unit_id])
+    return set_unit if @unit.nil? && policy(:org_graph).edit_structure?
+    unless @unit && policy(:org_graph).edit_unit?(@unit)
+      raise Pundit::NotAuthorizedError, query: :edit_unit?, record: :org_graph, policy: policy(:org_graph)
+    end
+
     render_drawer do |overview, rights|
       Views::Tenant::OrgGraph::StructureMoveStep.new(unit: @unit, overview:, rights:, effective_on: step_date,
                                                      alert: flash[:drawer_alert], parent: overview.unit(params[:parent_id]),

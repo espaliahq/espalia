@@ -219,6 +219,13 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
 
   def selected(name) = drawer.at_css("select[name='#{name}'] option[selected]")&.text
 
+  should "tell an admin a unit the move step can't find isn't in the Org Graph" do
+    get new_tenant_org_unit_structure_move_path(SecureRandom.uuid_v7, parent_id: @org[:checkout])
+
+    assert_redirected_to tenant_org_graph_path
+    assert_equal "That unit isn't in the Org Graph.", flash[:alert]
+  end
+
   should "keep each type chosen when a move is refused (#526)" do
     declare_fresh(:checkout, { @org[:squad] => "Group" })
     pod = SecureRandom.uuid_v7

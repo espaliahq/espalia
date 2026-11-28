@@ -346,9 +346,7 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       steps = {
         new_tenant_org_unit_retirement_path(@org[:platform]) => tenant_org_unit_retirement_path(@org[:platform]),
         new_tenant_org_unit_merge_path(@org[:platform]) => tenant_org_unit_merge_path(@org[:platform]),
-        new_tenant_org_unit_split_path(@org[:platform]) => tenant_org_unit_split_path(@org[:platform]),
-        new_tenant_org_unit_structure_move_path(@org[:platform], parent_id: @org[:checkout]) =>
-          tenant_org_unit_structure_move_path(@org[:platform])
+        new_tenant_org_unit_split_path(@org[:platform]) => tenant_org_unit_split_path(@org[:platform])
       }
       steps.each do |step, action|
         get step
@@ -357,6 +355,18 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
         assert_select "form[action='#{action}']", { count: 0 }, step
         assert_select "#org-unit-step-blocked", { count: 1 }, step
       end
+    end
+
+    should "refuse the structure move step for a unit out of reach as it refuses a made-up one" do
+      refusals = [ @org[:platform], SecureRandom.uuid_v7 ].map do |unit_id|
+        get new_tenant_org_unit_structure_move_path(unit_id, parent_id: @org[:checkout])
+        assert_redirected_to root_path
+        [ flash[:alert], flash[:drawer_alert] ]
+      end
+
+      assert_equal 1, refusals.uniq.size
+      get new_tenant_org_unit_structure_move_path(@org[:payments], parent_id: @org[:platform])
+      assert_response :success
     end
 
     should "send a move out of a structure to its step, which refuses it naming no structure (#510)" do
