@@ -628,8 +628,8 @@ Rules, all deliberate:
   sends nothing. The first command's refusal holds the person's row
   `FOR KEY SHARE` until the save commits: an erase, or a change to the
   person's email, waits for it; a name or manager change doesn't. Another
-  write to the stream mid-save rolls the save back with "Someone else changed
-  this feedback while you were saving"
+  write to the stream mid-save rolls the save back with "Someone else saved a
+  change for this person while you were saving"
   ([#624](https://github.com/espaliahq/espalia/issues/624)).
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; a placement notifier would hook in
