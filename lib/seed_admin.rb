@@ -38,6 +38,10 @@ class SeedAdmin
     end
 
     if (user = email && User.find_by(email: email))
+      if user.unvouched?
+        raise ArgumentError, "#{email} has an account that no operator created and no tenant holds, so the seed " \
+                             "won't promote it. Run bin/rails admin:create with EMAIL and PASSWORD instead."
+      end
       unless user.global_admin?
         user.update!(global_admin: true, global_admin_source: "seed")
         output.puts "Promoted #{user.email} to global admin"

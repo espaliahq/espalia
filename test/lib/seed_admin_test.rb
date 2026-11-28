@@ -14,6 +14,12 @@ class SeedAdminTest < ActiveSupport::TestCase
     old.each { |key, value| value.nil? ? ENV.delete(key) : ENV[key] = value }
   end
 
+  def member(user)
+    tenant = create(:tenant)
+    ActsAsTenant.with_tenant(tenant) { create(:tenant_user, tenant:, user:) }
+    user
+  end
+
   def bootstrap(env:, **vars)
     output = StringIO.new
     user = with_env({ "SEED_ADMIN_EMAIL" => nil, "SEED_ADMIN_PASSWORD" => nil }.merge(vars)) do
@@ -58,12 +64,21 @@ class SeedAdminTest < ActiveSupport::TestCase
   end
 
   should "promote an existing plain user with the admin email" do
-    create(:user, email: SeedAdmin::DEV_EMAIL, global_admin: false)
+    member(create(:user, email: SeedAdmin::DEV_EMAIL, global_admin: false))
 
     user, output = bootstrap(env: DEV)
 
     assert user.reload.global_admin?
     assert_includes output, "Promoted"
+  end
+
+  should "refuse to promote an account no tenant holds, and leave it as it was" do
+    unheld = create(:user, email: SeedAdmin::DEV_EMAIL, global_admin: false)
+
+    error = assert_raises(ArgumentError) { bootstrap(env: DEV) }
+
+    assert_includes error.message, "admin:create"
+    assert_not unheld.reload.global_admin?
   end
 
   should "stay idempotent under a mixed-case padded override" do
@@ -125,7 +140,7 @@ class SeedAdminTest < ActiveSupport::TestCase
 
   context "the audit" do
     should "record a promotion and a new admin as seed" do
-      promoted = create(:user, email: SeedAdmin::DEV_EMAIL)
+      promoted = member(create(:user, email: SeedAdmin::DEV_EMAIL))
       bootstrap(env: DEV)
       created, = bootstrap(env: DEV, "SEED_ADMIN_EMAIL" => "ops@example.org", "SEED_ADMIN_PASSWORD" => "s3eded-secret")
 
