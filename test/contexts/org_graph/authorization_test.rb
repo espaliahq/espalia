@@ -177,6 +177,25 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
       assert_equal @team, OrgUnit.find(@payments_id).level_id
     end
 
+    should "refuse the system a unit's type inside it, writing nothing" do
+      structure(context_for(@other)).declare_structure(@engineering_id, **@declaration)
+      lane = SecureRandom.uuid_v7
+      structure(context_for(@other)).add_level(lane, "Lane", structure_unit_id: @engineering_id, effective_on: "2026-02-01")
+      system = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+
+      error = assert_no_difference -> { Rails.configuration.event_store.read.count } do
+        assert_raises(OrgGraph::Authorization::Refused) { system.change_unit_kind(@payments_id, lane, effective_on: "2026-02-02") }
+      end
+      assert_equal "The system cannot change a structure", error.message
+      assert_equal @group, OrgUnit.find(@payments_id).level_id
+    end
+
+    should "leave the system a unit's type in the organisation's structure" do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).change_unit_kind(@product_id, @team, effective_on: "2026-02-01")
+
+      assert_equal @team, OrgUnit.find(@product_id).level_id
+    end
+
     should "be left to the organisation's admins and editors when the unit is the organisation's own" do
       error = assert_raises(OrgGraph::Authorization::Refused) do
         structure(context_for(@other)).add_level(SecureRandom.uuid_v7, "Lane", effective_on: "2026-02-01")
