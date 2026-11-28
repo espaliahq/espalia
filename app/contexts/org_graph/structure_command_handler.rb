@@ -208,6 +208,7 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#change_unit_kind
   def change_unit_kind(unit_id, level_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
+    authorize_unit_kind!(unit_id, @repository.load_structure.structure_left_by(unit_id))
     with_structure(plan) do |structure|
       with_actor_reread { authorize_unit_kind!(unit_id, structure.structure_left_by(unit_id)) }
       structure.change_unit_kind(unit_id, level_id, **attributed(options, :kind_changed_by_id))
@@ -266,6 +267,7 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     options = attributed(options, :stated_by_id)
     ProjectionVersion.unless_rebuilding(OrgGraph::Projections::Members::PROJECTION_NAME) do # placement_moves reads it
+      authorize_succession!([ predecessor_ids, successor_ids ])
       ActiveRecord::Base.transaction do
         @repository.lock_structure # before any person's, the order retire_unit takes them in
         with_actor_reread { authorize_succession!([ predecessor_ids, successor_ids ]) }

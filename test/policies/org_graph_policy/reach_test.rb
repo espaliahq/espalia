@@ -336,6 +336,15 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     end
   end
 
+  should "refuse a caller with no right to the units before taking any lock, so they never hold one" do
+    nobody = as(as_tenant { create(:person, tenant: @tenant) })
+    handler = OrgGraph::StructureCommandHandler.new(actor: nobody, repository: LockRefusingRepository.new(OrgGraph::Repository.new))
+
+    structure_changes.merge(unit_changes, cross_structure_changes, provider_changes).each do |change, command|
+      assert_raises(OrgGraph::Authorization::Refused, change) { command.call(StructureHandler.new(@tenant, handler)) }
+    end
+  end
+
   should "let the system change the organisation's types under the lock, with no person to read again" do
     level_id = SecureRandom.uuid_v7
     as_tenant { system.add_level(level_id, "Pod", **ON) }
@@ -451,6 +460,17 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
       revoke&.call
       self.revoke = nil
       yield
+    end
+
+    def method_missing(name, ...) = repository.public_send(name, ...)
+
+    def respond_to_missing?(name, include_private = false) = repository.respond_to?(name, include_private) || super
+  end
+
+  # Fails any command that takes a lock before refusing the caller.
+  LockRefusingRepository = Struct.new(:repository) do
+    %i[with_structure lock_structure with_person lock_person].each do |name|
+      define_method(name) { |*, **| raise Minitest::Assertion, "took a lock (#{name}) before refusing" }
     end
 
     def method_missing(name, ...) = repository.public_send(name, ...)
