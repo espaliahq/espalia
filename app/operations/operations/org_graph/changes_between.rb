@@ -5,11 +5,12 @@
 # callers join names.
 #
 # Incremental disclosure: defaults to `summary` (a count per kind). Pass
-# `mode: "full"` for every change.
+# `mode: "full"` for every change; only tenant admins and Org Graph editors may.
 #
 # The read behind [#130](https://github.com/espaliahq/espalia/issues/130).
 class Operations::OrgGraph::ChangesBetween < Operations::Base
   include Operations::OrgGraph::DateParameter
+  include Operations::OrgGraph::FullMode
 
   description "What changed in the Org Graph between two dates: joiners (with every fact and " \
               "membership and the units they own on their first day), leavers, person " \
@@ -22,7 +23,8 @@ class Operations::OrgGraph::ChangesBetween < Operations::Base
               "whatever date it took effect, so backdated corrections show, and a change it " \
               "no longer believes comes back withdrawn. A change's effective_on is the first day " \
               "it holds, so a leaving dated 30 April shows on 1 May. Defaults to a count per kind, " \
-              "with withdrawn changes counted apart; mode \"full\" lists every change. People are " \
+              "with withdrawn changes counted apart; mode \"full\" lists every change, and only tenant " \
+              "admins and Org Graph editors may ask for it. People are " \
               "named by id only."
   category :read
   approval :none
@@ -37,9 +39,11 @@ class Operations::OrgGraph::ChangesBetween < Operations::Base
   parameter :mode, String, required: false, allowed: %w[summary full]
   forbids_when :known_on, if: :by, equals: "learned"
 
-  # @raise [Pundit::NotAuthorizedError] when the caller isn't a member of the tenant
+  # @raise [Pundit::NotAuthorizedError] when the caller isn't a member of
+  #   the tenant, or asks for full mode without the right to change the structure
   def policy_check
     authorize :org_graph, :show?
+    authorize_full_mode
   end
 
   # @return [Hash] `:from`, `:to`, `:by`, `:known_on`, `:counts` (changes
