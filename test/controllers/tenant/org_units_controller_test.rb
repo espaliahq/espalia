@@ -346,9 +346,7 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       steps = {
         new_tenant_org_unit_retirement_path(@org[:platform]) => tenant_org_unit_retirement_path(@org[:platform]),
         new_tenant_org_unit_merge_path(@org[:platform]) => tenant_org_unit_merge_path(@org[:platform]),
-        new_tenant_org_unit_split_path(@org[:platform]) => tenant_org_unit_split_path(@org[:platform]),
-        new_tenant_org_unit_structure_move_path(@org[:platform], parent_id: @org[:checkout]) =>
-          tenant_org_unit_structure_move_path(@org[:platform])
+        new_tenant_org_unit_split_path(@org[:platform]) => tenant_org_unit_split_path(@org[:platform])
       }
       steps.each do |step, action|
         get step
@@ -357,6 +355,51 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
         assert_select "form[action='#{action}']", { count: 0 }, step
         assert_select "#org-unit-step-blocked", { count: 1 }, step
       end
+    end
+
+    should "refuse the structure move step for a unit out of reach as it refuses a made-up one" do
+      refusals = [ @org[:platform], SecureRandom.uuid_v7 ].map do |unit_id|
+        get new_tenant_org_unit_structure_move_path(unit_id, parent_id: @org[:checkout])
+        assert_redirected_to root_path
+        [ flash[:alert], flash[:drawer_alert] ]
+      end
+
+      assert_equal 1, refusals.uniq.size
+      get new_tenant_org_unit_structure_move_path(@org[:payments], parent_id: @org[:platform])
+      assert_response :success
+    end
+
+    should "send a move out of a structure to its step, which refuses it naming no structure (#510)" do
+      sign_in @admin_user
+      post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } }
+      sign_in @owner_user
+      events = Rails.configuration.event_store.read.count
+
+      patch tenant_org_unit_path(@org[:payments]), params: { org_unit: { parent_id: @org[:platform] } }
+
+      assert_redirected_to new_tenant_org_unit_structure_move_path(@org[:payments], parent_id: @org[:platform])
+      follow_redirect!
+      assert_includes drawer.text, "Payments can't move into another structure from here."
+      assert_no_match(/Checkout's structure|organisation's structure/, drawer.text)
+      assert_equal events, Rails.configuration.event_store.read.count
+      assert_equal @org[:checkout], unit(:payments).parent_id
+    end
+
+    should "move a unit within its structure without the structure step (#510)" do
+      ledger, till = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        structure.set_kind_parents(@org[:squad], parent_ids: [ @org[:team], @org[:squad] ], top: false, effective_on: "2026-01-01")
+        { ledger => "Ledger", till => "Till" }.each do |id, name|
+          structure.create_unit(id, name, level_id: @org[:squad], parent_id: @org[:payments], effective_on: "2026-01-01")
+        end
+      end
+
+      patch tenant_org_unit_path(till), params: { org_unit: { parent_id: ledger } }
+
+      assert_redirected_to edit_tenant_org_unit_path(till)
+      assert_equal "Moved.", flash[:notice]
+      assert_equal ledger, ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(till).parent_id }
     end
 
     should "change nothing outside Payments, through any write in the drawer" do

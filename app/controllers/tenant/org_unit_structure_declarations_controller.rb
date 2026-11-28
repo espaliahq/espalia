@@ -11,7 +11,8 @@ class Tenant::OrgUnitStructureDeclarationsController < ApplicationController
     authorize_structure_of!(@unit)
     render_drawer do |overview, rights|
       Views::Tenant::OrgGraph::DeclareStructureStep.new(unit: @unit, overview:, rights:, effective_on: step_date,
-                                                        alert: flash[:drawer_alert], fresh: params[:fresh].present?)
+                                                        alert: flash[:drawer_alert], fresh: params[:fresh].present?,
+                                                        carried: carried_choices)
     end
   end
 
@@ -22,7 +23,8 @@ class Tenant::OrgUnitStructureDeclarationsController < ApplicationController
     Operations::OrgGraph::DeclareStructure.call(context: pundit_user, params: with_date(unit_id: @unit.id, **declaration(overview)))
     redirect_to edit_tenant_org_structure_path(@unit.id), status: :see_other, notice: "#{@unit.name} has its own structure. Say here where each of its types can sit."
   rescue *FAILURES => e
-    redirect_to new_tenant_org_unit_structure_declaration_path(@unit, on: effective_on, fresh: (1 if fresh?), **comparison_params),
+    redirect_to new_tenant_org_unit_structure_declaration_path(@unit, on: effective_on, fresh: (1 if fresh?),
+                                                               **carried_choices.symbolize_keys, **comparison_params),
                 flash: { drawer_alert: readable(e.message) }
   end
 

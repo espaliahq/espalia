@@ -91,7 +91,7 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
   should "come back to the step with the reason when the declaration is refused" do
     declare_fresh(:checkout, { @org[:squad] => "" })
 
-    assert_redirected_to new_tenant_org_unit_structure_declaration_path(@org[:checkout], fresh: 1)
+    assert_redirected_to new_tenant_org_unit_structure_declaration_path(@org[:checkout], fresh: 1, names: { @org[:squad] => "" })
     assert_predicate flash[:drawer_alert], :present?
     assert_empty own_types(:checkout)
   end
@@ -211,6 +211,53 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Moved Checkout into Platform's structure. Its type is now Tribe.", flash[:notice]
     assert_equal "Tribe", type_of(:checkout)
     assert_equal "Group", type_of(:payments)
+  end
+
+  def refused(operation, &)
+    operation.stub(:call, ->(**) { raise OrgGraph::Authorization::Refused, "Refused for the test" }, &)
+  end
+
+  def selected(name) = drawer.at_css("select[name='#{name}'] option[selected]")&.text
+
+  should "tell an admin a unit the move step can't find isn't in the Org Graph" do
+    get new_tenant_org_unit_structure_move_path(SecureRandom.uuid_v7, parent_id: @org[:checkout])
+
+    assert_redirected_to tenant_org_graph_path
+    assert_equal "That unit isn't in the Org Graph.", flash[:alert]
+  end
+
+  should "keep each type chosen when a move is refused (#526)" do
+    declare_fresh(:checkout, { @org[:squad] => "Group" })
+    pod = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      admin = TenantUser.find_by!(user: @admin_user)
+      OrgGraph::StructureCommandHandler.new(actor: AuthorizationContext.new(user: @admin_user, tenant_user: admin, person: nil))
+                                       .add_level(pod, "Pod", structure_unit_id: @org[:checkout], effective_on: Date.current)
+    end
+
+    refused(Operations::OrgGraph::MoveUnit) do
+      post tenant_org_unit_structure_move_path(@org[:platform]), params: { parent_id: @org[:checkout], conversion: { @org[:team] => pod } }
+    end
+    follow_redirect!
+
+    assert_equal "Refused for the test", drawer.at_css("#org-unit-alert").text.strip
+    assert_equal "Pod", selected("conversion[#{@org[:team]}]")
+  end
+
+  should "keep each type chosen when a copied structure is refused (#526)" do
+    refused(Operations::OrgGraph::DeclareStructure) do
+      post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:team] } }
+    end
+    follow_redirect!
+
+    assert_equal "Team", selected("conversion[#{@org[:squad]}]")
+  end
+
+  should "keep each name given when a fresh structure is refused (#526)" do
+    refused(Operations::OrgGraph::DeclareStructure) { declare_fresh(:checkout, { @org[:squad] => "Guild" }) }
+    follow_redirect!
+
+    assert_equal "Guild", drawer.at_css("input[name='names[#{@org[:squad]}]']")["value"]
   end
 
   context "as Checkout's owner" do

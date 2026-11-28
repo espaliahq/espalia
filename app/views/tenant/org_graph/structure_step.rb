@@ -13,12 +13,30 @@ class Views::Tenant::OrgGraph::StructureStep < Views::Tenant::OrgGraph::UnitStep
     I18n.t("org_graph.structure_name.unit", unit: overview.unit(structure_unit_id).name)
   end
 
+  # @param carried [Hash{String => Hash, Array}] what a refused write sent, so
+  #   the step comes back with every choice made ([#526](https://github.com/espaliahq/espalia/issues/526))
+  def initialize(carried: {}, **)
+    super(**)
+    @carried = carried
+  end
+
   private
+
+  # @return [String, nil] what the refused write sent for this type
+  def carried(field, type)
+    sent = @carried[field]
+    sent[type.id].presence if sent.is_a?(Hash)
+  end
+
+  # The carried choice when it is still offered, else the first fallback that is.
+  def preselect(field, type, kinds, *fallbacks)
+    [ carried(field, type), *fallbacks ].find { |id| kinds.any? { it.id == id } }
+  end
 
   # A structure sits over sub-units, and an HRIS may supply the unit that
   # declares one, so the reshape blockers don't apply.
   def blocked_because
-    return "Only an admin can change a unit's structure." unless @rights.structure?
+    return "#{::OrgGraph::Authorization.structure_refusal(@unit)}." unless @rights.structure?
 
     not_allowed_because unless allowed?
   end

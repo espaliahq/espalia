@@ -46,7 +46,9 @@ class Tenant::OrgUnitsController < ApplicationController
   # PATCH /tenant/org_graph/units/:id
   #
   # One form renames the unit, one changes its type and another moves it, so
-  # a request carries a name, a level_id or a parent_id.
+  # a request carries a name, a level_id or a parent_id. A move into another
+  # structure goes to its own step, unless MoveUnit would refuse the caller
+  # the unit anyway (#510).
   def update
     authorize :org_graph, :show_units?
     attrs = params.expect(org_unit: [ :name, :level_id, :parent_id ])
@@ -58,7 +60,7 @@ class Tenant::OrgUnitsController < ApplicationController
       write(notice: "Renamed.") do
         Operations::OrgGraph::RenameUnit.call(context: pundit_user, params: with_date(unit_id: @unit.id, name: attrs[:name]))
       end
-    elsif into_another_structure?(attrs[:parent_id])
+    elsif policy(:org_graph).edit_unit?(@unit) && OrgGraph::StructureCrossing.new(@unit, attrs[:parent_id]).crosses?
       redirect_to new_tenant_org_unit_structure_move_path(@unit, parent_id: attrs[:parent_id], on: drawer_on, **comparison_params),
                   status: :see_other
     else
@@ -67,15 +69,5 @@ class Tenant::OrgUnitsController < ApplicationController
                                             params: with_date(unit_id: @unit.id, parent_id: attrs[:parent_id].presence))
       end
     end
-  end
-
-  private
-
-  # A parent in another structure needs each type converted, which
-  # the move step asks for ([#494](https://github.com/espaliahq/espalia/issues/494)).
-  def into_another_structure?(parent_id)
-    overview = OrgGraph::UnitsOverview.new(selected_unit_id: @unit.id)
-    rights = OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview)
-    parent_id.blank? ? rights.root_conversion_choice? : rights.conversion_parent_choices.any? { it.id == parent_id }
   end
 end
