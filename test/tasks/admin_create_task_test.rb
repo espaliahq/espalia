@@ -44,6 +44,17 @@ class AdminCreateTaskTest < ActiveSupport::TestCase
     assert user.valid_password?("new-password-2")
   end
 
+  should "end a member's MCP access when it changes their password, and keep it when it doesn't" do
+    user = member(create(:user, email: "member@example.com", password: "old-password-1", password_confirmation: "old-password-1"))
+    kept = create_mcp_token(user)
+
+    run_task("EMAIL" => "member@example.com", "PASSWORD" => nil)
+    assert_not kept.reload.revoked?
+
+    run_task("EMAIL" => "member@example.com", "PASSWORD" => "new-password-2")
+    assert kept.reload.revoked?
+  end
+
   should "create a global admin" do
     output = run_task("EMAIL" => "new-admin@example.com", "PASSWORD" => "new-password-2")
 
