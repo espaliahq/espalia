@@ -3,6 +3,8 @@
 require "test_helper"
 
 class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
+  include McpRequestCredentialsHelpers
+
   setup do
     @tenant = create(:tenant)
     @person = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, email: "colleague@example.com") }
@@ -186,10 +188,10 @@ class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
   def mcp_credentials
     app = Mcp::Application.create!(name: "Client", redirect_uri: "https://client.example/cb", scopes: "read", confidential: false)
     token = Mcp::AccessToken.create!(application: app, resource_owner_id: @account.id, tenant_id: @tenant.id, scopes: "read", expires_in: 3600)
-    grant = Mcp::AccessGrant.create!(application: app, resource_owner_id: @account.id, tenant_id: @tenant.id, scopes: "read",
-                                     expires_in: 600, redirect_uri: app.redirect_uri)
-    approval = Mcp::PendingApproval.create!(user: @account, tenant: @tenant, client_application: app,
-                                            operation_class: "Operations::System::Whoami", arguments: {}, expires_at: 1.hour.from_now)
+    grant = as_consent_by(@account) { Mcp::AccessGrant.create!(application: app, resource_owner_id: @account.id, tenant_id: @tenant.id, scopes: "read",
+                                     expires_in: 600, redirect_uri: app.redirect_uri) }
+    approval = as_mcp_call_with(token) { Mcp::PendingApproval.create!(user: @account, tenant: @tenant, client_application: app,
+                                            operation_class: "Operations::System::Whoami", arguments: {}, expires_at: 1.hour.from_now) }
     [ token, grant, approval ]
   end
 

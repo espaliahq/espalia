@@ -222,4 +222,43 @@ class OauthPkceFlowTest < ActionDispatch::IntegrationTest
       assert_response :bad_request
     end
   end
+
+  context "consent by an account that signs in with Google only" do
+    should "store the grant" do
+      account = create(:user, email: "gina@example.com")
+      account.replace_credentials!
+      create(:tenant_user, tenant: @tenant_a, user: account, role: :member)
+      Rails.application.env_config["devise.mapping"] = Devise.mappings[:user]
+      Rails.application.env_config["omniauth.auth"] = OmniAuth.config.mock_auth[:google_oauth2] = OmniAuth::AuthHash.new(
+        provider: "google_oauth2", uid: "uid-gina", info: { "email" => "gina@example.com", "email_verified" => true },
+        extra: { raw_info: { "email_verified" => true } }
+      )
+      get user_google_oauth2_omniauth_callback_path
+
+      post oauth_authorization_path, params: auth_params(tenant_id: @tenant_a.id)
+
+      assert response.location.start_with?(@application.redirect_uri)
+      assert_equal [ account.id ], Mcp::AccessGrant.where(application: @application).pluck(:resource_owner_id)
+    ensure
+      Rails.application.env_config.delete("omniauth.auth")
+      Rails.application.env_config.delete("devise.mapping")
+    end
+  end
+
+  context "consent while an admin views as another user" do
+    setup do
+      @admin = create(:user, password: "password123")
+      create(:tenant_user, tenant: @tenant_a, user: @admin, role: :admin)
+      member = ActsAsTenant.without_tenant { TenantUser.find_by!(user: @user, tenant: @tenant_a) }
+      sign_in @admin
+      post impersonation_path, params: { tenant_user_id: member.id }
+    end
+
+    should "refuse a consent form, storing no grant" do
+      post oauth_authorization_path, params: auth_params(tenant_id: @tenant_a.id)
+
+      assert_redirected_to root_path
+      assert_empty Mcp::AccessGrant.where(application: @application)
+    end
+  end
 end
