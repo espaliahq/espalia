@@ -102,6 +102,28 @@ class User < ApplicationRecord
     end
   end
 
+  # Completes a reset by token under the lock {#replace_credentials!} takes.
+  # Devise loads the account before this runs, so the stored token is read
+  # again under the lock, and a link a replacement ended meanwhile is refused.
+  # A record loaded without a reset token keeps Devise's behaviour.
+  #
+  # @param new_password [String]
+  # @param new_password_confirmation [String]
+  # @return [Boolean] whether the password was saved
+  def reset_password(new_password, new_password_confirmation)
+    loaded_token = reset_password_token_in_database
+    return super if loaded_token.blank?
+
+    transaction do
+      if self.class.lock(CREDENTIALS_LOCK).where(id:).pick(:reset_password_token) == loaded_token
+        super
+      else
+        errors.add(:reset_password_token, :invalid)
+        false
+      end
+    end
+  end
+
   # Drops a source named for a save that never reached the audit, such as one that failed validation.
   #
   # @return [User]

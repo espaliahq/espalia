@@ -104,6 +104,27 @@ class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
       assert_not @account.reload.valid_password?("old-password-1")
       assert token.reload.revoked?
     end
+
+    should "refuse a reset whose account was loaded before provisioning adopted it" do
+      token = @account.send_reset_password_instructions
+      replaced_password = nil
+      find_by_token = User.method(:find_or_initialize_with_error_by)
+      load_then_adopt = lambda do |*args|
+        find_by_token.call(*args).tap do
+          @person.ensure_user!
+          replaced_password = @account.reload.encrypted_password
+        end
+      end
+
+      assert_queries_match(/SELECT "users"."reset_password_token" .* FOR NO KEY UPDATE/) do
+        User.stub(:find_or_initialize_with_error_by, load_then_adopt) { reset_password(token) }
+      end
+
+      assert_response :unprocessable_content
+      assert_includes response.body, "Reset password token is invalid"
+      assert_equal replaced_password, @account.reload.encrypted_password
+      assert_not @account.valid_password?("new-password-1")
+    end
   end
 
   context "an account a tenant holds" do
@@ -128,6 +149,18 @@ class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
     end
   end
 
+  should "reset its password by token and end its other sessions" do
+    other = open_session
+    other.post user_session_path, params: { user: { email: "colleague@example.com", password: "old-password-1" } }
+    token = @account.send_reset_password_instructions
+
+    reset_password(token)
+
+    assert @account.reload.valid_password?("new-password-1")
+    other.get root_path
+    other.assert_redirected_to new_user_session_path
+  end
+
   should "keep a global admin's password when provisioning adopts it" do
     @account.update!(global_admin: true, global_admin_source: "admin_task")
 
@@ -140,6 +173,10 @@ class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
 
   def sign_in_with_password(remember: false)
     post user_session_path, params: { user: { email: "colleague@example.com", password: "old-password-1", remember_me: remember ? "1" : "0" } }
+  end
+
+  def reset_password(token)
+    put user_password_path, params: { user: { reset_password_token: token, password: "new-password-1", password_confirmation: "new-password-1" } }
   end
 
   def drop_session_cookie
