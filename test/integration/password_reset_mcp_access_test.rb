@@ -25,6 +25,16 @@ class PasswordResetMcpAccessTest < ActionDispatch::IntegrationTest
     assert_equal %w[google_oauth2 google-uid-1], [ @account.provider, @account.uid ]
   end
 
+  should "revoke a token and grant whose revocation is stamped ahead of this clock" do
+    token, grant, = mcp_credentials(@tenant)
+    [ token, grant ].each { it.update_columns(revoked_at: 1.hour.from_now) }
+
+    reset_password(@account.send_reset_password_instructions)
+
+    assert(token.reload.revoked_at <= Time.current)
+    assert(grant.reload.revoked_at <= Time.current)
+  end
+
   should "revoke nothing when the reset fails" do
     token, grant, approval = mcp_credentials(@tenant)
 
