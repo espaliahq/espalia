@@ -67,6 +67,34 @@ class User < ApplicationRecord
     global_admin
   end
 
+  # Whether neither a live membership nor the global admin flag vouches for
+  # this account. Provisioning that hands such an account to a person first
+  # replaces its credentials.
+  #
+  # @return [Boolean]
+  def unvouched?
+    !global_admin? && ActsAsTenant.without_tenant { tenant_users.none? }
+  end
+
+  # Sets a new password and ends everything the old credentials opened, in one
+  # transaction: sessions and remember-me cookies (Devise salts both from the
+  # password digest), an outstanding reset link, MCP access tokens and grants,
+  # and MCP calls awaiting approval.
+  #
+  # @param password [String] random unless an operator supplies one
+  # @return [void]
+  def replace_credentials!(password = SecureRandom.hex(24))
+    transaction do
+      lock!
+      update!(password:, password_confirmation: password, remember_created_at: nil,
+              reset_password_token: nil, reset_password_sent_at: nil)
+      now = Time.current
+      Mcp::AccessToken.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+      Mcp::AccessGrant.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+      ActsAsTenant.without_tenant { Mcp::PendingApproval.pending.where(user_id: id).update_all(status: :rejected, updated_at: now) }
+    end
+  end
+
   # Drops a source named for a save that never reached the audit, such as one that failed validation.
   #
   # @return [User]
@@ -144,7 +172,10 @@ class User < ApplicationRecord
 
     by_email = find_by(email: email)
     if by_email
-      by_email.update!(provider: auth.provider, uid: auth.uid) if by_email.provider.blank?
+      if by_email.provider.blank?
+        by_email.replace_credentials! if by_email.unvouched?
+        by_email.update!(provider: auth.provider, uid: auth.uid)
+      end
       return [ by_email, nil ]
     end
 
