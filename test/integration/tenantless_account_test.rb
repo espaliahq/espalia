@@ -174,6 +174,7 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     assert_empty uncrawlable, "a wildcard route can't be crawled: exempt it in EXEMPT with a reason"
     assert_empty stale, "an EXEMPT entry matches no route: remove it"
     assert(EXEMPT.values.all?(&:present?), "every EXEMPT entry gives a reason")
+    assert_empty mounted_engines, "the crawl sees only an engine's mount point: exempt it, or crawl its own routes"
   end
 
   should "fill every route in each tenant with that tenant's own seeded rows, or say why it can't" do
@@ -191,18 +192,22 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     assert((UNSEEDED.values + TENANT_LINKED.values + TENANT_WIDE.values + GLOBAL_TABLES.values).all?(&:present?), "every entry gives a reason")
   end
 
-  should "read no tenant's people, names, plans or pay on any page" do
+  should "read no tenant's people, names, plans or pay on any page, and change nothing" do
+    before = fingerprints
     leaks = []
     demo_tenants.each do |tenant|
       get_routes(tenant).each do |path|
         status, body = visit(:get, path)
-        found = leak_markers.select { |marker| body.include?(marker) || body.include?(ERB::Util.html_escape(marker)) }
+        found = markers_in(body)
         leaks << "#{path} (#{status}): #{found.first(3).join(', ')}" if found.any?
       end
     end
 
     assert_empty errors, "a tenantless request raised"
     assert_empty leaks, "a tenantless account saw tenant data:\n#{leaks.join("\n")}"
+    assert_equal before, fingerprints, "a tenantless read changed a table"
+    get root_path
+    assert_response :success, "the crawl should run signed in throughout"
   end
 
   should "be refused by every route that writes, in each tenant, and change nothing" do
@@ -235,7 +240,7 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
 
     seen = %w[/frameworks /assessments /calibration_sessions /tenant/users].select do |path|
       _status, body = visit(:get, path)
-      leak_markers.any? { body.include?(it) || body.include?(ERB::Util.html_escape(it)) }
+      markers_in(body).any?
     end
 
     assert_not_empty seen
@@ -250,8 +255,8 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
       failed = planning_and_org_routes(tenant).filter_map do |template, path|
         path = "#{path}?scenario=#{seeded_id(":scenario_id", "scenarios", nil, tenant)}" if SCENARIO_PAGES.key?(template)
         status, body = visit(:get, path, headers: (FRAMES[template] && { "Turbo-Frame" => FRAMES[template] }))
-        seen.merge(planning_names(tenant).select { body.include?(it) || body.include?(ERB::Util.html_escape(it)) })
-        pay_seen ||= pay_figures.any? { body.include?(it) }
+        seen.merge(names_in(body, planning_names(tenant)))
+        pay_seen ||= pay_in(body).any?
         next if status == 200 || (MEMBER_REDIRECTS.key?(template) && [ 302, 303 ].include?(status))
 
         "#{path} (#{status}#{" #{redirect_path}" if redirect_path && status.is_a?(Integer)} #{flash[:alert]})"
@@ -466,10 +471,17 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
   def redirect_path = response.location && URI(response.location).path
 
   def route_table
-    @route_table ||= Rails.application.routes.routes.map do |route|
-      verb = route.verb.to_s.downcase.split("|").first || "get"
-      [ verb.to_sym, route.path.spec.to_s.sub("(.:format)", "").gsub(/\(.*?\)/, "") ]
+    @route_table ||= Rails.application.routes.routes.flat_map do |route|
+      path = route.path.spec.to_s.sub("(.:format)", "").gsub(/\(.*?\)/, "")
+      route.verb.to_s.downcase.split("|").presence&.map { [ it.to_sym, path ] } || [ [ :get, path ] ]
     end.uniq
+  end
+
+  def mounted_engines
+    Rails.application.routes.routes.filter_map do |route|
+      app = route.app.respond_to?(:app) ? route.app.app : route.app
+      route.path.spec.to_s if app.is_a?(Class) && app < Rails::Engine && !exempt?(route.path.spec.to_s)
+    end
   end
 
   def exempt?(path) = EXEMPT.keys.any? { path.match?(it) }
@@ -596,24 +608,43 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # Names and figures only a tenant's members should see.
-  def leak_markers
-    @leak_markers ||= ActsAsTenant.without_tenant do
-      names = Tenant.pluck(:name) + Person.pluck(:name) + FrameworkState::Framework.pluck(:name) +
+  # Names, addresses and words only a tenant's members should see.
+  def leak_names
+    @leak_names ||= ActsAsTenant.without_tenant do
+      names = Tenant.pluck(:name) + Person.pluck(:name, :email).flatten + FrameworkState::Framework.pluck(:name) +
+              FrameworkState::Capability.pluck(:name, :description).flatten + FrameworkState::Role.pluck(:name) +
+              EvidenceItem.pluck(:content) + PersonDevelopmentComment.pluck(:body) +
               OrgUnit.pluck(:name) + AssessmentCycle.pluck(:name) + CalibrationSession.pluck(:name) +
               demo_tenants.flat_map { planning_names(it) }
-      names.compact.uniq.select { it.length > 3 } + pay_figures
+      names.compact.uniq.select { it.length > 3 }
     end
   end
 
-  # A checksum of every row, so an update counts as well as an insert or a delete.
+  def markers_in(body) = names_in(body, leak_names) + pay_in(body)
+
+  def names_in(body, names) = names.select { body.include?(it) || body.include?(ERB::Util.html_escape(it)) }
+
+  # Ids are taken out first, so a UUID or digest holding the digits doesn't count as pay.
+  def pay_in(body)
+    text = PayFigureAssertions.without_ids(body)
+    pay_figures.select { text.include?(it) }
+  end
+
+  # A checksum of every row, so an update counts as well as an insert or a delete. The crawling
+  # account's own settings may change; every other user's are checked like any other column.
   def fingerprints
     (connection.tables - UNTOUCHED_TABLES).sort.index_with do |table|
       columns = connection.columns(table).map(&:name)
-      columns -= OWN_SETTINGS if table == "users"
-      row = "row(#{columns.map { connection.quote_column_name(it) }.join(', ')})::text"
-      connection.select_value("SELECT md5(coalesce(string_agg(#{row}, '|' ORDER BY #{row}), '')) FROM #{connection.quote_table_name(table)}")
+      next checksum(table, columns) unless table == "users"
+
+      own = "id = #{connection.quote(@account.id)}"
+      [ checksum(table, columns, "NOT (#{own})"), checksum(table, columns - OWN_SETTINGS, own) ]
     end
+  end
+
+  def checksum(table, columns, condition = "TRUE")
+    row = "row(#{columns.map { connection.quote_column_name(it) }.join(', ')})::text"
+    connection.select_value("SELECT md5(coalesce(string_agg(#{row}, '|' ORDER BY #{row}), '')) FROM #{connection.quote_table_name(table)} WHERE #{condition}")
   end
 
   def connection = ActiveRecord::Base.connection
