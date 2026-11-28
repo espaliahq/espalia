@@ -4,23 +4,26 @@
 # live units, who was employed and who belonged where. People come back as
 # ids only; callers join names.
 #
-# Incremental disclosure: defaults to `summary` (units with member counts). Pass
-# `mode: "full"` for each person's facts and every membership, and `unit_id`
-# to narrow either mode to one unit and the units under it.
+# Incremental disclosure: defaults to `summary` (units with member counts,
+# naming no one). Pass `mode: "full"` for each unit's owners, each person's
+# facts and every membership; only tenant admins and Org Graph editors may.
+# `unit_id` narrows either mode to one unit and the units under it.
 #
 # The read behind [#123](https://github.com/espaliahq/espalia/issues/123).
 class Operations::OrgGraph::AsOf < Operations::Base
   include Operations::OrgGraph::DateParameter
+  include Operations::OrgGraph::FullMode
 
   description "Read the Org Graph as it stood on one date: the live units with their parent, " \
-              "level, owners and direct member count, the organisation's unit types with the type ids each " \
+              "level and direct member count, the organisation's unit types with the type ids each " \
               "could sit under (parent_ids) and whether it could sit at the top, the same for each unit " \
               "that had a structure of its own (structures, by unit_id and its name that day), and the number of employed people. A future " \
               "date includes changes already recorded for it, such as a hire who starts then or a " \
               "scheduled move. known_on reads what the Org Graph knew at the end of that earlier " \
               "date in the tenant's time zone, leaving out corrections learned " \
-              "since. mode \"full\" adds each employed " \
-              "person's facts (title, level, manager, site, employment) and every membership. " \
+              "since. mode \"full\" adds each unit's owner_ids, each employed " \
+              "person's facts (title, level, manager, site, employment) and every membership, and only " \
+              "tenant admins and Org Graph editors may ask for it. " \
               "unit_id narrows to that unit and the units under it, counting only the people " \
               "placed there. People are named by id only."
   category :read
@@ -33,9 +36,11 @@ class Operations::OrgGraph::AsOf < Operations::Base
   parameter :mode, String, required: false, allowed: %w[summary full]
   parameter :unit_id, String, required: false, allow_blank: false, schema: { format: "uuid" }
 
-  # @raise [Pundit::NotAuthorizedError] when the caller isn't a member of the tenant
+  # @raise [Pundit::NotAuthorizedError] when the caller isn't a member of
+  #   the tenant, or asks for full mode without the right to change the structure
   def policy_check
     authorize :org_graph, :show?
+    authorize_full_mode
   end
 
   # @return [Hash] `:date`, `:known_on`, `:kinds` (the top structure's unit
@@ -43,9 +48,9 @@ class Operations::OrgGraph::AsOf < Operations::Base
   #   structure in force among the units reported, with its `:unit_id` and
   #   `:kinds`), `:people_count` (everyone employed,
   #   or with `unit_id` everyone placed under it) and `:units`, each with
-  #   `:id`, `:name`, `:parent_id`, `:level_id`, `:owner_ids` and
-  #   `:member_count` (its direct members); in full mode also `:people` and
-  #   `:memberships`
+  #   `:id`, `:name`, `:parent_id`, `:level_id` and `:member_count` (its
+  #   direct members); in full mode each unit also has `:owner_ids`, and the
+  #   result `:people` and `:memberships`
   # @raise [Operations::Base::ParameterError] for a malformed date, or a
   #   unit_id that names no unit live on that date
   def perform
@@ -62,17 +67,23 @@ class Operations::OrgGraph::AsOf < Operations::Base
 
   def payload(snapshot, units, people, memberships)
     member_counts = memberships.group_by(&:unit_id).transform_values { it.map(&:person_id).uniq.size }
+    full = params[:mode] == "full"
     result = {
       date: snapshot.date.iso8601,
       known_on: snapshot.known_on&.iso8601,
       people_count: people.size,
       kinds: kind_rows(snapshot.kinds),
       structures: structures_payload(snapshot, units),
-      units: units.map { it.to_h.merge(member_count: member_counts.fetch(it.id, 0)) }
+      units: units.map { unit_row(it, member_counts, full:) }
     }
-    return result unless params[:mode] == "full"
+    return result unless full
 
     result.merge(people: people.map(&:to_h), memberships: memberships.map(&:to_h))
+  end
+
+  def unit_row(unit, member_counts, full:)
+    row = unit.to_h.merge(member_count: member_counts.fetch(unit.id, 0))
+    full ? row : row.except(:owner_ids)
   end
 
   def structures_payload(snapshot, units)

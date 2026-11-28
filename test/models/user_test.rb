@@ -168,6 +168,42 @@ class UserTest < ActiveSupport::TestCase
       assert_equal "member", roles[account.id]
     end
 
+    context "when the grants stream records a matching person as forgotten" do
+      setup do
+        @stream_forgotten = lambda do |tenant|
+          ActsAsTenant.with_tenant(tenant) do
+            person = create(:person, tenant:, email: "gale@example.com")
+            create(:tenant_user, tenant:, person: nil).link_to!(person, match: :admin)
+            AccountGrants::CommandHandler.new.unlink_forgotten(person.id)
+            person
+          end
+        end
+      end
+
+      should "refuse with :no_matching_account, leaving no account, when the row still holds the email" do
+        tenant = create(:tenant)
+        @stream_forgotten.(tenant)
+
+        assert_no_difference -> { User.count } do
+          assert_equal [ nil, :no_matching_account ], User.from_google_omniauth(build_auth(email: "gale@example.com", uid: "uid-g"))
+        end
+        assert_equal 1, TenantUser.unscoped.where(tenant_id: tenant.id).count
+      end
+
+      should "provision the first live match after two forgotten ones" do
+        tenants = Array.new(3) { create(:tenant) }
+        travel_to(2.days.ago) { @stream_forgotten.(tenants[0]) }
+        travel_to(1.day.ago) { @stream_forgotten.(tenants[1]) }
+        live = ActsAsTenant.with_tenant(tenants[2]) { create(:person, tenant: tenants[2], email: "gale@example.com") }
+
+        user, reason = User.from_google_omniauth(build_auth(email: "gale@example.com", uid: "uid-g"))
+
+        assert_nil reason
+        assert_equal [ tenants[2].id ], TenantUser.unscoped.where(user_id: user.id).pluck(:tenant_id)
+        assert_equal live.id, TenantUser.unscoped.find_by!(user_id: user.id).person_id
+      end
+    end
+
     should "refuse with :no_matching_account when no User and no Person matches" do
       user, reason = User.from_google_omniauth(build_auth(email: "stranger@example.com", uid: "uid-x"))
       assert_nil user
