@@ -28,7 +28,7 @@ class Operations::OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
       @handler.leave(@grace.id, **ESPALIA, effective_on: "2026-03-05")
 
       user = create(:user)
-      @context = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, user:, tenant: @tenant), person: nil)
+      @context = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, user:, tenant: @tenant, org_graph_editor: true), person: nil)
     end
   end
 
