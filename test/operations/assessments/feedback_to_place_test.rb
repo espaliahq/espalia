@@ -50,6 +50,10 @@ class Operations::Assessments::FeedbackToPlaceTest < ActiveSupport::TestCase
     id
   end
 
+  def forget!(person)
+    person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+  end
+
   def call_op(**params)
     ActsAsTenant.with_tenant(@tenant) do
       Operations::Assessments::FeedbackToPlace.call(context: @context, params: params)
@@ -140,6 +144,20 @@ class Operations::Assessments::FeedbackToPlaceTest < ActiveSupport::TestCase
     end
 
     assert_not_includes ids(call_op[:items]), @about_direct
+  end
+
+  should "leave out feedback about a forgotten person, which can no longer be placed" do
+    ActsAsTenant.with_tenant(@tenant) { forget!(@direct) }
+    result = call_op
+
+    assert_equal [ @about_seconded, @about_deeper ], ids(result[:items])
+    assert_equal({ team: 2, org: 3 }, result[:counts])
+  end
+
+  should "keep feedback a forgotten author wrote about someone still here" do
+    ActsAsTenant.with_tenant(@tenant) { forget!(@peer) }
+
+    assert_equal [ @about_direct, @about_seconded, @about_deeper ], ids(call_op[:items])
   end
 
   should "refuse an unknown scope" do

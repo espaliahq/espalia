@@ -31,4 +31,7 @@ class FrameworkState::Capability < ApplicationRecord
 
   scope :active, -> { where(status: "active") }
   scope :archived, -> { where(status: "archived") }
+  scope :active_in_framework, ->(framework_id) {
+    active.joins(:category).where(framework_capability_categories: { framework_id: framework_id })
+  }
 end

@@ -73,12 +73,13 @@ class TeamPlanning::SeatStart
   def planned = ([ @position.target_start, @opens_on ].compact.max unless on_hold?)
 
   # @param time_to_hire [Integer] days
+  # @param today [Date] the tenant's today: a seat still open can't have filled before it
   # @return [Date, nil] when an undated open seat is forecast to fill; nil
   #   when the plan dates it, or recruiting is on hold
-  def forecast(time_to_hire:)
+  def forecast(time_to_hire:, today:)
     return if on_hold? || @position.target_start || @opens_on.nil?
 
-    @opens_on + time_to_hire
+    [ @opens_on + time_to_hire, today ].max
   end
 
   # @return [String] "on_hold", "target" or "opened"

@@ -28,6 +28,11 @@ class User < ApplicationRecord
   # source. A validated save fails on `global_admin_source` instead.
   class GlobalAdminSourceMissing < StandardError; end
 
+  # Row lock for credential changes. Weaker than FOR UPDATE so that a foreign key
+  # check, which takes FOR KEY SHARE, never waits on it. Grant, approval and refresh
+  # inserts take this lock on purpose, to queue behind {#replace_credentials!}.
+  CREDENTIALS_LOCK = "FOR NO KEY UPDATE"
+
   # Where the next change to `global_admin` comes from: one of
   # {GlobalAdminChange::RECORDABLE_SOURCES}. Cleared after every save, by a validation that finds
   # an error, and by one run while the flag is unchanged: name it just before the save it is for.
@@ -65,6 +70,59 @@ class User < ApplicationRecord
   # @return [Boolean] whether this user has global admin privileges
   def global_admin?
     global_admin
+  end
+
+  # Whether neither a live membership nor the global admin flag vouches for
+  # this account. Provisioning that hands such an account to a person first
+  # replaces its credentials.
+  #
+  # @return [Boolean]
+  def unvouched?
+    !global_admin? && ActsAsTenant.without_tenant { tenant_users.none? }
+  end
+
+  # Sets a new password and ends everything the old credentials opened, in one
+  # transaction: sessions and remember-me cookies (Devise salts both from the
+  # password digest), an outstanding reset link, the linked Google identity,
+  # MCP access tokens and grants, and MCP calls awaiting approval.
+  #
+  # @param password [String] random unless an operator supplies one
+  # @return [void]
+  def replace_credentials!(password = SecureRandom.hex(24))
+    transaction do
+      lock!(CREDENTIALS_LOCK)
+      # Grants before tokens, so a code exchange holding its grant commits its token
+      # before the tokens are revoked. The account row last, as clearing a unique
+      # column would block that exchange's foreign key check.
+      now = Time.current
+      Mcp::AccessGrant.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+      Mcp::AccessToken.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
+      ActsAsTenant.without_tenant { Mcp::PendingApproval.pending.where(user_id: id).update_all(status: :rejected, updated_at: now) }
+      update!(password:, password_confirmation: password, remember_created_at: nil,
+              reset_password_token: nil, reset_password_sent_at: nil, provider: nil, uid: nil)
+    end
+  end
+
+  # Completes a reset by token under the lock {#replace_credentials!} takes.
+  # Devise loads the account before this runs, so the stored token is read
+  # again under the lock, and a link a replacement ended meanwhile is refused.
+  # A record loaded without a reset token keeps Devise's behaviour.
+  #
+  # @param new_password [String]
+  # @param new_password_confirmation [String]
+  # @return [Boolean] whether the password was saved
+  def reset_password(new_password, new_password_confirmation)
+    loaded_token = reset_password_token_in_database
+    return super if loaded_token.blank?
+
+    transaction do
+      if self.class.lock(CREDENTIALS_LOCK).where(id:).pick(:reset_password_token) == loaded_token
+        super
+      else
+        errors.add(:reset_password_token, :invalid)
+        false
+      end
+    end
   end
 
   # Drops a source named for a save that never reached the audit, such as one that failed validation.
@@ -126,7 +184,8 @@ class User < ApplicationRecord
   # Provisioning rules (see docs/guidelines/authorization.md and the plan):
   # - Refuse unless Google reports the email as verified.
   # - Existing User by `provider/uid` → return as-is.
-  # - Existing User by email → backfill `provider`/`uid`.
+  # - Existing User by email → backfill `provider`/`uid`; one with no membership
+  #   first gets fresh credentials ({#replace_credentials!}).
   # - No User but a Person matches across any tenant → create both User and
   #   the linking TenantUser so the new identity lands in a usable tenant.
   # - Otherwise refuse.
@@ -144,7 +203,10 @@ class User < ApplicationRecord
 
     by_email = find_by(email: email)
     if by_email
-      by_email.update!(provider: auth.provider, uid: auth.uid) if by_email.provider.blank?
+      transaction do
+        by_email.replace_credentials! if by_email.lock!(CREDENTIALS_LOCK).unvouched?
+        by_email.update!(provider: auth.provider, uid: auth.uid) if by_email.provider.blank?
+      end
       return [ by_email, nil ]
     end
 

@@ -74,6 +74,8 @@ module OrgGraph::Authorization
   # @param structure_unit_id [String, nil] the declaring unit of the structure
   #   in force where it sits, nil for the organisation's
   def authorize_unit_kind!(unit_id, structure_unit_id)
+    raise Refused, "The system cannot change a structure" if system? && structure_unit_id
+
     structure_unit = structure_unit_id && unit_for(structure_unit_id)
     authorize!(:change_unit_kind?, structure_unit) do
       name = unit_name(unit_for(unit_id))
@@ -168,13 +170,16 @@ module OrgGraph::Authorization
 
   # Runs the block's checks against the actor as the database holds it now:
   # a check under a lock must see a grant, role or status changed while the
-  # command waited for it.
+  # command waited for it. Taking the lock through `execute` happens to clear
+  # Rails' query cache too; `uncached` keeps the check sound however it's taken.
   def with_actor_reread
     return yield if system?
 
     actor = @actor
-    @actor = actor.reread
-    yield
+    ActiveRecord::Base.uncached do
+      @actor = actor.reread
+      yield
+    end
   ensure
     @actor = actor if actor
   end

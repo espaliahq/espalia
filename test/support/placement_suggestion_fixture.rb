@@ -114,6 +114,34 @@ module PlacementSuggestionFixture
     AuthorizationContext.new(user: tenant_user.user, tenant_user: tenant_user, person: person)
   end
 
+  LOOKALIKE = "Another tenant's"
+
+  # Another tenant reusing this fixture's framework, capability and role ids,
+  # with its own dismissal under the same feedback by the same viewer, so a
+  # lookup that loses its tenant scope picks up a name, code or reason
+  # containing LOOKALIKE. An assignment can't share (person, framework) across
+  # tenants (its id derives from them), so that row points at its own person.
+  def plant_lookalikes_in_another_tenant
+    other = create(:tenant)
+    ActsAsTenant.with_tenant(other) do
+      category = create(:framework_capability_category, tenant: other, framework_id: @framework_id)
+      [ @ownership, @collaboration ].each do |capability|
+        create(:framework_capability, tenant: other, category_id: category.category_id, stable_id: capability.stable_id,
+                                      name: "#{LOOKALIKE} capability")
+      end
+      other_role_id = SecureRandom.uuid_v7
+      (1..5).each do |ordinal|
+        create(:framework_level, tenant: other, role_id: @role.role_id, ordinal: ordinal, code: "#{LOOKALIKE} code")
+        create(:framework_level, tenant: other, role_id: other_role_id, ordinal: ordinal, code: "#{LOOKALIKE} code")
+      end
+      person = create(:person, tenant: other)
+      create(:person_framework_assignment, tenant: other, person_id: person.id, framework_id: @framework_id, role_id: other_role_id)
+      create(:evidence_placement_suggestion, tenant: other, evidence_id: @item.id, person_id: person.id,
+             framework_id: @framework_id, capability_stable_id: @ownership.stable_id, level_ordinal: 5, status: "dismissed",
+             decided_by_id: @jordan.id, decided_at: Time.current, dismiss_reason: "#{LOOKALIKE} reason")
+    end
+  end
+
   private
 
   def bound_capability(category, name, description, ordinals)

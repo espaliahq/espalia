@@ -166,6 +166,7 @@ Pundit's `authorize` passes none.
 | See the Org Graph (`show?`) | Any tenant member |
 | The Units view, a unit's activity sidebar, and `org_graph_units` and `org_graph_activity` for a unit (`show_units?`, [#537](https://github.com/espaliahq/espalia/issues/537)) | A tenant admin, an Org Graph editor, and anyone who owns a live unit or whose reach covers one. An admin sees it in the admin layout, anyone else in the app's, under "Organisation" |
 | The organisation's own activity, a person's drawer and `org_graph_person_get`, stale facts and `org_graph_stale_facts`, and change it back, with `org_graph_change_back` and `org_graph_change_back_group` (`edit_structure?`; a change-back also needs the rights to make the inverse change) | A tenant admin or an Org Graph editor. Anyone else `show_units?` admits sees no stale flags, opens no person, and over MCP reads each change as one they can't change back |
+| `org_graph_as_of` and `org_graph_changes_between` in full mode, with each person's facts, memberships and a unit's owners (`edit_structure?`). Summary mode names no one and needs only `show?` | A tenant admin or an Org Graph editor. An owner, or anyone whose reach covers a unit, gets summary mode only |
 | Add, rename or remove a type in the organisation's structure, or say where it can sit (`edit_taxonomy?`, which is `edit_structure_of?(nil)`) | A tenant admin or an Org Graph editor |
 | Give a unit a structure of its own, withdraw it, change its types, or move a unit into it (`edit_structure_of?(unit)`, [#494](https://github.com/espaliahq/espalia/issues/494)), and the structure's own page at `/tenant/org_graph/structures/:unit_id/edit` with `org_graph_unit_structure` ([#537](https://github.com/espaliahq/espalia/issues/537)) | A tenant admin, an Org Graph editor, or anyone whose reach covers the unit. A move in also needs `move_unit?`, and its refusal names no structure |
 | Providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
@@ -178,7 +179,9 @@ Pundit's `authorize` passes none.
 
 A caller's **reach** (`OrgGraphPolicy::Reach`) is every live unit owned by an
 active person in their subtree, themselves included, and every unit beneath
-those. A retired unit keeps its owners but gives them nothing. So an owner's manager, and their manager's manager, hold the owner's
+those. A retired unit keeps its owners but gives them nothing, though a retired
+unit beneath one in reach stays in reach, so its last memberships can be ended
+and it can be named as a predecessor. So an owner's manager, and their manager's manager, hold the owner's
 rights. Ownership is always stated on a unit, never derived from the
 reporting line; only the rights follow the line. Rights inherit downward:
 owning Payments gives rights over every squad beneath it, even one with owners
@@ -186,13 +189,19 @@ of its own. A caller who has left reaches nothing, and an owner who has left
 drops out of their managers' reach. A manager in between who has left doesn't
 break the line. A request builds the reach once; a command builds it for
 each check, so its check under the structure's lock sees the line as it
-stands. Every check under that lock also reads the caller again: the seven
-commands that change a structure itself (declare, withdraw, both change-backs,
-and adding, reparenting or removing a type), a move between structures and its
-change-back, and a unit's retyping. So a caller deactivated, demoted,
-unlinked from their person or stripped of the editor grant while the command
-waited is refused. A check builds one however many units it names, so a command builds at
-most three (a move between structures checks the move and each structure), and
+stands. Every structure command checks again under that lock, against the
+caller as the database holds them then. So an owner removed, or a caller
+deactivated, demoted, unlinked from their person or stripped of the editor
+grant while the command waited, is refused. A membership command checks
+again under the member's lock. For a tenant cut over to the Org Graph, the
+member's manager is written under that same lock, so a manager taken off the
+member while the command waited is refused. For a tenant not yet cut over, the
+HRIS sync writes the manager to the row outside any person lock, so the change
+is read again but can still land between the check and the write. The same
+holds everywhere for the managers further up the line and the unit's owners
+([#643](https://github.com/espaliahq/espalia/issues/643)). A check builds one however many
+units it names, so a command's check under the lock builds at most three (a
+move between structures checks the move and each structure), and
 a screen asking which changes it may change back shares one across them all. A unit or person the Org Graph
 doesn't hold is left to admins and editors, except that the manager chain can
 still end a membership of a unit that is gone.
@@ -225,9 +234,8 @@ raises `ArgumentError`, so a screen that forgets to pass one fails instead of
 skipping the check. Pass `SYSTEM` only where no person drives the write.
 `SYSTEM` may change the organisation's own structure. It can't give a unit a
 structure of its own, change one, or move a unit between structures: those are
-a person's call. It may still change a unit's type inside one, though no
-system write does. The move needs the right to change both structures, and its
-refusal names neither.
+a person's call, and so is a unit's type inside one. The move needs the right
+to change both structures, and its refusal names neither.
 `TenantUser#ensure_person!` records a new person's stream as `SYSTEM` even when
 an admin triggers it, since provisioning a person for an account is the
 system's act and must never fail a member's sign-in.

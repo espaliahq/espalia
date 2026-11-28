@@ -39,6 +39,12 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
     Noticed::Notification.create!(type: "FeedbackReceivedNotifier::Notification", event: event, recipient: user)
   end
 
+  def forget!(person)
+    ActsAsTenant.with_tenant(@tenant) do
+      person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+    end
+  end
+
   def unplaced_item = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(@unplaced_id) }
 
   def feedback_about_manager!
@@ -197,6 +203,19 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-testid='group-report'][data-attention='true']"
     end
 
+    should "stop asking a manager to place feedback about a report once the report is forgotten" do
+      sign_in @manager_user
+      get evidence_conversation_path(@peer.id, view: "report")
+      assert_select "##{EvidenceItem.dom_id(@unplaced_id)} button", text: "Place on a capability"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @assessee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      get evidence_conversation_path(@peer.id, view: "report")
+      assert_select "##{EvidenceItem.dom_id(@unplaced_id)}"
+      assert_select "##{EvidenceItem.dom_id(@unplaced_id)} button", text: "Place on a capability", count: 0
+    end
+
     should "open a thread with a place action on owed feedback" do
       sign_in @assessee_user
       get evidence_conversation_path(@peer.id)
@@ -205,6 +224,113 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
         assert_select "##{EvidenceItem.dom_id(@unplaced_id)}" do
           assert_select "button", text: "Place on a capability"
         end
+      end
+    end
+
+    should "offer a manager Edit links on placed feedback about a report, until the report is forgotten" do
+      cap = ActsAsTenant.with_tenant(@tenant) do
+        cat = create(:framework_capability_category, framework_id: @framework_id, name: "Thinking", ordinal: 1)
+        create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
+      end
+      placed_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        @handler.record_evidence(@assessee.id, @framework_id, placed_id,
+          capability_stable_id: cap.stable_id, level_ordinal: 2, source: "peer", evidence_type: "peer_feedback",
+          content: "Paired well on the migration.", author_id: @peer.id, valence: "demonstrated")
+      end
+      sign_in @manager_user
+
+      get evidence_conversation_path(@peer.id, view: "person")
+      assert_select "##{EvidenceItem.dom_id(placed_id)} button", text: "Edit links"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @assessee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      get evidence_conversation_path(@peer.id, view: "person")
+      assert_select "##{EvidenceItem.dom_id(placed_id)}"
+      assert_select "##{EvidenceItem.dom_id(placed_id)} button", text: "Edit links", count: 0
+    end
+
+    should "offer the author Edit and Withdraw on their feedback, until its subject is forgotten" do
+      sign_in @peer_user
+      item = "##{EvidenceItem.dom_id(@unplaced_id)}"
+
+      get evidence_conversation_path(@assessee.id)
+      assert_select "#{item} button", text: "Edit"
+      assert_select "#{item} button", text: "Withdraw"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        @assessee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      get evidence_conversation_path(@assessee.id)
+      assert_select item
+      assert_select "#{item} button", text: "Edit", count: 0
+      assert_select "#{item} button", text: "Withdraw", count: 0
+    end
+
+    should "offer Give and Ask in a thread, until the other person is forgotten" do
+      sign_in @peer_user
+      get evidence_conversation_path(@assessee.id)
+      assert_select "[data-conversation-thread-target='composer'] button", text: "Give Alex feedback"
+
+      forget!(@assessee)
+      get evidence_conversation_path(@assessee.id)
+      assert_select "[data-conversation-thread-target='composer']", text: /A former member takes no new feedback/
+      assert_select "[data-conversation-thread-target='composer']", text: /Not a private chat/, count: 0
+      assert_select "[data-conversation-thread-target='composer'] button", count: 0
+    end
+
+    should "offer a manager no Ask about a report once the report is forgotten" do
+      sign_in @manager_user
+      get evidence_report_conversation_path(@assessee.id)
+      assert_select "[data-conversation-thread-target='composer'] button", text: "Ask someone about Alex"
+
+      forget!(@assessee)
+      get evidence_report_conversation_path(@assessee.id)
+      assert_select "[data-conversation-thread-target='composer'] button", count: 0
+    end
+
+    should "close a pending request about a forgotten person to both sides" do
+      request = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_request, tenant: @tenant, requester: @manager, requestee: @peer, person_id: @assessee.id,
+                                  framework_id: @framework_id)
+      end
+      forget!(@assessee)
+
+      sign_in @peer_user
+      get evidence_conversation_path(@manager.id)
+      assert_select "##{request.dom_id}", text: /Closed/ do
+        assert_select "button", text: "Respond", count: 0
+        assert_select "button", text: "Decline", count: 0
+      end
+      assert_select "##{request.dom_id}", text: /Waiting on/, count: 0
+      assert_select "#needs-you [data-testid='needs-you-request']", count: 0
+
+      sign_in @manager_user
+      get evidence_conversation_path(@peer.id)
+      assert_select "##{request.dom_id}", text: /Closed/ do
+        assert_select "a", text: "Cancel request", count: 0
+        assert_select "button", text: "Send a nudge", count: 0
+      end
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@peer.id}']" do
+        assert_select "*", text: "Waiting", count: 0
+      end
+    end
+
+    should "offer the requester Cancel but no Nudge once the person asked is forgotten" do
+      request = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_request, tenant: @tenant, requester: @manager, requestee: @peer, person_id: @assessee.id,
+                                  framework_id: @framework_id, requested_at: 3.days.ago)
+      end
+      sign_in @manager_user
+      get evidence_conversation_path(@peer.id)
+      assert_select "##{request.dom_id} button", text: "Send a nudge"
+
+      forget!(@peer)
+      get evidence_conversation_path(@peer.id)
+      assert_select "##{request.dom_id}", text: /Waiting on Former member/ do
+        assert_select "a", text: "Cancel request"
+        assert_select "button", text: "Send a nudge", count: 0
       end
     end
 

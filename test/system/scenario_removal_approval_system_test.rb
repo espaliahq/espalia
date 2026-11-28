@@ -5,6 +5,8 @@ require "application_system_test_case"
 # An editor who cannot see pay reviews a scenario removal sent over MCP: the
 # page warns them, by count alone, of the pay changes it takes, and fits a phone.
 class ScenarioRemovalApprovalSystemTest < ApplicationSystemTestCase
+  include McpRequestCredentialsHelpers
+
   AMOUNT = "92417"
 
   setup do
@@ -22,9 +24,9 @@ class ScenarioRemovalApprovalSystemTest < ApplicationSystemTestCase
                                                            amount: AMOUNT, currency: "AUD", period: "year", basis: "full_time")
       application = Mcp::Application.create!(name: "Test MCP Client", redirect_uri: "https://client.example/callback",
                                              scopes: "read write", confidential: false)
-      @approval = Mcp::PendingApproval.create!(tenant: @tenant, user: @editor.user, client_application: application,
+      @approval = as_mcp_call_by(@editor.user, application, tenant: @tenant) { Mcp::PendingApproval.create!(tenant: @tenant, user: @editor.user, client_application: application,
                                                operation_class: "Operations::TeamPlanning::RemoveScenario",
-                                               arguments: { plan_id:, scenario_id: q1 }, expires_at: 1.hour.from_now)
+                                               arguments: { plan_id:, scenario_id: q1 }, expires_at: 1.hour.from_now) }
     end
   end
 

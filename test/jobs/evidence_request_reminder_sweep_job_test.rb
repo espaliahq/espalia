@@ -67,6 +67,17 @@ class EvidenceRequestReminderSweepJobTest < ActiveSupport::TestCase
     assert_nil EvidenceRequest.find(declined).last_reminded_at
   end
 
+  should "record no reminder for a forgotten requestee, whom nobody could reach" do
+    id = request_at!(8.days.ago)
+    @requestee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+
+    sweep!
+
+    req = EvidenceRequest.find(id)
+    assert_nil req.last_reminded_at
+    assert_empty req.reminder_history
+  end
+
   should "not remind again on a re-run" do
     id = request_at!(8.days.ago)
     sweep!

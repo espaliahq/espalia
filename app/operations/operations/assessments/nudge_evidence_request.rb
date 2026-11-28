@@ -25,6 +25,9 @@ class Operations::Assessments::NudgeEvidenceRequest < Operations::Base
   # @return [Hash] { request_id, status, last_reminded_at }
   def perform
     raise Operations::Base::ParameterError, "Request is no longer open" unless evidence_request.pending?
+    if evidence_request.requestee&.forgotten?
+      raise Operations::Base::ParameterError, "The person asked is a former member, so nobody would get the nudge. Cancel the request instead."
+    end
     unless evidence_request.can_nudge?
       raise Operations::Base::ParameterError,
         "A reminder went out recently — you can nudge again 2 days after the last one."

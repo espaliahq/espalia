@@ -17,6 +17,8 @@
 # data); a manager evidencing a direct report is routine, and the MCP
 # client's own write-approval prompt is the right friction.
 class Operations::Assessments::RecordEvidence < Operations::Base
+  include Operations::CapabilityGuard
+
   description "Record a piece of feedback / evidence on an assessment — against a capability × level, or " \
               "with no cell at all when you don't know which expectation it speaks to: the recipient or their " \
               "manager places it later. Find a colleague's assignment_id with assessments_feedback_recipients."
@@ -81,7 +83,7 @@ class Operations::Assessments::RecordEvidence < Operations::Base
     validate_external_reference!
     if placed?
       validate_level_ordinal!
-      validate_capability_in_framework!(params[:capability_stable_id])
+      ensure_active_capability!(assignment.framework_id, params[:capability_stable_id])
     end
     additional_links = normalize_additional_links!
 
@@ -156,24 +158,9 @@ class Operations::Assessments::RecordEvidence < Operations::Base
       end
       level = Integer(level, exception: false)
       validate_level_ordinal!(level)
-      validate_capability_in_framework!(cap)
+      ensure_active_capability!(assignment.framework_id, cap)
       { capability_stable_id: cap, level_ordinal: level, valence: valence }
     end
-  end
-
-  # Guards against recording/linking evidence onto a capability outside this
-  # assessment's framework (the lookup is scoped to the assignment's
-  # framework, so a foreign / non-existent stable_id resolves to absent).
-  def validate_capability_in_framework!(capability_stable_id)
-    in_framework = FrameworkState::Capability
-      .joins(:category)
-      .where(stable_id: capability_stable_id)
-      .merge(FrameworkState::CapabilityCategory.where(framework_id: assignment.framework_id))
-      .exists?
-    return if in_framework
-
-    raise Operations::Base::ParameterError,
-      "capability_stable_id does not belong to the assignment's framework"
   end
 
   # The external reference URL is validated upfront — same posture as

@@ -199,6 +199,94 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
     end
   end
 
+  context "the author's own dismissals" do
+    setup do
+      sign_in @jordan_user
+      stream_post dismiss_evidence_placement_suggestion_path(@collaboration_suggestion), params: { reason: "Not about teamwork" }
+      @dismiss_response = response.body
+      sign_out @jordan_user
+    end
+
+    should "come back in the dismiss response, to the author who dismissed it" do
+      assert_includes @dismiss_response, %(target="#{Views::Evidence::OwnDismissals.dom_id_for(@item.id)}")
+      assert_includes @dismiss_response, "You dismissed the suggestion for Collaboration · E4 today."
+      assert_includes @dismiss_response, "Your reason: “Not about teamwork”"
+    end
+
+    should "show on the hub to the author, under the feedback" do
+      sign_in @jordan_user
+      get evidence_conversation_path(@alex.id)
+
+      assert_select "##{Views::Evidence::OwnDismissals.dom_id_for(@item.id)}",
+                    text: /You dismissed the suggestion for Collaboration · E4 today\..*Your reason: “Not about teamwork”/m
+    end
+
+    should "stay off the hub for the assessee and the manager, who see the assessment" do
+      { @alex_user => evidence_conversation_path(@jordan.id), @morgan_user => evidence_report_conversation_path(@alex.id) }
+        .each do |user, path|
+          sign_in user
+          get path
+
+          assert_response :success
+          assert_select "##{Views::Evidence::OwnDismissals.dom_id_for(@item.id)}", 1, user.email
+          assert_select "##{Views::Evidence::OwnDismissals.dom_id_for(@item.id)} li", 0, user.email
+          refute_includes response.body, "Not about teamwork", user.email
+          sign_out user
+        end
+    end
+
+    should "carry nothing from another tenant that reuses the same ids, in the hub or the dismiss response" do
+      plant_lookalikes_in_another_tenant
+      sign_in @jordan_user
+      stream_post dismiss_evidence_placement_suggestion_path(@ownership_suggestion), params: { reason: "Not ownership" }
+      dismiss_response = response.body
+      get evidence_conversation_path(@alex.id)
+
+      { "dismiss response" => dismiss_response, "hub" => response.body }.each do |where, body|
+        assert_includes body, "You dismissed the suggestion for Collaboration · E4 today.", where
+        refute_includes body, LOOKALIKE, where
+        refute_includes body, CGI.escapeHTML(LOOKALIKE), where
+      end
+    end
+
+    should "show nothing once the person the feedback is about is forgotten" do
+      ActsAsTenant.with_tenant(@tenant) { @alex.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
+      sign_in @jordan_user
+      get evidence_conversation_path(@alex.id)
+
+      assert_response :success
+      refute_includes response.body, "Not about teamwork"
+      refute_includes response.body, "You dismissed the suggestion"
+    end
+  end
+
+  context "a dismissal's reason" do
+    should "render as text, never as markup" do
+      sign_in @jordan_user
+      stream_post dismiss_evidence_placement_suggestion_path(@collaboration_suggestion),
+                  params: { reason: "<script>alert(1)</script>" }
+
+      refute_includes response.body, "<script>alert(1)</script>"
+      assert_includes response.body, "&lt;script&gt;"
+    end
+
+    should "never reach a broadcast" do
+      sent = []
+      record = ->(*_streamables, **options) { sent << options[:html].to_s }
+      sign_in @jordan_user
+      Turbo::StreamsChannel.stub(:broadcast_replace_to, record) do
+        stream_post dismiss_evidence_placement_suggestion_path(@collaboration_suggestion), params: { reason: "Not about teamwork" }
+      end
+
+      assert_response :success
+      assert_not_empty sent, "the dismissal sends its sync ping"
+      sent.each do |html|
+        refute_includes html, "Not about teamwork"
+        refute_includes html, Views::Evidence::OwnDismissals.dom_id_for(@item.id)
+      end
+    end
+  end
+
   context "suggesting again" do
     should "enqueue a fresh run" do
       sign_in @alex_user
@@ -316,6 +404,27 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal "accepted", @ownership_suggestion.reload.status
         assert_equal "demonstrated", EvidenceLink.active.find_by(evidence_id: @item.id).valence
+      end
+    end
+
+    should "store nothing when a kept suggestion on an already-linked cell is about a forgotten person" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.add_evidence_link(@alex.id, @framework_id, @item.id,
+          capability_stable_id: @ownership.stable_id, level_ordinal: 3, linked_by_id: @alex.id, valence: "demonstrated")
+        @alex.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+      sign_in @jordan_user
+      cell = "#{@ownership.stable_id}|3"
+      patch evidence_item_path(@item), params: { return_to: "hub", evidence: {
+        evidence_id: @item.id, assignment_id: @assignment.id, desired_links: [ cell ],
+        link_valences: { cell => "demonstrated" }, suggestion_ids: [ @ownership_suggestion.id ],
+        evidence_type: "peer_feedback", content: "Rewritten"
+      } }
+
+      assert_equal "this person has been forgotten", flash[:alert]
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "Alex owned the outage follow-up end to end and kept everyone informed.", @item.reload.content
+        assert @ownership_suggestion.reload.pending?
       end
     end
 

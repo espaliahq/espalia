@@ -115,10 +115,11 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
     end
 
     should "change a unit's type only to one of its own structure, judged by that structure's rules" do
-      error = assert_raises(RuntimeError) { as_tenant { @handler.change_unit_kind(@basket, @squad, effective_on: @today) } }
+      admin = OrgGraph::StructureCommandHandler.new(actor: admin_context)
+      error = assert_raises(RuntimeError) { as_tenant { admin.change_unit_kind(@basket, @squad, effective_on: @today) } }
       assert_equal "Squad isn't a unit type of Payments's structure", error.message
 
-      error = assert_raises(RuntimeError) { as_tenant { @handler.change_unit_kind(@basket, @group, effective_on: @today) } }
+      error = assert_raises(RuntimeError) { as_tenant { admin.change_unit_kind(@basket, @group, effective_on: @today) } }
       assert_equal "Basket can't change to Group, as these wouldn't fit: Basket under Checkout (Group)", error.message
     end
 
@@ -218,6 +219,13 @@ class OrgGraph::DeclaredStructuresTest < ActiveSupport::TestCase
   def merge(unit_id, into:)
     @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ unit_id ], successor_ids: [ into ], effective_on: @today,
                                                      retire_predecessors: true)
+  end
+
+  def admin_context
+    as_tenant do
+      tenant_user = create(:tenant_user, tenant: @tenant, role: :admin)
+      AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: nil)
+    end
   end
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)

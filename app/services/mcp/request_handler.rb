@@ -86,6 +86,8 @@ class Mcp::RequestHandler
   rescue Pundit::NotAuthorizedError => e
     log_client_error("not authorized", e, code: -32603)
     error(id, code: -32603, message: "not authorized: #{e.message}")
+  rescue Mcp::RequestCredentials::Replaced
+    raise
   rescue StandardError => e
     Rails.logger.error("[mcp] internal error: #{e.class}: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
     error(id, code: -32603, message: "internal error")

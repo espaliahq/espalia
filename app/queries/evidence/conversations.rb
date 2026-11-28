@@ -162,11 +162,19 @@ class Evidence::Conversations
   # @return [Boolean]
   def owes?(message)
     case message.kind
-    when :request then message.request.pending? && message.request.requestee_person_id == viewer_id
+    when :request then open?(message.request) && message.request.requestee_person_id == viewer_id
     when :reply, :feedback then placeable?(message.item)
     else false
     end
   end
+
+  # Whether a request still waits on someone. One about a forgotten person
+  # stays pending in the data until
+  # https://github.com/espaliahq/espalia/issues/627, but nobody can answer it.
+  #
+  # @param request [EvidenceRequest]
+  # @return [Boolean]
+  def open?(request) = request.pending? && !request.assessee&.forgotten?
 
   # @return [Hash{String => Person}] the other party of each conversation, in
   #   either group
@@ -183,7 +191,7 @@ class Evidence::Conversations
     Conversation.new(
       person_id: person_id, messages: list,
       owes: list.any? { |m| owes?(m) },
-      waiting: list.any? { |m| m.kind == :request && m.request.pending? && m.request.requested_by_id == viewer_id }
+      waiting: list.any? { |m| m.kind == :request && open?(m.request) && m.request.requested_by_id == viewer_id }
     )
   end
 
@@ -249,8 +257,10 @@ class Evidence::Conversations
       .includes(:author).to_a.select { |item| report_keys.include?([ item.person_id, item.framework_id ]) }
   end
 
+  # Feedback about a forgotten person takes no more links, so nobody owes it a place.
   def unplaced_ids
-    @unplaced_ids ||= EvidenceItem.unplaced.where(id: items.map(&:id)).pluck(:id).to_set
+    @unplaced_ids ||= EvidenceItem.unplaced.where(id: items.map(&:id))
+      .where.not(person_id: Person.forgotten.select(:id)).pluck(:id).to_set
   end
 
   # The switch's split, from the query that counts the feedback to place.

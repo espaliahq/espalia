@@ -17,10 +17,12 @@ namespace :events do
     tenants = args[:tenant_id].present? ? Tenant.where(id: args[:tenant_id]) : Tenant.all
     handler = PersonDevelopment::CommandHandler.new
     total = 0
+    skipped = 0
 
     tenants.find_each do |tenant|
       ActsAsTenant.with_tenant(tenant) do
-        assignments = PersonFrameworkAssignment.where(tenant_id: tenant.id)
+        # A forgotten person's stream takes nothing more, so they are skipped.
+        assignments = PersonFrameworkAssignment.where(tenant_id: tenant.id).where.not(person_id: Person.forgotten.select(:id))
         # One query for all managers instead of one per assignment.
         managers = Person.where(id: assignments.select(:person_id)).pluck(:id, :manager_id).to_h
 
@@ -29,9 +31,15 @@ namespace :events do
             manager_id = managers[assignment.person_id]
             next if manager_id.nil?
 
-            handler.record_reporting_manager(
-              assignment.person_id, assignment.framework_id, manager_id, source: "backfill"
-            )
+            begin
+              handler.record_reporting_manager(
+                assignment.person_id, assignment.framework_id, manager_id, source: "backfill"
+              )
+            rescue PersonDevelopment::ForgottenSubject::Forgotten
+              # Erased after the query above ran.
+              skipped += 1
+              next
+            end
             total += 1
           end
         end
@@ -39,5 +47,6 @@ namespace :events do
     end
 
     puts "Backfilled reporting managers across #{tenants.count} tenant(s); #{total} assignment(s) processed."
+    puts "Skipped #{skipped} assignment(s) of people forgotten during the run." if skipped.positive?
   end
 end

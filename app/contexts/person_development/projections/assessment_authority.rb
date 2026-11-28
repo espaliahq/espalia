@@ -114,13 +114,15 @@ class PersonDevelopment::Projections::AssessmentAuthority
   def broadcast_assessment_sync(event)
     return if Projections::Replayer.replay_mode?
 
-    Turbo::StreamsChannel.broadcast_replace_to(
-      "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
-      target: "assessment-sync-signal",
-      html: "<div id=\"assessment-sync-signal\" class=\"hidden\" data-assessment-sync-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
-    )
-  rescue => e
-    Rails.logger.warn("[AssessmentAuthority] Broadcast failed: #{e.message}")
+    ActiveRecord.after_all_transactions_commit do
+      Turbo::StreamsChannel.broadcast_replace_to(
+        "assessment_updates", event.metadata[:framework_id], event.metadata[:person_id],
+        target: "assessment-sync-signal",
+        html: "<div id=\"assessment-sync-signal\" class=\"hidden\" data-assessment-sync-target=\"signal\" data-updated-at=\"#{Time.current.to_f}\"></div>"
+      )
+    rescue => e
+      Rails.logger.warn("[AssessmentAuthority] Broadcast failed: #{e.message}")
+    end
   end
 
   def with_tenant(event, &block)
