@@ -33,10 +33,12 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     "/impersonation" => "refused unless the account is a global admin, before it reads a tenant"
   }.freeze
 
-  # Where a refusal redirects. A redirect anywhere else may be a write that worked.
+  # Where a refusal redirects. A redirect anywhere else may be a write that worked. A tenant
+  # switch lands on / either way and changes only the session, so its own test below checks it.
   REFUSAL_PATHS = %w[/ /users/sign_in].freeze
 
   # Writes refused by their own lookup, which return to their own page. Each says where and why.
+  # A write that worked lands there too, so the table checksum is what tells the two apart.
   NO_PERSON = "needs a person linked to the account, and returns to the assessments list without one"
   REFUSED_ELSEWHERE = {
     "/settings/connected_clients/:id" => [ %r{\A/settings/connected_clients\z}, "finds the token among the account's own, and returns to the list when none matches" ],
@@ -70,6 +72,24 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     "calibrants" => "calibration_session_members", "participants" => "calibration_session_members",
     "delegations" => "manager_assessment_delegations", "connected_clients" => "oauth_access_tokens",
     "members" => "org_memberships", "memberships" => "org_memberships", "owners" => "org_unit_owners"
+  }.freeze
+
+  # Parents whose children link to them other than by `<parent>_id`, as child column => parent column.
+  PARENT_LINKS = {
+    "assessment_cycles" => { "cycle_id" => "cycle_id" },
+    "calibration_sessions" => { "session_id" => "id" },
+    "assessments" => { "person_id" => "person_id", "framework_id" => "framework_id" }
+  }.freeze
+
+  # Parents whose children reach them through a chain of ids, matched by tenant instead. Each says why that holds.
+  TENANT_LINKED = {
+    "frameworks" => "a framework's read models reach it through their parents' ids, and each tenant holds one framework, which the crawl checks"
+  }.freeze
+
+  # Children drawn from any row because their table holds no link to the parent. Each says why.
+  UNLINKED = {
+    "calibration_sessions/capabilities" => "a session flags the framework's own capabilities, so any of them belongs to it",
+    "users/collaborators" => "a collaborator's row names the person, not the account, and its route looks the account up first"
   }.freeze
 
   # Org Graph routes whose word names a different table than elsewhere.
@@ -148,7 +168,7 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
       assert_no_emails do
         answered = write_routes.filter_map do |verb, path, template|
           status, = visit(verb, path, params: body_for(template, path))
-          "#{verb.upcase} #{template} (#{status} #{redirect_path})" unless refused?(status, template) || NOT_REFUSED.key?(template)
+          "#{verb.upcase} #{template} (#{status}#{" #{redirect_path}" if status.is_a?(Integer)})" unless refused?(status, template) || NOT_REFUSED.key?(template)
         end
       end
     end
@@ -216,15 +236,25 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
       session = create(:calibration_session, tenant:, name: "Driftwood round")
       create(:calibration_session_member, tenant:, session:)
       create(:calibration_session_member, :participant, tenant:, session:)
-      create(:person_development_comment, tenant:)
-      create(:manager_assessment_delegation, tenant:)
       create(:evidence_placement_suggestion, tenant:)
     end
+    seed_under_first_assessment
     client = Mcp::Application.create!(name: "Crawl client", redirect_uri: "https://client.example/cb", scopes: "read", confidential: false)
     token = Mcp::AccessToken.create!(application: client, resource_owner_id: @admin.id, tenant_id: tenant.id, scopes: "read", expires_in: 3600)
     as_mcp_call_with(token) do
       Mcp::PendingApproval.create!(user: @admin, tenant:, client_application: client, operation_class: "Operations::System::Whoami",
                                    arguments: {}, expires_at: 1.hour.from_now)
+    end
+  end
+
+  # The crawl fills an assessment's routes with the first assessment, so its children belong to that one.
+  def seed_under_first_assessment
+    assessment = ActsAsTenant.without_tenant { PersonFrameworkAssignment.order(:id).first! }
+    ActsAsTenant.with_tenant(assessment.tenant) do
+      owner = { tenant: assessment.tenant, person_id: assessment.person_id, framework_id: assessment.framework_id }
+      create(:person_development_comment, **owner)
+      create(:manager_assessment_delegation, **owner)
+      create(:evidence_item, **owner, author: create(:person, tenant: assessment.tenant))
     end
   end
 
@@ -267,15 +297,15 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
   def unfilled = @unfilled ||= Set.new
 
   def fill(path)
-    parent = parent_value = nil
+    parent = nil
     scope = path.include?("/org_graph/") ? ORG_GRAPH_TABLES : {}
     path.gsub(%r{(\w+)/:(\w+)}) do
       collection, param = Regexp.last_match.captures
       key = param == "id" ? collection : param.delete_suffix("_id").pluralize
       value = special(collection, param) ||
-              (seeded_id(key, parent, parent_value, scope) if param == "id" || param.end_with?("_id"))
-      unfilled << (param == "id" ? [ parent, collection, ":id" ].compact.join("/") : ":#{param}") unless value
-      parent, parent_value = collection, value
+              (seeded_id(key, parent, scope) if param == "id" || param.end_with?("_id"))
+      unfilled << (param == "id" ? [ parent&.first, collection, ":id" ].compact.join("/") : ":#{param}") unless value
+      parent = [ collection, value, *(seeded_source(key, parent&.first, scope) unless special(collection, param)) ]
       "#{collection}/#{value || SecureRandom.uuid_v7}"
     end
   end
@@ -291,14 +321,43 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # The routing id of a seeded row in the table the collection names, under the parent's row where it has one.
-  def seeded_id(collection, parent, parent_value, scope = {})
+  # The routing id of a seeded row in the table the collection names, under the parent's row.
+  # parent is [collection, value, table, column], where value is nil when nothing filled it.
+  def seeded_id(collection, parent, scope = {})
     @seeded_ids ||= {}
-    @seeded_ids.fetch([ collection, parent, parent_value, scope ]) do
-      table, column = table_for(collection, parent, scope)
-      @seeded_ids[[ collection, parent, parent_value, scope ]] =
-        table && first_value(table, column || routing_column(table, collection), parent && "#{parent.singularize}_id", parent_value)
+    @seeded_ids.fetch([ collection, parent, scope ]) do
+      table, column = seeded_source(collection, parent&.first, scope)
+      @seeded_ids[[ collection, parent, scope ]] = table && first_value(table, column, parent_link(table, collection, parent))
     end
+  end
+
+  def seeded_source(collection, parent, scope)
+    table, column = table_for(collection, parent, scope)
+    table && [ table, column || routing_column(table, collection) ]
+  end
+
+  # SQL limiting a child table to the parent's row, or nil when the child has no parent row to follow.
+  def parent_link(table, collection, parent)
+    parent_collection, parent_value, parent_table, parent_column = parent
+    return unless parent_value && parent_table
+    return if UNLINKED.key?("#{parent_collection}/#{collection}")
+
+    link = PARENT_LINKS.fetch(parent_collection) { { "#{parent_collection.singularize}_id" => parent_column } }
+    unless link.keys.all? { connection.column_exists?(table, it) }
+      raise "#{table} holds no link to #{parent_collection}: map it in PARENT_LINKS or list it in UNLINKED" unless
+        TENANT_LINKED.key?(parent_collection)
+
+      link = { "tenant_id" => "tenant_id" }
+      assert_equal 1, connection.select_value("SELECT count(*) FROM #{connection.quote_table_name(parent_table)} WHERE tenant_id IN " \
+                                              "(SELECT tenant_id FROM #{connection.quote_table_name(parent_table)} WHERE " \
+                                              "#{connection.quote_column_name(parent_column)} = #{connection.quote(parent_value)})"),
+                   "#{parent_table} holds more than one row in a tenant, so a tenant no longer names one #{parent_collection.singularize}"
+    end
+
+    link.map do |child_column, column|
+      "#{connection.quote_column_name(child_column)} IN (SELECT #{connection.quote_column_name(column)} FROM " \
+        "#{connection.quote_table_name(parent_table)} WHERE #{connection.quote_column_name(parent_column)} = #{connection.quote(parent_value)})"
+    end.join(" AND ")
   end
 
   def table_for(collection, parent, scope)
@@ -320,17 +379,19 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     [ "#{collection.singularize}_id", "#{table.split('_').last.singularize}_id" ].find { columns.include?(it) } || "id"
   end
 
-  def first_value(table, column, parent_column, parent_value)
+  def first_value(table, column, condition)
     quoted = connection.quote_column_name(column)
-    scoped = parent_value && connection.column_exists?(table, parent_column)
-    where = scoped ? "WHERE #{connection.quote_column_name(parent_column)} = #{connection.quote(parent_value)}" : ""
-    connection.select_value("SELECT #{quoted} FROM #{connection.quote_table_name(table)} #{where} ORDER BY #{quoted} LIMIT 1")
+    connection.select_value("SELECT #{quoted} FROM #{connection.quote_table_name(table)} " \
+                            "#{"WHERE #{condition}" if condition} ORDER BY #{quoted} LIMIT 1")
   end
 
   def body_for(template, path)
-    parent, parent_value = path.scan(%r{(\w+)/([^/]+)}).last
-    BODIES.fetch(template, {}).transform_values do |fields|
-      fields.transform_values { seeded_id(it.to_s.delete_suffix("_id").pluralize, parent, parent_value) }
+    return {} unless BODIES.key?(template)
+
+    collection, value = path.scan(%r{(\w+)/([^/]+)}).last
+    parent = [ collection, value, *seeded_source(collection, nil, {}) ]
+    BODIES[template].transform_values do |fields|
+      fields.transform_values { seeded_id(it.to_s.delete_suffix("_id").pluralize, parent) }
     end
   end
 
