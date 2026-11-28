@@ -114,58 +114,10 @@ class TenantSettingChangeTest < ActiveSupport::TestCase
     assert_equal ends.sort, ends
   end
 
-  should "read a recorded size in base ten" do
-    tenant = create(:tenant)
-    ActsAsTenant.with_tenant(tenant) { tenant.setting_changes.create!(setting: "min_group_size", value: "08", changed_at: 1.second.from_now) }
-
-    assert_equal 8, tenant.reload.min_group_size_at(1.minute.from_now)
-  end
-
   should "read today's zone for a tenant with no rows at all" do
     tenant = create(:tenant, time_zone: "Europe/Paris")
     TenantSettingChange.where(tenant_id: tenant.id).delete_all
 
     assert_equal Time.find_zone("Europe/Paris").local(2026, 3, 15).end_of_day, tenant.reload.end_of_day_then(Date.new(2026, 3, 15))
-  end
-
-  context "the floor for a cycle's report" do
-    setup do
-      travel_to Time.utc(2026, 3, 1, 12)
-      @tenant = create(:tenant)
-      smallest_group(@tenant, 6)
-      @closed_at = Time.utc(2026, 3, 10)
-      travel_to Time.utc(2026, 4, 1, 12)
-    end
-
-    should "never fall below the smallest size an admin may set, though today's stored size would" do
-      Tenant.where(id: @tenant.id).update_all(%(comparison_config = '{"min_group_size": "five"}'::jsonb))
-
-      assert_equal ComparisonConfig::LOWEST_MIN_GROUP_SIZE, @tenant.reload.comparison_floor(closed_at: nil)
-    end
-
-    should "be today's size while the cycle is open" do
-      smallest_group(@tenant, 4)
-
-      assert_equal 4, @tenant.comparison_floor(closed_at: nil)
-    end
-
-    should "stay the size in force when the cycle closed, though an admin lowers it since" do
-      smallest_group(@tenant, 4)
-
-      assert_equal 6, @tenant.comparison_floor(closed_at: @closed_at)
-    end
-
-    should "never fall below the smallest size an admin may set, whatever a row holds" do
-      ActsAsTenant.with_tenant(@tenant) { @tenant.setting_changes.create!(setting: "min_group_size", value: "0", changed_at: Time.utc(2026, 3, 5)) }
-
-      assert_equal ComparisonConfig::LOWEST_MIN_GROUP_SIZE, @tenant.reload.min_group_size_at(@closed_at)
-    end
-
-    # The rule for a size raised since awaits a ruling; this asserts the larger of then and now.
-    should "follow a size raised since, as the larger of then and now" do
-      smallest_group(@tenant, 9)
-
-      assert_equal 9, @tenant.comparison_floor(closed_at: @closed_at)
-    end
   end
 end

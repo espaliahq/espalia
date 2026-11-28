@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# One change to a tenant setting that past answers depend on, recorded by
-# {Tenant} in the save that makes it, so a reader of the past can use the
-# value in force then. Rows are never changed.
+# One change to a tenant setting, recorded by {Tenant} in the save that
+# makes it. Past Org Graph reads use the time zone in force then; the
+# smallest group size is a record only, as every report uses today's.
+# Rows are never changed.
 #
 # The migration that created the table wrote each tenant's values that day,
 # dated from the tenant's creation: what we know was in force.

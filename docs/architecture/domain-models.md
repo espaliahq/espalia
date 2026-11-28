@@ -62,20 +62,20 @@ end
 
 A tenant's theme is Default, the Bento preset, or Custom (ADR-23). Custom stores values only for the roles it overrides; a blank role, light or dark, falls back to Default's. The roles it can set are the ones `theme/roles.css` reads a `--tenant-*` hook for (`Themeable::CUSTOM_ROLES`). The font applies to Custom only; presets carry their own. Additional JSONB columns for `sso_config`, `hris_config`, and `notification_config` are planned for V1 integrations but not yet implemented.
 
-### Settings past answers read
+### Setting history
 
-Two settings change answers about the past, so every change to them leaves a row in `tenant_setting_changes`: the setting, its new value and when. `Tenant` writes the row in the save that changes the setting, so the two commit together. Rows are never changed; a saved row is read-only.
+Every change to two settings leaves a row in `tenant_setting_changes`: the setting, its new value and when. `Tenant` writes the row in the save that changes the setting, so the two commit together. Rows are never changed; a saved row is read-only.
 
 | Setting | Read by |
 |---|---|
 | `time_zone` | `OrgFactPeriod.known_on` and `OrgGraph::ChangesBetween`, through `Tenant#end_of_day_then`: a past day ends in the zone in force at the end of it |
-| `min_group_size` | The capability attainment report of a closed cycle, through `Tenant#comparison_floor`: the size in force when the cycle closed |
+| `min_group_size` | No reader. It is a record only: every report, a closed cycle's included, uses today's size, so a row explains why a closed cycle's report changed |
 
-A time before a tenant's first row reads the first row's value, as that is what was known to be in force. The migration that created the table wrote each tenant's values that day, dated from the tenant's creation. Today's value is read only for a tenant with no rows at all. Reads of today, level comparisons among them, use today's value.
+A day before a tenant's first row reads the first row's zone, as that is what was known to be in force. The migration that created the table wrote each tenant's values that day, dated from the tenant's creation. Today's zone is read only for a tenant with no rows at all. Reads of today use today's zone.
 
-A size must be a whole number: the model and a check constraint refuse anything else. A floor, today's or a closed cycle's, reads through `ComparisonConfig.floor_for`, never below the least an admin may set, so a stray row or a stored value the validation would refuse can't open it.
+A recorded size must be a whole number: the model and a check constraint refuse anything else.
 
-**The limit.** `update_column`, `update_all` and raw SQL that change either setting skip the callback and leave no row, so past answers would read the old value for the new one's time. The recorded write check and the `Espalia/WritesMustBeDeclared` cop guard those, and nothing else does (see [direct-writes.md](direct-writes.md)). A save that skips validation with no whole size, such as a blank one, fails as a whole: the record refuses the row, and the tenant is left as it was.
+**The limit.** `update_column`, `update_all` and raw SQL that change either setting skip the callback and leave no row, so the record misses the change, and a past day would end in the old zone after the new one took over. The recorded write check and the `Espalia/WritesMustBeDeclared` cop guard those, and nothing else does (see [direct-writes.md](direct-writes.md)). A save that skips validation with no whole size, such as a blank one, fails as a whole: the record refuses the row, and the tenant is left as it was.
 
 ---
 

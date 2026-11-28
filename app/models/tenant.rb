@@ -248,25 +248,6 @@ class Tenant < ApplicationRecord
     super.tap { @setting_history = nil }
   end
 
-  # The smallest group a closed cycle's report may show. An open cycle uses today's.
-  #
-  # @param closed_at [Time, nil] when the cycle closed, nil while it is open
-  # @return [Integer]
-  def comparison_floor(closed_at:)
-    now = ComparisonConfig.floor_for(comparison_config.min_group_size)
-    return now unless closed_at
-
-    # Which rule applies to a closed cycle awaits a ruling: the larger of then and now, or then exactly.
-    [ min_group_size_at(closed_at), now ].max
-  end
-
-  # The smallest comparison group in force at an instant, through
-  # {ComparisonConfig.floor_for}, so a stray row can't open the floor.
-  #
-  # @param time [Time]
-  # @return [Integer]
-  def min_group_size_at(time) = ComparisonConfig.floor_for(setting_at("min_group_size", time))
-
   # The current tenant's today, for code that runs inside a tenant.
   #
   # @return [Date]
@@ -560,16 +541,6 @@ class Tenant < ApplicationRecord
   # @return [Hash{String => Array<TenantSettingChange>}] each setting's changes, oldest first
   def setting_history
     @setting_history ||= ActsAsTenant.with_tenant(self) { setting_changes.order(:changed_at, :id).to_a }.group_by(&:setting)
-  end
-
-  # The value in force at an instant. Before a tenant's first row, the first
-  # row's value, as that is what we know was in force; today's only for a
-  # tenant with no rows at all.
-  def setting_at(setting, time)
-    rows = setting_history.fetch(setting, [])
-    return recorded_settings(time_zone, comparison_config).fetch(setting) if rows.empty?
-
-    rows.reverse.find { it.changed_at <= time }&.value || rows.first.value
   end
 
   # The zone in force at the end of a day, judged by each zone's own end of it.

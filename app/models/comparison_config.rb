@@ -17,7 +17,7 @@ class ComparisonConfig
   # The size a floor applies, never below the least an admin may set, so a
   # value the validation would refuse can't open it.
   #
-  # @param size [Integer, String, nil] a size as stored or recorded
+  # @param size [Integer, String, nil] a size as stored
   # @return [Integer]
   def self.floor_for(size) = [ Integer(size.to_s, 10, exception: false).to_i, LOWEST_MIN_GROUP_SIZE ].max
 

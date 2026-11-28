@@ -224,7 +224,7 @@ class Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
       assert res.roles.find { |g| g.key == @engineer.role_id }.cells[@cap1.stable_id].suppressed
     end
 
-    should "keep a closed cycle's floor at the minimum in force when it closed" do
+    should "apply today's size to a closed cycle, though an admin changed it since the cycle closed" do
       5.times { |i| enroll(create(:person, tenant: @tenant, name: "Eng #{i}"), @engineer) }
       @tenant.update!(comparison_config: ComparisonConfig.new(min_group_size: 6))
       @cycle.update!(status: "closed", closed_at: Time.current)
@@ -232,8 +232,8 @@ class Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
       @tenant.update!(comparison_config: ComparisonConfig.new(min_group_size: 4))
 
       res = result(suppress: true)
-      assert_equal 6, res.suppression_floor
-      assert res.roles.find { |g| g.key == @engineer.role_id }.cells[@cap1.stable_id].suppressed
+      assert_equal 4, res.suppression_floor
+      assert_not res.roles.find { |g| g.key == @engineer.role_id }.cells[@cap1.stable_id].suppressed
     end
 
     should "hold the floor to the smallest size an admin may set, whatever is stored" do

@@ -43,9 +43,7 @@ role/level (ADR-19) from a single bulk `AssessmentLevelRating` query.
 aggregate derived from data the viewer cannot open at the individual level.
 When suppression applies, any cell under the tenant's smallest group
 (`ComparisonConfig#min_group_size`: default 5, never below 4, set under Tenant
-admin → Comparisons and shared with the level comparison; a closed cycle's
-report keeps at least the size in force when it closed, through
-`Tenant#comparison_floor`) keeps its coverage
+admin → Comparisons and shared with the level comparison) keeps its coverage
 counts but hides buckets/percentages; family cells add a differencing guard
 (suppressed when the remainder behind visible role cells is a reconstructable
 1..floor−1 people). **Currently every attainment viewer is
