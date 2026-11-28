@@ -220,6 +220,10 @@ class User < ApplicationRecord
       # A concurrent Google sign-in for the same email won the race;
       # re-resolve and link instead of failing.
       from_google_omniauth(auth)
+    rescue AccountGrants::Aggregate::PersonForgotten
+      # Forgotten while this waited on the person's row: the account and its
+      # membership roll back with the refusal.
+      [ nil, :no_matching_account ]
     end
   end
 
@@ -246,11 +250,12 @@ class User < ApplicationRecord
     end
   end
 
-  # A refused link writes nothing, so the account is created unlinked and
-  # sign-in goes ahead; its person stays with whoever holds them.
+  # A link another account holds writes nothing, so the account is created
+  # unlinked and sign-in goes ahead; its person stays with whoever holds them.
+  # A forgotten person raises instead, rolling the new account back.
   def self.link_provisioned(account, person)
     account.link_to!(person, match: :provisioned)
-  rescue AccountGrants::Aggregate::LinkRefused => e
+  rescue AccountGrants::Aggregate::LinkTaken => e
     Rails.logger.warn("provisioned TenantUser #{account.id} left unlinked: #{e.class}")
   end
 
