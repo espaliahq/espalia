@@ -204,6 +204,7 @@ class Views::Evidence::ConversationMessage < Views::Base
     render Components::Kit::Prose.new(@item.content, class: "text-sm text-default")
     external_link
     suggestion_area
+    own_dismissals
     item_actions
   end
 
@@ -250,6 +251,12 @@ class Views::Evidence::ConversationMessage < Views::Base
       can_regenerate: @details[:can_regenerate], offer_when_empty: unplaced?
     )
     div(id: Views::Evidence::PlacementSuggestions.status_id_for(@item.id), role: "status", aria: { live: "polite" })
+  end
+
+  def own_dismissals
+    render Views::Evidence::OwnDismissals.new(
+      item: @item, **@details[:own_dismissals].fetch(@item.id, Evidence::OwnDismissals::NONE)
+    )
   end
 
   def unplaced? = @details[:links].fetch(@item.id, []).empty?
