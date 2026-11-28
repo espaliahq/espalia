@@ -35,6 +35,9 @@ class Oauth::AuthorizationsController < Doorkeeper::AuthorizationsController
   # renders force `layout: false`, so they're unaffected.
   layout "application"
 
+  before_action :hold_the_session_salt
+  rescue_from Mcp::RequestCredentials::Replaced, with: :sign_in_again
+
   def new
     render_consent_screen
   end
@@ -46,6 +49,19 @@ class Oauth::AuthorizationsController < Doorkeeper::AuthorizationsController
   end
 
   private
+
+  # Read from the session cookie, never the database, so it stays the salt
+  # Devise checked when this request authenticated.
+  def hold_the_session_salt
+    Mcp::RequestCredentials.session_salt = session[warden.session_serializer.key_for(:user)]&.last
+  end
+
+  def sign_in_again
+    Rails.logger.info("[oauth] consent refused: the account's credentials were replaced")
+    sign_out(:user)
+    session[:user_return_to] = oauth_authorization_path(pre_auth_params.to_h)
+    redirect_to new_user_session_url
+  end
 
   # Renders the Phlex consent view. Kept private so #new and #create share
   # exactly one render path — any view-shape change happens once.

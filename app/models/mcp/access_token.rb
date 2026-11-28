@@ -22,7 +22,8 @@ class Mcp::AccessToken < ApplicationRecord
   # that client signs in again.
   def refuse_a_refresh_revoked_meanwhile
     User.lock(User::CREDENTIALS_LOCK).find_by(id: resource_owner_id)
-    revoked = self.class.where(refresh_token: previous_refresh_token).where.not(revoked_at: nil).exists?
+    # Uncached, so a read earlier in the request can't answer for the row after the lock.
+    revoked = ActiveRecord::Base.uncached { self.class.where(refresh_token: previous_refresh_token).where.not(revoked_at: nil).exists? }
     raise Doorkeeper::Errors::InvalidGrantReuse if revoked
   end
 end

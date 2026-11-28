@@ -3,6 +3,8 @@
 require "test_helper"
 
 class Mcp::PruneStaleClientsJobTest < ActiveSupport::TestCase
+  include McpRequestCredentialsHelpers
+
   setup do
     @user   = create(:user)
     @tenant = create(:tenant)
@@ -55,11 +57,11 @@ class Mcp::PruneStaleClientsJobTest < ActiveSupport::TestCase
   context "#perform" do
     should "delete stale DCR apps and their dependent tokens/grants" do
       stale = dcr_app(name: "stale", registered_at: 60.days.ago, last_token_at: 45.days.ago)
-      Mcp::AccessGrant.create!(
+      as_consent_by(@user) { Mcp::AccessGrant.create!(
         application: stale, resource_owner_id: @user.id, tenant_id: @tenant.id,
         token: "g1", expires_in: 60, redirect_uri: "http://localhost:7777/cb",
         scopes: "read", created_at: 45.days.ago
-      )
+      ) }
 
       result = nil
       assert_difference -> { Mcp::Application.count }, -1 do
