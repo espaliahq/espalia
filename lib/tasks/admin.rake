@@ -9,7 +9,16 @@ namespace :admin do
     password = ENV["PASSWORD"].presence
 
     user = User.find_by(email: email)
-    if user
+    if user&.unvouched?
+      if password.nil?
+        abort "#{email} has an account that no operator created and no tenant holds. Give PASSWORD to " \
+              "replace its credentials and end its sessions before it becomes a global admin."
+      end
+
+      user.replace_credentials!(password)
+      user.update!(global_admin: true, global_admin_source: "admin_task")
+      puts "#{email} is a global admin; its password was replaced and its sessions and tokens ended."
+    elsif user
       user.assign_attributes(global_admin: true, global_admin_source: "admin_task")
       user.assign_attributes(password: password, password_confirmation: password) if password
       user.save!
