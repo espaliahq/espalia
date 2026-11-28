@@ -375,8 +375,19 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_select "form[action='#{change_back_tenant_org_graph_path}']", count: 0
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Can't change back/, count: 0
       assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Rowan Grant/, count: 0
       assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Added Dot Fennick/
+    end
+
+    should "offer an admin a change back in the payments feed the owner is shown, so the owner is really refused one" do
+      sign_in @admin_user
+      get tenant_org_graph_path(unit: @org[:payments])
+
+      assert_response :success
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Added Dot Fennick/
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Rowan Grant/, count: 0
+      assert_select "form[action='#{change_back_tenant_org_graph_path}']", minimum: 1
     end
 
     should "show each member's name and role, but not their title, allocation or HRIS level" do
