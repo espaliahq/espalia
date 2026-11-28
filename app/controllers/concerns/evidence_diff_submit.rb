@@ -27,7 +27,8 @@ module EvidenceDiffSubmit
   #
   # @return [TouchedCells]
   # @raise [Operations::Base::ParameterError] also when another write to the
-  #   stream landed mid-save, which the callers already show as an alert
+  #   stream, or a lock it holds, beat the save, which the callers already
+  #   show as an alert
   def apply_evidence_diff
     params_hash = evidence_diff_params
     ActiveRecord::Base.transaction do
@@ -37,7 +38,7 @@ module EvidenceDiffSubmit
       else               diff_new(params_hash)
       end
     end
-  rescue RubyEventStore::WrongExpectedEventVersion
+  rescue RubyEventStore::WrongExpectedEventVersion, ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
     raise Operations::Base::ParameterError, VERSION_CONFLICT
   end
 

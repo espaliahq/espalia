@@ -105,6 +105,17 @@ class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
       assert_equal 1, held
     end
 
+    [ ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout ].each do |error|
+      should "store nothing and ask to try again when a #{error.name.demodulize} lands mid-save" do
+        sign_in @peer_user
+
+        assert_stores_nothing do
+          fail_with(Operations::Assessments::AddEvidenceLink, error.new("lock")) { move_link_and_edit }
+        end
+        assert_equal EvidenceDiffSubmit::VERSION_CONFLICT, flash[:alert]
+      end
+    end
+
     should "refuse a forgotten person's item even when only its text changes" do
       forget(@author)
       sign_in @peer_user
