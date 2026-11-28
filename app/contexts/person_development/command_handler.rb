@@ -73,6 +73,21 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Removes the framework assignment of someone the HRIS says has left. Unlike
+  # {#unassign_from_framework} it goes through for a forgotten person, so a
+  # leaver forgotten before the sync that offboards them doesn't keep an
+  # assignment forever. It takes no reason: the event carries `left_company`
+  # and ids only, since it can land after the erase.
+  #
+  # @param person_id [String] UUID of the person
+  # @param framework_id [String] UUID of the framework
+  # @raise [RuntimeError] if not assigned, or still enrolled in a cycle
+  def offboard_from_framework(person_id, framework_id)
+    @repository.with_person_development(person_id, framework_id, forgotten: :offboarding) do |aggregate|
+      aggregate.unassign_from_framework(reason: "left_company")
+    end
+  end
+
   # Records the person's reporting manager on their stream (idempotent — no-op
   # when unchanged). Populated from HRIS sync and the one-off backfill.
   #
@@ -224,7 +239,7 @@ class PersonDevelopment::CommandHandler
       attempts += 1
       # A placement job or a decision can store to the stream mid-publish. Losing that race must not roll the publish back.
       ActiveRecord::Base.transaction(requires_new: true) do
-        @repository.with_person_development(person_id, framework_id) do |aggregate|
+        @repository.with_person_development(person_id, framework_id, forgotten: :framework_migration) do |aggregate|
           aggregate.migrate_framework_version(framework_id, old_version, new_version, mappings)
         end
       end
@@ -243,9 +258,13 @@ class PersonDevelopment::CommandHandler
   # @param person_id [String] UUID of the person
   # @param framework_id [String] UUID of the framework
   # @param cycle_id [String] UUID of the cycle being left (must match current)
-  # @param reason [String] why the person is leaving
+  # @param reason [String] one of {AssessmentCycles::Aggregate::UNENROLL_REASONS}
+  # @raise [ArgumentError] for any other reason: this write reaches a
+  #   forgotten person's stream, so it never carries free text
   def leave_cycle(person_id, framework_id, cycle_id, reason)
-    @repository.with_person_development(person_id, framework_id) do |aggregate|
+    raise ArgumentError, "unknown unenroll reason #{reason.inspect}" unless AssessmentCycles::Aggregate::UNENROLL_REASONS.include?(reason)
+
+    @repository.with_person_development(person_id, framework_id, forgotten: :cycle_ending) do |aggregate|
       aggregate.leave_cycle(cycle_id, reason)
     end
   end
@@ -260,7 +279,7 @@ class PersonDevelopment::CommandHandler
   # @param framework_id [String] UUID of the framework
   # @param cycle_id [String] UUID of the cycle that concluded (must match current)
   def conclude_cycle(person_id, framework_id, cycle_id)
-    @repository.with_person_development(person_id, framework_id) do |aggregate|
+    @repository.with_person_development(person_id, framework_id, forgotten: :cycle_ending) do |aggregate|
       aggregate.conclude_cycle(cycle_id)
     end
   end

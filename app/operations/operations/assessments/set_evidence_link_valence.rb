@@ -9,6 +9,10 @@
 # full-state resubmit is safe. Reclassification is an explicit affordance:
 # existing links are never force-reclassified by content edits.
 #
+# A forgotten person's links stay as they were when they were forgotten: a
+# link about them is refused with "this person has been forgotten", as a
+# ParameterError ({PersonDevelopment::ForgottenSubject}).
+#
 # Write — :mcp_client approval. Same additive-context friction as adding
 # a link; valence is narrative metadata, never a scoring input.
 class Operations::Assessments::SetEvidenceLinkValence < Operations::Base

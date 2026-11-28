@@ -24,11 +24,13 @@ class OrgGraphPolicy::Reach
     unit.present? && covered_unit_ids.include?(unit.id)
   end
 
-  # @return [Set<String>] the units owned by active people in the subtree
+  # A retired unit keeps its owners, but gives them nothing to reach.
+  #
+  # @return [Set<String>] the live units owned by active people in the subtree
   def owned_unit_ids
     @owned_unit_ids ||= if @person
       subtree = [ @person.id, *@person.all_reports.pluck(:id) ]
-      OrgUnitOwner.joins(:person).merge(Person.active)
+      OrgUnitOwner.joins(:person, :unit).merge(Person.active).merge(OrgUnit.live)
                   .where(tenant_id: @person.tenant_id, person_id: subtree).distinct.pluck(:unit_id).to_set
     else
       Set.new

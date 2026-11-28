@@ -91,6 +91,8 @@ class Views::Evidence::ConversationMessage < Views::Base
   end
 
   def pending_request
+    return closed_request if @details[:closed_ids].include?(@request.id)
+
     due = @request.due_at ? " · due #{@request.due_at.strftime("%a %-d %b")}" : ""
     p(class: "text-sm text-default") { plain "Waiting on #{whom(@request.requestee_person_id, @request.requestee)}"; span(class: "text-muted") { due } }
     div(class: "space-y-0.5", data: { testid: "request-history" }) do
@@ -101,6 +103,13 @@ class Views::Evidence::ConversationMessage < Views::Base
       respond_actions
     elsif @request.requested_by_id == @viewer_id
       outgoing_actions
+    end
+  end
+
+  def closed_request
+    div(class: "flex flex-wrap items-center gap-2") do
+      chip("Closed")
+      p(class: "text-sm text-muted") { "Nobody needs to answer: it's about a former member." }
     end
   end
 
@@ -195,6 +204,7 @@ class Views::Evidence::ConversationMessage < Views::Base
     render Components::Kit::Prose.new(@item.content, class: "text-sm text-default")
     external_link
     suggestion_area
+    own_dismissals
     item_actions
   end
 
@@ -243,12 +253,18 @@ class Views::Evidence::ConversationMessage < Views::Base
     div(id: Views::Evidence::PlacementSuggestions.status_id_for(@item.id), role: "status", aria: { live: "polite" })
   end
 
+  def own_dismissals
+    render Views::Evidence::OwnDismissals.new(
+      item: @item, **@details[:own_dismissals].fetch(@item.id, Evidence::OwnDismissals::NONE)
+    )
+  end
+
   def unplaced? = @details[:links].fetch(@item.id, []).empty?
 
   def item_actions
     owed = @details[:owed_ids].include?(@message.dom_id)
     in_situ = @details[:in_situ_paths][@item.id]
-    mine = @item.author_id == @viewer_id
+    mine = @item.author_id == @viewer_id && !@details[:closed_ids].include?(@item.id)
     edit_links = !mine && !owed && @details[:linkable_ids].include?(@item.id)
     return unless owed || in_situ || mine || edit_links
 

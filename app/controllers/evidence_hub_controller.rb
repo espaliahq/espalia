@@ -177,9 +177,9 @@ class EvidenceHubController < ApplicationController
                                                             params: { scope: place_param == "org" ? "org" : "team" })
     about_you, for_team = to_place_records(placing)
     for_team = [] if place_param == "mine"
-    incoming = EvidenceRequest.incoming_for(current_person.id).pending.least_recently_touched
+    incoming = EvidenceRequest.incoming_for(current_person.id).open.least_recently_touched
       .includes(:requester, :assessee).to_a
-    waiting = EvidenceRequest.outgoing_for(current_person.id).pending.least_recently_touched.includes(:requestee).to_a
+    waiting = EvidenceRequest.outgoing_for(current_person.id).open.least_recently_touched.includes(:requestee).to_a
     paths = {}
     incoming.each do |r|
       paths[r.id] = message_path(conversations, request_id: r.id, anchor: r.dom_id)
@@ -264,18 +264,22 @@ class EvidenceHubController < ApplicationController
     items = shown.filter_map(&:item)
     requests = shown.filter_map(&:request).uniq
     can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
-    linkable = linkable_items(conversations, shown)
+    forgotten = Person.forgotten.where(id: items.map(&:person_id).uniq).pluck(:id).to_set
+    linkable = linkable_items(conversations, shown, forgotten)
     decidable = can_regenerate || EvidencePlacementSuggestion.pending.exists? ? linkable : []
 
     {
       messages: shown, hidden_count: hidden_count, shown_ids: shown.to_set(&:dom_id),
       owed_ids: shown.select { |m| conversations.owes?(m) }.map(&:dom_id).to_set,
+      closed_ids: (items.select { |item| forgotten.include?(item.person_id) } +
+                   requests.select { |request| request.pending? && !conversations.open?(request) }).to_set(&:id),
       cells: Evidence::CellContextResolver.new(requests + items.select(&:capability_stable_id)).by_id,
       links: links_for(items),
       in_situ_paths: in_situ_paths_for(items),
       people: Person.where(id: items.map(&:person_id).uniq).index_by(&:id),
       answering: answering(shown),
       suggestions: Evidence::PlacementSuggestionRows.for(decidable), decidable_ids: decidable.to_set(&:id),
+      own_dismissals: Evidence::OwnDismissals.for(items, current_person.id),
       linkable_ids: linkable.to_set(&:id),
       can_regenerate: can_regenerate,
       composer: composer_for(conversations, partner)
@@ -284,9 +288,11 @@ class EvidenceHubController < ApplicationController
 
   # Items the viewer may place or link: what they're asked to place, plus
   # anything else the policy lets them link. The same items' suggestions are
-  # theirs to decide.
-  def linkable_items(conversations, shown)
+  # theirs to decide. Feedback about a forgotten person takes no more links.
+  def linkable_items(conversations, shown, forgotten)
     shown.select(&:item).select do |m|
+      next false if forgotten.include?(m.item.person_id)
+
       conversations.owes?(m) || EvidencePolicy.new(pundit_user, m.item).add_link?
     end.map(&:item)
   end
@@ -358,6 +364,8 @@ class EvidenceHubController < ApplicationController
 
       return { self_thread: true, own_assessment_path: own && assessment_path(own) }
     end
+
+    return { closed: true } if partner.forgotten?
 
     partner_assignments = PersonFrameworkAssignment.where(person_id: partner.id).order(:created_at, :id).to_a
     # A request is about one assessment; with several, the newest is the one in use.

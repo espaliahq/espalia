@@ -123,13 +123,6 @@ class Operations::CalibrationSessions::RequestEvidenceTest < ActiveSupport::Test
       assert error.message.present?
       assert_equal 1, EvidenceRequest.where(person_id: @report.id).count
     end
-
-    should "refuse a foreign capability" do
-      error = assert_raises(Operations::Base::ParameterError) do
-        request!({ capability_stable_id: SecureRandom.uuid_v7 })
-      end
-      assert_match(/does not belong to the session's framework/, error.message)
-    end
   end
 
   context "the two-stream race" do
@@ -181,6 +174,21 @@ class Operations::CalibrationSessions::RequestEvidenceTest < ActiveSupport::Test
       assert error
       assert_equal 0, EvidenceRequest.count,
                    "the entitlement bar must hold BEFORE the request is created"
+    end
+  end
+
+  # #615
+  context "with a capability that isn't active in the published framework" do
+    setup do
+      category_id = FrameworkState::Capability.find_by!(stable_id: @cap_stable).category_id
+      @retired = create(:framework_capability, category_id: category_id, name: "Old Thinking", status: "archived")
+    end
+
+    should "refuse a retired capability and a made-up id alike" do
+      [ @retired.stable_id, SecureRandom.uuid_v7 ].each do |id|
+        err = assert_raises(Operations::Base::ParameterError) { request!({ capability_stable_id: id }) }
+        assert_equal "capability_stable_id #{id} is not an active capability in the published framework", err.message
+      end
     end
   end
 end

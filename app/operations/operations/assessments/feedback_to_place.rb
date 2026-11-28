@@ -5,7 +5,8 @@
 # the people they place feedback for in one of two views
 # ({Assessments::FeedbackToPlace}): `team` (default — direct reports and
 # active rating delegations) or `org` (team plus everyone deeper in the
-# subtree). The view narrows what is listed, never who may place it.
+# subtree). The view narrows what is listed, never who may place it. Items
+# about a forgotten person are left out, since their links can't change.
 # Read-only; any member with a Person record (AssessmentPolicy#index?).
 class Operations::Assessments::FeedbackToPlace < Operations::Base
   EXCERPT_LENGTH = 200

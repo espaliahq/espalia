@@ -118,11 +118,14 @@ class Views::Evidence::ConversationThread < Views::Base
   def composer
     c = @details[:composer] || {}
     div(class: "border-t border-default bg-default px-4 py-3 space-y-2", data: { conversation_thread_target: "composer" }) do
-      p(class: "text-xs text-muted") do
-        "Not a private chat. Feedback is visible to the person it's about, their managers and workspace admins."
+      unless c[:closed]
+        p(class: "text-xs text-muted") do
+          "Not a private chat. Feedback is visible to the person it's about, their managers and workspace admins."
+        end
       end
       div(class: "flex flex-wrap gap-2") do
-        if c[:about_me] then about_me_actions(c)
+        if c[:closed] then p(class: "text-sm text-muted") { "A former member takes no new feedback." }
+        elsif c[:about_me] then about_me_actions(c)
         elsif c[:self_thread] then self_actions(c)
         else partner_actions(c)
         end

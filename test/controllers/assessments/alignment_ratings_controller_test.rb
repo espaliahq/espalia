@@ -121,4 +121,36 @@ class Assessments::AlignmentRatingsControllerTest < ActionDispatch::IntegrationT
       end
     end
   end
+
+  context "on a forgotten report" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @report.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+    end
+
+    should "refuse the manager inline, not with a 500" do
+      sign_in @manager_user
+      post assessment_alignment_ratings_path(@report_assignment), params: {
+        rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "consistent" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :unprocessable_content
+      assert_includes response.body, "this person has been forgotten"
+    end
+
+    should "give a stranger the ordinary refusal, never the forgotten one" do
+      stranger = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: stranger, person: create(:person, tenant: @tenant, email: stranger.email))
+      end
+      sign_in stranger
+      post assessment_alignment_ratings_path(@report_assignment), params: {
+        rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "consistent" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :forbidden
+      assert_not_includes response.body, "forgotten"
+    end
+  end
 end

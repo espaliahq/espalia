@@ -13,7 +13,7 @@ class TeamPlanning::RuleKinds::AttritionTest < ActiveSupport::TestCase
   # yearly cost of 365 EUR, so a row's cost is minus its empty FTE-days.
   def frame(from, to, earlier: [])
     TeamPlanning::Forecast::Frame.new(
-      kind: TeamPlanning::RuleKinds::Attrition, step: Date.parse(from)..Date.parse(to), covered: Set.new, earlier:,
+      kind: TeamPlanning::RuleKinds::Attrition, step: Date.parse(from)..Date.parse(to), covered: Set.new, earlier:, today: Date.parse(from),
       map: Map.new({ "attrition" => { "yearly_rate" => "0.365" }, "time_to_hire" => { "days" => "180" } }),
       filled: [ TeamPlanning::Forecast::Filled.new(person_id: "ada", unit_id: "platform", cost_centre: nil, fte: 1r) ],
       averages: { "platform" => TeamPlanning::Forecast::Average.new(cost: { "EUR" => 365r }, capacity: { "per_fte" => 1r }) }

@@ -269,24 +269,39 @@ class AssessmentCycles::AggregateTest < ActiveSupport::TestCase
     end
 
     should "apply PersonUnenrolled event" do
-      @aggregate.unenroll(@person_id, "withdrew", unenrolled_by: @defined_by)
+      @aggregate.unenroll(@person_id, "left_company", unenrolled_by: @defined_by)
 
       event = @aggregate.unpublished_events.to_a.last
       assert_kind_of AssessmentCycles::Events::PersonUnenrolled, event
       assert_equal @person_id, event.data[:person_id]
-      assert_equal "withdrew", event.data[:reason]
+      assert_equal "left_company", event.data[:reason]
       assert_equal @framework_id, event.data[:framework_id]
     end
 
     should "raise if person not enrolled" do
       err = assert_raises(RuntimeError) do
-        @aggregate.unenroll(SecureRandom.uuid_v7, "nope")
+        @aggregate.unenroll(SecureRandom.uuid_v7, "manual")
       end
       assert_match /not enrolled/, err.message
     end
 
+    should "refuse a reason outside the list, so free text never reaches the person's stream" do
+      assert_raises(ArgumentError) { @aggregate.unenroll(@person_id, "left the team") }
+      assert_empty @aggregate.unpublished_events.to_a.grep(AssessmentCycles::Events::PersonUnenrolled)
+    end
+
+    should "still load an older unenroll whose reason is outside the list" do
+      @aggregate.apply(AssessmentCycles::Events::PersonUnenrolled.new(data: {
+        cycle_id: @cycle_id, person_id: @person_id, framework_id: @framework_id,
+        reason: "left the team", unenrolled_by: nil
+      }))
+
+      @aggregate.enroll(@person_id)
+      assert_kind_of AssessmentCycles::Events::PersonEnrolled, @aggregate.unpublished_events.to_a.last
+    end
+
     should "allow re-enrolling after unenroll" do
-      @aggregate.unenroll(@person_id, "withdrew")
+      @aggregate.unenroll(@person_id, "manual")
       @aggregate.enroll(@person_id)
 
       event = @aggregate.unpublished_events.to_a.last

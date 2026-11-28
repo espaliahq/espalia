@@ -19,6 +19,8 @@
 # (it grants no permissions and changes no one's data); the MCP client's own
 # write prompt is the right friction.
 class Operations::Assessments::PostComment < Operations::Base
+  include Operations::CapabilityGuard
+
   description "Post a comment on a capability × level of an assessment (optionally as a reply). " \
               "Pass evidence_id to comment on that evidence item's linkage at the cell instead — " \
               "the discussion of the feedback's relevance and valence there."
@@ -47,8 +49,12 @@ class Operations::Assessments::PostComment < Operations::Base
     # An evidence-link comment's coordinates name the linkage, and the
     # aggregate's ever-linked check owns their validity — a manager may
     # have linked at any ordinal, not just the assessee's role's levels.
-    validate_level_ordinal! unless evidence_id
-    validate_capability_in_framework!
+    # A comment on an existing link may still discuss one left on a retired
+    # capability, as the link tools may still tidy it.
+    if evidence_id.nil?
+      validate_level_ordinal!
+      ensure_active_capability!(assignment.framework_id, params[:capability_stable_id])
+    end
 
     comment_id = SecureRandom.uuid_v7
     PersonDevelopment::CommandHandler.new.post_comment(
@@ -94,20 +100,5 @@ class Operations::Assessments::PostComment < Operations::Base
 
     raise Operations::Base::ParameterError,
       "level_ordinal #{params[:level_ordinal]} does not exist for the assignment's role"
-  end
-
-  # Guard against anchoring a comment to a capability outside this
-  # assessment's framework (the lookup is scoped to the assignment's
-  # framework, so a foreign / version-specific id resolves to absent).
-  def validate_capability_in_framework!
-    in_framework = FrameworkState::Capability
-      .joins(:category)
-      .where(stable_id: params[:capability_stable_id])
-      .merge(FrameworkState::CapabilityCategory.where(framework_id: assignment.framework_id))
-      .exists?
-    return if in_framework
-
-    raise Operations::Base::ParameterError,
-      "capability_stable_id does not belong to the assignment's framework"
   end
 end

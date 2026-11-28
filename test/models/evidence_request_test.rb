@@ -94,6 +94,14 @@ class EvidenceRequestTest < ActiveSupport::TestCase
 
       assert_equal [ eligible.id ], EvidenceRequest.reminder_candidates.pluck(:id)
     end
+
+    should "exclude a request to a forgotten requestee" do
+      request = create(:evidence_request, tenant: @tenant, requested_at: 8.days.ago)
+      assert_equal [ request.id ], EvidenceRequest.reminder_candidates.pluck(:id)
+
+      request.requestee.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      assert_empty EvidenceRequest.reminder_candidates
+    end
   end
 
   context "#can_nudge?" do
@@ -108,6 +116,11 @@ class EvidenceRequestTest < ActiveSupport::TestCase
     should "measure from the ask when never reminded" do
       assert request(requested_at: 3.days.ago).can_nudge?
       assert_not request(requested_at: 1.day.ago).can_nudge?
+    end
+
+    should "never allow nudging a forgotten requestee" do
+      requestee = create(:person, tenant: @tenant, name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      assert_not request(requested_at: 9.days.ago, requestee: requestee).can_nudge?
     end
 
     should "never allow nudging a resolved request" do
