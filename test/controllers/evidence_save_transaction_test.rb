@@ -5,6 +5,19 @@ require "test_helper"
 # The feedback modal's save stores all of its commands or none of them, and a
 # save that stores nothing queues no job and broadcasts nothing.
 class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
+  # Once the aggregate has loaded, another writer appends to its stream, so
+  # the link's store meets a real version conflict.
+  module LandWriteBeforeLink
+    def add_evidence_link(...)
+      if (stream = Thread.current[:land_write_before_link])
+        Thread.current[:land_write_before_link] = nil
+        Rails.configuration.event_store.publish(RubyEventStore::Event.new, stream_name: stream, expected_version: :auto)
+      end
+      super
+    end
+  end
+  PersonDevelopment::Aggregate.prepend(LandWriteBeforeLink)
+
   include Devise::Test::IntegrationHelpers
   include ActiveJob::TestHelper
 
@@ -80,9 +93,10 @@ class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
       sign_in @peer_user
 
       assert_stores_nothing do
-        fail_with(Operations::Assessments::AddEvidenceLink, RubyEventStore::WrongExpectedEventVersion.new) do
-          move_link_and_edit
-        end
+        Thread.current[:land_write_before_link] = stream_name
+        move_link_and_edit
+      ensure
+        Thread.current[:land_write_before_link] = nil
       end
       assert_equal EvidenceDiffSubmit::VERSION_CONFLICT, flash[:alert]
     end
@@ -231,10 +245,9 @@ class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
     end
   end
 
-  def stream_events
-    stream = EventStreamNaming.person_development_stream(@author.id, @framework_id, tenant: @tenant)
-    Rails.configuration.event_store.read.stream(stream).to_a
-  end
+  def stream_name = EventStreamNaming.person_development_stream(@author.id, @framework_id, tenant: @tenant)
+
+  def stream_events = Rails.configuration.event_store.read.stream(stream_name).to_a
 
   def active_links
     ActsAsTenant.with_tenant(@tenant) do
