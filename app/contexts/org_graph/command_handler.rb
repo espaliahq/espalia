@@ -220,6 +220,8 @@ class OrgGraph::CommandHandler
     authorize_membership!(person_id, unit_id)
     unit = ensure_live_unit!(unit_id)
     with_person(person_id, plan) do |person|
+      # Again under the member's lock, as their manager may have changed meanwhile.
+      with_actor_reread { authorize_membership!(person_id, unit_id) }
       ensure_provides_unit!(unit, options[:provider], person_id, held: person.membership_provider(unit.id))
       person.set_membership(unit_id, **attributed(options, :set_by_id))
     end
@@ -238,6 +240,7 @@ class OrgGraph::CommandHandler
     authorize_membership!(person_id, unit_id)
     unit = find_unit(unit_id) or raise "Unit not found"
     with_person(person_id, plan) do |person|
+      with_actor_reread { authorize_membership!(person_id, unit_id) }
       ensure_provides_unit!(unit, options[:provider], person_id, held: person.membership_provider(unit.id))
       person.end_membership(unit_id, **attributed(options, :ended_by_id))
     end
@@ -269,6 +272,7 @@ class OrgGraph::CommandHandler
     unit = ensure_live_unit!(unit_id)
     from = find_unit(from_unit_id) or raise "Unit not found"
     with_person(person_id, plan) do |person|
+      with_actor_reread { authorize_move_membership!(person_id, from_unit_id, unit_id) }
       provider = person.membership_provider(from.id) or raise "Not a member of this unit"
       # Espalia keeps a membership it holds as it moves between one provider's units.
       unless provider == OrgGraph::StructureAggregate::ESPALIA && from.provider == unit.provider
@@ -296,6 +300,7 @@ class OrgGraph::CommandHandler
       authorize_structure!
     end
     with_person(person_id, plan, facts: !membership) do |person|
+      with_actor_reread { membership ? authorize_membership!(person_id, unit.id) : authorize_structure! }
       if membership
         ensure_provides_unit!(unit, OrgGraph::StructureAggregate::ESPALIA, person_id, held: person.membership_provider(unit.id))
       else

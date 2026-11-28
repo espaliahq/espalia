@@ -170,13 +170,16 @@ module OrgGraph::Authorization
 
   # Runs the block's checks against the actor as the database holds it now:
   # a check under a lock must see a grant, role or status changed while the
-  # command waited for it.
+  # command waited for it. Taking the lock through `execute` happens to clear
+  # Rails' query cache too; `uncached` keeps the check sound however it's taken.
   def with_actor_reread
     return yield if system?
 
     actor = @actor
-    @actor = actor.reread
-    yield
+    ActiveRecord::Base.uncached do
+      @actor = actor.reread
+      yield
+    end
   ensure
     @actor = actor if actor
   end
