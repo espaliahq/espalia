@@ -57,7 +57,7 @@ class Views::Tenant::OrgGraph::DeclareStructureStep < Views::Tenant::OrgGraph::S
     return no_units if governed.empty?
 
     conversion_fieldset(governed, "Each type beneath #{@unit.name} becomes") do |type, id|
-      type_select("conversion[#{type.id}]", id, source_kinds, selected: type.id)
+      type_select("conversion[#{type.id}]", id, source_kinds, selected: preselect("conversion", type, source_kinds, type.id))
     end
   end
 
@@ -69,16 +69,18 @@ class Views::Tenant::OrgGraph::DeclareStructureStep < Views::Tenant::OrgGraph::S
       no_units
       div do
         label(for: "org-unit-new-type", class: "block text-sm font-medium text-default") { "Its first unit type" }
-        input(type: "text", id: "org-unit-new-type", name: "names[]", required: true, autocomplete: "off",
+        input(type: "text", id: "org-unit-new-type", name: "names[]", value: first_name_sent, required: true, autocomplete: "off",
               class: "#{Components::Kit::Field::INPUT} mt-1 w-full")
       end
     else
       conversion_fieldset(governed, "Name the type each becomes. Give two the same name to make them one.") do |type, id|
-        input(type: "text", id:, name: "names[#{type.id}]", value: type.name, required: true, autocomplete: "off",
+        input(type: "text", id:, name: "names[#{type.id}]", value: carried("names", type) || type.name, required: true, autocomplete: "off",
               class: "#{Components::Kit::Field::INPUT} w-full")
       end
     end
   end
+
+  def first_name_sent = (@carried["names"].first if @carried["names"].is_a?(Array))
 
   def no_units = p(class: "text-sm text-default") { "No unit sits beneath #{@unit.name} yet, so none changes type." }
 end

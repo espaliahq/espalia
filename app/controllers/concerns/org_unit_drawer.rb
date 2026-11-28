@@ -36,6 +36,10 @@ module OrgUnitDrawer
     end
   end
 
+  # What a structure step's form sent, carried back to it when the write is
+  # refused, so every choice stays made ([#526](https://github.com/espaliahq/espalia/issues/526)).
+  def carried_choices = params.to_unsafe_h.slice("conversion", "names")
+
   def drawer_path = edit_tenant_org_unit_path(@unit, on: drawer_on, **comparison_params)
 
   # The date a drawer step opens with: the one carried in, or today.

@@ -12,7 +12,7 @@ class Tenant::OrgUnitStructureMovesController < ApplicationController
     render_drawer do |overview, rights|
       Views::Tenant::OrgGraph::StructureMoveStep.new(unit: @unit, overview:, rights:, effective_on: step_date,
                                                      alert: flash[:drawer_alert], parent: overview.unit(params[:parent_id]),
-                                                     to_top: params[:parent_id].blank?)
+                                                     to_top: params[:parent_id].blank?, carried: carried_choices)
     end
   end
 
@@ -26,7 +26,8 @@ class Tenant::OrgUnitStructureMovesController < ApplicationController
     ))
     redirect_to edit_tenant_org_unit_path(@unit, on: drawer_on, **comparison_params), status: :see_other, notice:
   rescue *FAILURES => e
-    redirect_to new_tenant_org_unit_structure_move_path(@unit, parent_id: params[:parent_id], on: effective_on, **comparison_params),
+    redirect_to new_tenant_org_unit_structure_move_path(@unit, parent_id: params[:parent_id], on: effective_on,
+                                                              **carried_choices.symbolize_keys, **comparison_params),
                 flash: { drawer_alert: readable(e.message) }
   end
 

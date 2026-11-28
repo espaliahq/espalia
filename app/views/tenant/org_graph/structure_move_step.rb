@@ -45,7 +45,7 @@ class Views::Tenant::OrgGraph::StructureMoveStep < Views::Tenant::OrgGraph::Stru
       input(type: "hidden", name: "parent_id", value: @parent&.id.to_s)
       conversion_fieldset(moved, "Each type in #{structure_name(from_id)} becomes a type in #{structure_name(into_id)}") do |type, id|
         kinds = type.id == @unit.level_id ? own_kinds : into_kinds
-        type_select("conversion[#{type.id}]", id, kinds, selected: previous_type(moved, type, kinds) || same_name(type, kinds))
+        type_select("conversion[#{type.id}]", id, kinds, selected: preselect("conversion", type, kinds, previous_type(moved, type, kinds), same_name(type, kinds)))
       end
       date_field
       submit(title)
