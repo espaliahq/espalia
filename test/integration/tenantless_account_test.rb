@@ -10,6 +10,7 @@ require_relative "../../lib/tasks/example_seed"
 # of their data and changes nothing.
 class TenantlessAccountTest < ActionDispatch::IntegrationTest
   include McpRequestCredentialsHelpers
+  include ActionMailer::TestHelper
 
   # Every other route is crawled. Each entry must match a route and say why it isn't crawled.
   EXEMPT = {
@@ -27,7 +28,23 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     "/oauth/introspect" => "Doorkeeper's introspection endpoint authenticates the client, not the session",
     "/oauth/register" => "dynamic client registration is open by design and holds no tenant data",
     "/settings/color_scheme" => "the account's own colour scheme, held on the account rather than a tenant",
+    "/settings/notifications" => "the account's own notification settings, held on the account rather than a tenant",
+    "/notifications/read_all" => "marks read only the account's own notifications",
     "/impersonation" => "refused unless the account is a global admin, before it reads a tenant"
+  }.freeze
+
+  # Where a refusal redirects. A redirect anywhere else may be a write that worked.
+  REFUSAL_PATHS = %w[/ /users/sign_in].freeze
+
+  # Writes refused by their own lookup, which return to their own page. Each says where and why.
+  NO_PERSON = "needs a person linked to the account, and returns to the assessments list without one"
+  REFUSED_ELSEWHERE = {
+    "/settings/connected_clients/:id" => [ %r{\A/settings/connected_clients\z}, "finds the token among the account's own, and returns to the list when none matches" ],
+    "/assessments/:assessment_id/carried_ratings" => [ %r{\A/assessments\z}, NO_PERSON ],
+    "/assessments/:assessment_id/explorations" => [ %r{\A/assessments\z}, NO_PERSON ],
+    "/assessments/:assessment_id/explorations/:exploration_id/closure" => [ %r{\A/assessments\z}, NO_PERSON ],
+    "/frameworks/:framework_id/suggestions/:suggestion_id/comments/:id" =>
+      [ %r{\A/frameworks/[^/]+/activity\z}, "finds no comment, as none is seeded, and returns to the framework's activity" ]
   }.freeze
 
   # Bodies for writes that read their params before they authorise, so an empty
@@ -44,7 +61,7 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     "assessments" => "person_framework_assignments", "assignments" => "person_framework_assignments",
     "assessments/comments" => "person_development_comments", "evidence" => "evidence_items",
     "items" => "evidence_items", "requests" => "evidence_requests", "frameworks" => %w[framework_states framework_id],
-    "planning" => "team_planning_plans", "suggestions" => "framework_suggested_edits",
+    "planning" => "team_planning_plans", "scenarios" => "team_planning_scenarios", "suggestions" => "framework_suggested_edits",
     "notifications" => "noticed_notifications", "units" => "org_units", "users" => "tenant_users",
     "org_people" => "people", "illustrations" => %w[framework_role_illustrations illustration_id],
     "categories" => %w[framework_capability_categories category_id], "evidences" => "evidence_items",
@@ -55,10 +72,14 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     "members" => "org_memberships", "memberships" => "org_memberships", "owners" => "org_unit_owners"
   }.freeze
 
+  # Org Graph routes whose word names a different table than elsewhere.
+  ORG_GRAPH_TABLES = { "levels" => "org_taxonomy_levels" }.freeze
+
   # Route segments no seeded record fills. Each says why.
   NO_PLAN = "the example seed makes no Team Planning plan"
   NO_UNIT = "the example seed records people in the Org Graph but no units"
   NO_INPUTS = "the example seed sets none of the tenant's planning inputs"
+  NO_LEVEL = "the example seed defines no Org Graph levels"
   UNSEEDED = {
     ":plan_id" => NO_PLAN,
     "planning/:id" => NO_PLAN,
@@ -80,16 +101,17 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     ":budget_line_id" => NO_INPUTS,
     "suggestions/comments/:id" => "the example seed's suggestions carry no comments",
     "notifications/:id" => "the example seed sends no notifications",
-    ":exploration_id" => "the example seed opens no exploration"
+    ":exploration_id" => "the example seed opens no exploration",
+    "levels/:id" => NO_LEVEL,
+    ":level_id" => NO_LEVEL,
+    ":token" => "the example seed leaves no evidence draft, and a draft's token is no table's id"
   }.freeze
 
   UNTOUCHED_TABLES = %w[schema_migrations ar_internal_metadata].freeze
   # The account's own display and notification settings, which it may change without a tenant.
   OWN_SETTINGS = %w[color_scheme notification_preferences updated_at].freeze
 
-  setup do
-    seed unless name.include?("crawl every route")
-  end
+  setup { seed }
 
   should "crawl every route, or exempt it with a reason" do
     uncrawlable = route_table.filter_map { |verb, path| "#{verb.upcase} #{path}" if path.include?("*") && !exempt?(path) }
@@ -121,13 +143,19 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
 
   should "be refused by every route that writes, and change nothing" do
     before = fingerprints
-    answered = write_routes.filter_map do |verb, path, template|
-      status, = visit(verb, path, params: body_for(template))
-      "#{verb.upcase} #{template} (#{status})" unless refused?(status) || NOT_REFUSED.key?(template)
+    answered = nil
+    assert_no_enqueued_jobs do
+      assert_no_emails do
+        answered = write_routes.filter_map do |verb, path, template|
+          status, = visit(verb, path, params: body_for(template, path))
+          "#{verb.upcase} #{template} (#{status} #{redirect_path})" unless refused?(status, template) || NOT_REFUSED.key?(template)
+        end
+      end
     end
 
     assert_empty errors, "a tenantless request raised"
     assert_empty answered, "a write answered a tenantless account other than with a refusal"
+    assert_empty (NOT_REFUSED.keys + REFUSED_ELSEWHERE.keys) - write_routes.map(&:last), "an entry names no crawled write: remove it"
     assert_equal before, fingerprints, "a tenantless write changed a table"
     get root_path
     assert_response :success, "the crawl should run signed in throughout"
@@ -167,7 +195,7 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, tenant.name
 
     get "/tenant/users"
-    assert refused?(response.status), "a tenant page should still refuse the account"
+    assert refused?(response.status, nil), "a tenant page should still refuse the account"
   end
 
   private
@@ -181,7 +209,7 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     post user_session_path, params: { user: { email: @account.email, password: "password-123" } }
   end
 
-  # Rows the example seed doesn't make, in its second tenant, so the crawl reaches both.
+  # Rows the example seed doesn't make, so the routes that read them have a record to crawl.
   def seed_second_tenant
     tenant = Tenant.find_by!(slug: ExampleSeed::SECOND_TENANT[:slug])
     ActsAsTenant.with_tenant(tenant) do
@@ -211,7 +239,14 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     [ e.class.name, "" ]
   end
 
-  def refused?(status) = [ 302, 303, 401, 403, 404 ].include?(status)
+  def refused?(status, template)
+    return true if [ 401, 403, 404 ].include?(status)
+    return false unless [ 302, 303 ].include?(status)
+
+    REFUSAL_PATHS.include?(redirect_path) || REFUSED_ELSEWHERE[template]&.first&.match?(redirect_path)
+  end
+
+  def redirect_path = response.location && URI(response.location).path
 
   def route_table
     Rails.application.routes.routes.map do |route|
@@ -232,13 +267,15 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
   def unfilled = @unfilled ||= Set.new
 
   def fill(path)
-    parent = nil
+    parent = parent_value = nil
+    scope = path.include?("/org_graph/") ? ORG_GRAPH_TABLES : {}
     path.gsub(%r{(\w+)/:(\w+)}) do
       collection, param = Regexp.last_match.captures
       key = param == "id" ? collection : param.delete_suffix("_id").pluralize
-      value = special(collection, param) || seeded_id(key, parent)
+      value = special(collection, param) ||
+              (seeded_id(key, parent, parent_value, scope) if param == "id" || param.end_with?("_id"))
       unfilled << (param == "id" ? [ parent, collection, ":id" ].compact.join("/") : ":#{param}") unless value
-      parent = collection
+      parent, parent_value = collection, value
       "#{collection}/#{value || SecureRandom.uuid_v7}"
     end
   end
@@ -254,34 +291,47 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # The routing id of a seeded row in the table the collection names.
-  def seeded_id(collection, parent)
+  # The routing id of a seeded row in the table the collection names, under the parent's row where it has one.
+  def seeded_id(collection, parent, parent_value, scope = {})
     @seeded_ids ||= {}
-    @seeded_ids.fetch([ collection, parent ]) do
-      table, column = table_for(collection, parent)
-      @seeded_ids[[ collection, parent ]] = table && first_value(table, column || routing_column(table, collection))
+    @seeded_ids.fetch([ collection, parent, parent_value, scope ]) do
+      table, column = table_for(collection, parent, scope)
+      @seeded_ids[[ collection, parent, parent_value, scope ]] =
+        table && first_value(table, column || routing_column(table, collection), parent && "#{parent.singularize}_id", parent_value)
     end
   end
 
-  def table_for(collection, parent)
-    mapped = TABLES["#{parent}/#{collection}"] || TABLES[collection]
+  def table_for(collection, parent, scope)
+    mapped = scope[collection] || TABLES["#{parent}/#{collection}"] || TABLES[collection]
     return Array(mapped) if mapped
 
     candidates = connection.tables.select { it == collection || it.end_with?("_#{collection}") }
-    [ candidates.find { parent && it.include?(parent.singularize) } || candidates.first ]
+    candidates = candidates.select { it.include?(parent.singularize) }.presence || candidates if parent
+    raise "#{parent}/#{collection} could name #{candidates.to_sentence}: map it in TABLES" if candidates.many?
+
+    candidates
   end
 
+  # Framework read models route by the stable id their events carry; every other table by its primary key.
   def routing_column(table, collection)
     columns = connection.columns(table).map(&:name)
+    return "id" unless table.start_with?("framework_")
+
     [ "#{collection.singularize}_id", "#{table.split('_').last.singularize}_id" ].find { columns.include?(it) } || "id"
   end
 
-  def first_value(table, column)
-    connection.select_value("SELECT #{connection.quote_column_name(column)} FROM #{connection.quote_table_name(table)} LIMIT 1")
+  def first_value(table, column, parent_column, parent_value)
+    quoted = connection.quote_column_name(column)
+    scoped = parent_value && connection.column_exists?(table, parent_column)
+    where = scoped ? "WHERE #{connection.quote_column_name(parent_column)} = #{connection.quote(parent_value)}" : ""
+    connection.select_value("SELECT #{quoted} FROM #{connection.quote_table_name(table)} #{where} ORDER BY #{quoted} LIMIT 1")
   end
 
-  def body_for(template)
-    BODIES.fetch(template, {}).transform_values { |fields| fields.transform_values { seeded_id(it.to_s.delete_suffix("_id").pluralize, nil) } }
+  def body_for(template, path)
+    parent, parent_value = path.scan(%r{(\w+)/([^/]+)}).last
+    BODIES.fetch(template, {}).transform_values do |fields|
+      fields.transform_values { seeded_id(it.to_s.delete_suffix("_id").pluralize, parent, parent_value) }
+    end
   end
 
   def tenant_names
