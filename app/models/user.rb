@@ -78,8 +78,8 @@ class User < ApplicationRecord
 
   # Sets a new password and ends everything the old credentials opened, in one
   # transaction: sessions and remember-me cookies (Devise salts both from the
-  # password digest), an outstanding reset link, MCP access tokens and grants,
-  # and MCP calls awaiting approval.
+  # password digest), an outstanding reset link, the linked Google identity,
+  # MCP access tokens and grants, and MCP calls awaiting approval.
   #
   # @param password [String] random unless an operator supplies one
   # @return [void]
@@ -87,7 +87,7 @@ class User < ApplicationRecord
     transaction do
       lock!
       update!(password:, password_confirmation: password, remember_created_at: nil,
-              reset_password_token: nil, reset_password_sent_at: nil)
+              reset_password_token: nil, reset_password_sent_at: nil, provider: nil, uid: nil)
       now = Time.current
       Mcp::AccessToken.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
       Mcp::AccessGrant.where(resource_owner_id: id, revoked_at: nil).update_all(revoked_at: now)
@@ -154,7 +154,8 @@ class User < ApplicationRecord
   # Provisioning rules (see docs/guidelines/authorization.md and the plan):
   # - Refuse unless Google reports the email as verified.
   # - Existing User by `provider/uid` → return as-is.
-  # - Existing User by email → backfill `provider`/`uid`.
+  # - Existing User by email → backfill `provider`/`uid`; one with no membership
+  #   first gets fresh credentials ({#replace_credentials!}).
   # - No User but a Person matches across any tenant → create both User and
   #   the linking TenantUser so the new identity lands in a usable tenant.
   # - Otherwise refuse.
@@ -172,11 +173,9 @@ class User < ApplicationRecord
 
     by_email = find_by(email: email)
     if by_email
-      if by_email.provider.blank?
-        transaction do
-          by_email.replace_credentials! if by_email.unvouched?
-          by_email.update!(provider: auth.provider, uid: auth.uid)
-        end
+      transaction do
+        by_email.replace_credentials! if by_email.lock!.unvouched?
+        by_email.update!(provider: auth.provider, uid: auth.uid) if by_email.provider.blank?
       end
       return [ by_email, nil ]
     end

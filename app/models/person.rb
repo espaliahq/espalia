@@ -71,8 +71,9 @@ class Person < ApplicationRecord
   # notification reaches an HRIS-imported person who has never logged in. The
   # account starts with a random password; the person claims it later via
   # password reset or Google SSO (both match on email), and an existing-but-
-  # unlinked membership is adopted rather than duplicated. Idempotent and safe
-  # under concurrent provisioning.
+  # unlinked membership is adopted rather than duplicated. An existing account
+  # with no membership gets fresh credentials ({User#replace_credentials!})
+  # before it is linked. Idempotent and safe under concurrent provisioning.
   #
   # @return [User, nil] nil for a forgotten person, who has no address
   def ensure_user!
@@ -89,7 +90,7 @@ class Person < ApplicationRecord
         next if forgotten?
 
         account = User.find_or_create_by!(email: email.to_s.downcase) { |u| u.password = SecureRandom.hex(24) }
-        account.replace_credentials! if !account.previously_new_record? && account.unvouched?
+        account.replace_credentials! if !account.previously_new_record? && account.lock!.unvouched?
         membership = TenantUser.find_or_initialize_by(tenant: tenant, user: account)
         membership.role ||= :member
         membership.save!

@@ -72,6 +72,27 @@ class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "lose its linked Google identity when provisioning adopts it" do
+      @account.update!(provider: "google_oauth2", uid: "earlier-uid")
+      assert_equal [ @account, nil ], User.from_google_omniauth(google_auth("renamed@example.com", uid: "earlier-uid"))
+
+      @person.ensure_user!
+
+      assert_equal [ nil, :no_matching_account ], User.from_google_omniauth(google_auth("renamed@example.com", uid: "earlier-uid"))
+    end
+
+    should "lose its password and tokens when a Google sign-in with a different identity claims its email" do
+      @account.update!(provider: "google_oauth2", uid: "earlier-uid")
+      token, = mcp_credentials
+
+      signed_in, = User.from_google_omniauth(google_auth("colleague@example.com"))
+
+      assert_equal @account, signed_in
+      assert_not @account.reload.valid_password?("old-password-1")
+      assert token.reload.revoked?
+      assert_equal "google-uid-1", @account.uid
+    end
+
     should "lose its password when a Google sign-in with its email claims it" do
       token, = mcp_credentials
 
@@ -138,8 +159,8 @@ class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
                           headers: { "Content-Type" => "application/json", "Authorization" => "Bearer #{token.token}" }
   end
 
-  def google_auth(email)
-    OmniAuth::AuthHash.new(provider: "google_oauth2", uid: "google-uid-1", info: { "email" => email, "email_verified" => true },
+  def google_auth(email, uid: "google-uid-1")
+    OmniAuth::AuthHash.new(provider: "google_oauth2", uid:, info: { "email" => email, "email_verified" => true },
                            extra: { raw_info: { "email_verified" => true } })
   end
 end
