@@ -69,7 +69,7 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     "categories" => %w[framework_capability_categories category_id], "evidences" => "evidence_items",
     "comments" => "person_development_comments", "suggestions/comments" => "framework_suggestion_comments",
     "capability_bindings" => %w[framework_capability_role_bindings binding_id],
-    "calibrants" => "calibration_session_members", "participants" => "calibration_session_members",
+    "calibrants" => %w[calibration_session_members person_id], "participants" => %w[calibration_session_members person_id],
     "delegations" => "manager_assessment_delegations", "connected_clients" => "oauth_access_tokens",
     "members" => "org_memberships", "memberships" => "org_memberships", "owners" => "org_unit_owners"
   }.freeze
@@ -78,18 +78,15 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
   PARENT_LINKS = {
     "assessment_cycles" => { "cycle_id" => "cycle_id" },
     "calibration_sessions" => { "session_id" => "id" },
-    "assessments" => { "person_id" => "person_id", "framework_id" => "framework_id" }
+    "assessments" => { "person_id" => "person_id", "framework_id" => "framework_id" },
+    "users" => { "person_id" => "person_id" }
   }.freeze
 
-  # Parents whose children reach them through a chain of ids, matched by tenant instead. Each says why that holds.
+  # Parents, or parent/child pairs, whose children reach them through a chain of ids, so they're
+  # matched by tenant instead. That holds while the parent's tenant has one framework, which the crawl checks.
   TENANT_LINKED = {
-    "frameworks" => "a framework's read models reach it through their parents' ids, and each tenant holds one framework, which the crawl checks"
-  }.freeze
-
-  # Children drawn from any row because their table holds no link to the parent. Each says why.
-  UNLINKED = {
-    "calibration_sessions/capabilities" => "a session flags the framework's own capabilities, so any of them belongs to it",
-    "users/collaborators" => "a collaborator's row names the person, not the account, and its route looks the account up first"
+    "frameworks" => "a framework's read models reach it through their parents' ids",
+    "calibration_sessions/capabilities" => "a session's capabilities are those of its framework"
   }.freeze
 
   # Org Graph routes whose word names a different table than elsewhere.
@@ -122,6 +119,7 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     "suggestions/comments/:id" => "the example seed's suggestions carry no comments",
     "notifications/:id" => "the example seed sends no notifications",
     ":exploration_id" => "the example seed opens no exploration",
+    "users/collaborators/:id" => "a collaborator's route id joins its framework, role and scope, which no column holds",
     "levels/:id" => NO_LEVEL,
     ":level_id" => NO_LEVEL,
     ":token" => "the example seed leaves no evidence draft, and a draft's token is no table's id"
@@ -147,6 +145,8 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
 
     assert_empty unfilled.to_a - UNSEEDED.keys, "no seeded record fills these segments: seed one, map it in TABLES, or list it in UNSEEDED"
     assert_empty UNSEEDED.keys - unfilled.to_a, "an UNSEEDED entry is now filled: remove it"
+    assert_empty PARENT_LINKS.keys + TENANT_LINKED.keys - links_used.to_a, "a link entry is used by no route: remove it"
+    assert(TENANT_LINKED.values.all?(&:present?), "every TENANT_LINKED entry gives a reason")
   end
 
   should "read no tenant's people, names or settings on any page" do
@@ -168,7 +168,7 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
       assert_no_emails do
         answered = write_routes.filter_map do |verb, path, template|
           status, = visit(verb, path, params: body_for(template, path))
-          "#{verb.upcase} #{template} (#{status}#{" #{redirect_path}" if status.is_a?(Integer)})" unless refused?(status, template) || NOT_REFUSED.key?(template)
+          "#{verb.upcase} #{template} (#{status}#{" #{redirect_path}" if redirect_path && status.is_a?(Integer)})" unless refused?(status, template) || NOT_REFUSED.key?(template)
         end
       end
     end
@@ -233,9 +233,6 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
   def seed_second_tenant
     tenant = Tenant.find_by!(slug: ExampleSeed::SECOND_TENANT[:slug])
     ActsAsTenant.with_tenant(tenant) do
-      session = create(:calibration_session, tenant:, name: "Driftwood round")
-      create(:calibration_session_member, tenant:, session:)
-      create(:calibration_session_member, :participant, tenant:, session:)
       create(:evidence_placement_suggestion, tenant:)
     end
     seed_under_first_assessment
@@ -247,7 +244,8 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # The crawl fills an assessment's routes with the first assessment, so its children belong to that one.
+  # The crawl fills an assessment's routes with the first assessment, so its children belong to that one,
+  # and a calibration session in its framework.
   def seed_under_first_assessment
     assessment = ActsAsTenant.without_tenant { PersonFrameworkAssignment.order(:id).first! }
     ActsAsTenant.with_tenant(assessment.tenant) do
@@ -255,6 +253,9 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
       create(:person_development_comment, **owner)
       create(:manager_assessment_delegation, **owner)
       create(:evidence_item, **owner, author: create(:person, tenant: assessment.tenant))
+      session = create(:calibration_session, tenant: assessment.tenant, framework_id: assessment.framework_id, name: "Crawl round")
+      create(:calibration_session_member, tenant: assessment.tenant, session:)
+      create(:calibration_session_member, :participant, tenant: assessment.tenant, session:)
     end
   end
 
@@ -340,25 +341,30 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
   def parent_link(table, collection, parent)
     parent_collection, parent_value, parent_table, parent_column = parent
     return unless parent_value && parent_table
-    return if UNLINKED.key?("#{parent_collection}/#{collection}")
 
-    link = PARENT_LINKS.fetch(parent_collection) { { "#{parent_collection.singularize}_id" => parent_column } }
-    unless link.keys.all? { connection.column_exists?(table, it) }
-      raise "#{table} holds no link to #{parent_collection}: map it in PARENT_LINKS or list it in UNLINKED" unless
-        TENANT_LINKED.key?(parent_collection)
-
-      link = { "tenant_id" => "tenant_id" }
-      assert_equal 1, connection.select_value("SELECT count(*) FROM #{connection.quote_table_name(parent_table)} WHERE tenant_id IN " \
-                                              "(SELECT tenant_id FROM #{connection.quote_table_name(parent_table)} WHERE " \
-                                              "#{connection.quote_column_name(parent_column)} = #{connection.quote(parent_value)})"),
-                   "#{parent_table} holds more than one row in a tenant, so a tenant no longer names one #{parent_collection.singularize}"
-    end
-
-    link.map do |child_column, column|
-      "#{connection.quote_column_name(child_column)} IN (SELECT #{connection.quote_column_name(column)} FROM " \
-        "#{connection.quote_table_name(parent_table)} WHERE #{connection.quote_column_name(parent_column)} = #{connection.quote(parent_value)})"
-    end.join(" AND ")
+    parent_row = "SELECT %s FROM #{connection.quote_table_name(parent_table)} " \
+                 "WHERE #{connection.quote_column_name(parent_column)} = #{connection.quote(parent_value)}"
+    link = parent_link_columns(table, collection, parent_collection, parent_column, parent_row)
+    link.map { |child_column, column| "#{connection.quote_column_name(child_column)} IN (#{parent_row % connection.quote_column_name(column)})" }
+        .join(" AND ")
   end
+
+  def parent_link_columns(table, collection, parent_collection, parent_column, parent_row)
+    links_used << parent_collection if PARENT_LINKS.key?(parent_collection)
+    link = PARENT_LINKS.fetch(parent_collection) { { "#{parent_collection.singularize}_id" => parent_column } }
+    return link if link.keys.all? { connection.column_exists?(table, it) }
+
+    key = [ "#{parent_collection}/#{collection}", parent_collection ].find { TENANT_LINKED.key?(it) }
+    raise "#{table} holds no link to #{parent_collection}: map it in PARENT_LINKS or TENANT_LINKED" unless
+      key && connection.column_exists?(table, "tenant_id")
+
+    links_used << key
+    frameworks = connection.select_value("SELECT count(*) FROM framework_states WHERE tenant_id IN (#{parent_row % 'tenant_id'})")
+    assert_equal 1, frameworks, "#{parent_collection}'s tenant holds #{frameworks} frameworks, so its tenant no longer names one"
+    { "tenant_id" => "tenant_id" }
+  end
+
+  def links_used = @links_used ||= Set.new
 
   def table_for(collection, parent, scope)
     mapped = scope[collection] || TABLES["#{parent}/#{collection}"] || TABLES[collection]
