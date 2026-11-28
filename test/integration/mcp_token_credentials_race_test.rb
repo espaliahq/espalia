@@ -5,7 +5,8 @@ require "digest"
 require "base64"
 
 # Two connections at once: a consent, MCP call or token request on this one,
-# replace_credentials! on another, so each must see the other's committed rows.
+# replace_credentials! or a password reset on another, so each must see the
+# other's committed rows.
 class McpTokenCredentialsRaceTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
   include McpRequestCredentialsHelpers
@@ -168,7 +169,57 @@ class McpTokenCredentialsRaceTest < ActionDispatch::IntegrationTest
     assert_equal 1, ActsAsTenant.without_tenant { Mcp::PendingApproval.where(user_id: @user.id).count }
   end
 
+  context "with a password reset on the other connection" do
+    should "refuse a refresh whose token the reset revokes after Doorkeeper checked it" do
+      refresh_token = exchange_code["refresh_token"]
+
+      before_token_insert(-> { finished(resetting) }) do
+        post oauth_token_path, params: { grant_type: "refresh_token", client_id: @application.uid, refresh_token: }
+      end
+
+      assert_response :bad_request
+      assert_empty live_tokens
+    end
+
+    should "let a code exchange holding its grant finish, then revoke its token" do
+      @user.update_columns(reset_password_token: "race-token")
+      code = authorization_code
+      reset = nil
+
+      before_token_insert(-> { reset = resetting.tap { wait_until_blocked(it) } }) do
+        post oauth_token_path, params: token_params(code)
+      end
+
+      assert_response :success
+      assert_nil finished(reset).value
+      assert_nil @user.reload.reset_password_token
+      assert_empty live_tokens
+    end
+
+    should "send a consent to sign in again, storing no grant, when the reset commits before it is stored" do
+      before_insert(Mcp::AccessGrant, -> { finished(resetting) }) { authorization_code }
+
+      assert_redirected_to new_user_session_url
+      assert_empty Mcp::AccessGrant.where(resource_owner_id: @user.id)
+    end
+
+    should "answer an MCP call like a revoked token, storing no approval, when the reset commits before it is stored" do
+      token = Mcp::AccessToken.create!(application: @application, resource_owner_id: @user.id, tenant_id: @tenant.id,
+                                       scopes: "read write", expires_in: 3600)
+
+      with_whoami_awaiting_approval do
+        before_insert(Mcp::PendingApproval, -> { finished(resetting) }) { call_whoami(token) }
+      end
+
+      assert_equal 401, response.status
+      assert_empty ActsAsTenant.without_tenant { Mcp::PendingApproval.where(user_id: @user.id) }
+    end
+  end
+
   private
+
+  # A reset on another connection, raised from finished if it saves nothing.
+  def resetting = on_another_connection { User.find(@user.id).reset_password("new-password-1", "new-password-1") or raise "the reset failed" }
 
   def live_token
     Mcp::AccessToken.create!(application: @application, resource_owner_id: @user.id, tenant_id: @tenant.id,

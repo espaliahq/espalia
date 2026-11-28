@@ -15,8 +15,9 @@ class Mcp::AccessToken < ApplicationRecord
   private
 
   # Doorkeeper checks a refresh token's revocation on the row it loaded, without a
-  # lock, so User#replace_credentials! can revoke it before this insert. Waiting on
-  # the lock that method holds, then reading the token again, puts the two in order.
+  # lock, so a credential change such as User#replace_credentials! or a password
+  # reset can revoke it before this insert. Waiting on the lock those hold, then
+  # reading the token again, puts the two in order.
   # Any stamp counts, as another process's clock may run ahead of this one. It also
   # refuses a refresh whose token a sibling refresh's first use revoked meanwhile;
   # that client signs in again.

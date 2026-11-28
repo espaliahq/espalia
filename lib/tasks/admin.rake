@@ -22,9 +22,12 @@ namespace :admin do
           "#{email} is a global admin; its password was replaced and its sessions and tokens ended."
         else
           user.assign_attributes(global_admin: true, global_admin_source: "admin_task")
-          user.assign_attributes(password: password, password_confirmation: password) if password
+          if password
+            user.assign_attributes(password: password, password_confirmation: password)
+            user.end_mcp_access!
+          end
           user.save!
-          password ? "#{email} is a global admin; password updated." \
+          password ? "#{email} is a global admin; password updated and its MCP access ended." \
                    : "#{email} is a global admin. (No PASSWORD given, so the existing password stands.)"
         end
       end

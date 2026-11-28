@@ -364,6 +364,11 @@ belong to multiple tenants re-authorise to switch. Implementation:
   no-refresh surface, whose hourly expiry made clients re-run the full
   browser flow — and Dynamic Client Registration — several times a
   session (alpha-tester report, June 2026).
+- **A new password ends MCP access.** A password reset, an operator's
+  `admin:create` with `PASSWORD`, and `User#replace_credentials!` all call
+  `User#end_mcp_access!` under the account's credentials lock: grants and
+  tokens are revoked, and calls awaiting approval are rejected. A reset
+  that fails revokes nothing. A reset leaves the linked Google identity.
 
 ### 7. Discovery + DCR for self-onboarding
 
