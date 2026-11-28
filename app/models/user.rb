@@ -138,7 +138,8 @@ class User < ApplicationRecord
     loaded_token = reset_password_token_in_database
     saved = false
 
-    transaction do
+    # Its own savepoint, so a failed reset inside a caller's transaction still revokes nothing.
+    transaction(requires_new: true) do
       locked_token = self.class.lock(CREDENTIALS_LOCK).where(id:).pick(:reset_password_token)
       if loaded_token.present? && locked_token != loaded_token
         errors.add(:reset_password_token, :invalid)

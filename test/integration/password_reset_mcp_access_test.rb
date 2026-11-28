@@ -37,6 +37,16 @@ class PasswordResetMcpAccessTest < ActionDispatch::IntegrationTest
     assert approval.reload.pending?
   end
 
+  should "revoke nothing when a reset fails inside a caller's transaction" do
+    token, grant, approval = mcp_credentials(@tenant)
+
+    User.transaction { assert_not @account.reset_password("new-password-1", "something-else") }
+
+    assert_not token.reload.revoked?
+    assert_not grant.reload.revoked?
+    assert approval.reload.pending?
+  end
+
   should "revoke nothing for an unknown reset token" do
     token, = mcp_credentials(@tenant)
 
