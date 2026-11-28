@@ -540,6 +540,46 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
         assert_equal "active", @item.link_status
       end
     end
+
+    should "let a tenant admin who isn't the author withdraw it" do
+      admin_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        admin = create(:person, tenant: @tenant, email: admin_user.email, name: "Admin")
+        create(:tenant_user, tenant: @tenant, user: admin_user, person: admin, role: :admin)
+        @admin_id = admin.id
+      end
+
+      sign_in admin_user
+      delete assessment_evidence_path(@assignment, @item.id)
+
+      assert_equal "Feedback withdrawn.", flash[:notice]
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal "withdrawn", @item.link_status
+        assert_equal @admin_id, @item.withdrawn_by_id
+      end
+    end
+
+    should "deny the assessee's manager feedback someone else wrote" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @peer_item_id = SecureRandom.uuid_v7
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @assessee.id, @assignment.framework_id, @peer_item_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          source: "peer", evidence_type: "peer_feedback",
+          content: "Calm on the call.", author_id: @peer.id, valence: "demonstrated"
+        )
+      end
+
+      sign_in @manager_user
+      delete assessment_evidence_path(@assignment, @peer_item_id)
+
+      assert_response :redirect
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "active", EvidenceItem.find(@peer_item_id).link_status
+      end
+    end
   end
 
   private
