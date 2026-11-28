@@ -53,6 +53,25 @@ class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
       assert approval.reload.rejected?
     end
 
+    should "be refused at the MCP endpoint with a token issued before adoption" do
+      token, = mcp_credentials
+
+      @person.ensure_user!
+
+      call_mcp(token)
+      assert_response :unauthorized
+
+      call_mcp(Mcp::AccessToken.create!(application: token.application, resource_owner_id: @account.id,
+                                        tenant_id: @tenant.id, scopes: "read", expires_in: 3600))
+      assert_response :success, "a token issued after adoption should reach the endpoint"
+    end
+
+    should "send no email and enqueue no job when its credentials are replaced" do
+      assert_no_emails do
+        assert_no_enqueued_jobs { @account.replace_credentials! }
+      end
+    end
+
     should "lose its password when a Google sign-in with its email claims it" do
       token, = mcp_credentials
 
@@ -112,6 +131,11 @@ class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
     approval = Mcp::PendingApproval.create!(user: @account, tenant: @tenant, client_application: app,
                                             operation_class: "Operations::System::Whoami", arguments: {}, expires_at: 1.hour.from_now)
     [ token, grant, approval ]
+  end
+
+  def call_mcp(token)
+    post mcp_server_path, params: { jsonrpc: "2.0", id: 1, method: "initialize" }.to_json,
+                          headers: { "Content-Type" => "application/json", "Authorization" => "Bearer #{token.token}" }
   end
 
   def google_auth(email)
