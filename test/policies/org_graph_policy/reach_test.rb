@@ -315,6 +315,15 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
                                                      restore: ->(id) { Person.find(@org[:dot].id).update!(manager_id: id) })
   end
 
+  should "check again under each lock past Rails' query cache, warmed before the lock" do
+    cached_revocations.each do |change, (context, command, handler, revoke, restore)|
+      repository = RevokingRepository.new(OrgGraph::Repository.new, revoke)
+      assert_refused_with_the_cache_warm(change, command, context, handler.new(actor: context, repository:)) { context.reread }
+    ensure
+      as_tenant { restore.call }
+    end
+  end
+
   should "let the system change the organisation's types under the lock, with no person to read again" do
     level_id = SecureRandom.uuid_v7
     as_tenant { system.add_level(level_id, "Pod", **ON) }
@@ -530,6 +539,37 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     ensure
       as_tenant { restore.call(manager.person.id) }
     end
+  end
+
+  # One change per lock path, each with a revocation written on the test's own
+  # connection below Active Record, so Rails' query cache never hears of it.
+  def cached_revocations
+    lead = as(as_tenant { create(:person, tenant: @tenant).tap { @org[:dot].update!(manager: it) } })
+    take_grant = -> { raw_sql("UPDATE tenant_users SET org_graph_editor = false WHERE id = $1", editor.tenant_user.id) }
+    give_grant = -> { TenantUser.find(editor.tenant_user.id).update!(org_graph_editor: true) }
+    {
+      "a withdrawal, under the structure's lock" =>
+        [ editor, structure_changes["a withdrawal"], OrgGraph::StructureCommandHandler, take_grant, give_grant ],
+      "a unit retyped, under the structure's lock" =>
+        [ editor, cross_structure_changes["a unit retyped"], OrgGraph::StructureCommandHandler, take_grant, give_grant ],
+      "a succession applied, under the structure's lock it takes itself" =>
+        [ editor, unit_changes["a succession applied"], OrgGraph::StructureCommandHandler, take_grant, give_grant ],
+      "a membership's terms set, under the member's lock" =>
+        [ lead, membership_changes["a membership's terms set"], OrgGraph::CommandHandler,
+          -> { raw_sql("UPDATE people SET status = 'inactive' WHERE id = $1", lead.person.id) },
+          -> { Person.find(lead.person.id).update!(status: "active") } ]
+    }
+  end
+
+  def raw_sql(sql, *binds) = ActiveRecord::Base.connection.raw_connection.exec_params(sql, binds)
+
+  def assert_refused_with_the_cache_warm(change, command, context, handler)
+    events_before = event_ids
+    ActiveRecord::Base.cache do
+      yield if block_given?
+      assert_raises(OrgGraph::Authorization::Refused, change) { StructureHandler.new(@tenant, handler).then { command.call(it) } }
+    end
+    assert_empty event_ids - events_before, change
   end
 
   def unit(id) = as_tenant { OrgUnit.find(id) }
