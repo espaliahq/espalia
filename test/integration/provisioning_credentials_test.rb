@@ -23,6 +23,8 @@ class ProvisioningCredentialsTest < ActionDispatch::IntegrationTest
     end
 
     should "lose its remember-me cookie when provisioning adopts it" do
+      # A ticked sign-in stamps this inside Devise's hook, which the write recorder can only pin on a controller.
+      @account.update!(remember_created_at: Time.current)
       sign_in_with_password(remember: true)
       drop_session_cookie
       get root_path
