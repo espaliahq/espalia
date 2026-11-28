@@ -220,15 +220,24 @@ class Views::Users::Sessions::NewView < Views::Base
 
   def footer_links
     div(class: "flex flex-col items-center text-center text-sm/[18px]") do
-      a(
-        href: new_user_registration_path,
-        class: "inline-flex items-center min-h-11 text-sm/5 font-semibold underline underline-offset-3 " \
-               "decoration-(--gos-border-default) hover:decoration-current transition-colors duration-200"
-      ) { "Create an account" }
+      sign_up_link if self.class.sign_up_routed?
       a(
         href: new_user_password_path,
         class: "inline-flex items-center min-h-11 text-muted hover:underline underline-offset-3"
       ) { "Forgot your password?" }
     end
+  end
+
+  # Sign-up is switched off in config/routes.rb (#653); the link returns with its route.
+  #
+  # @return [Boolean]
+  def self.sign_up_routed? = Rails.application.routes.url_helpers.method_defined?(:new_user_registration_path)
+
+  def sign_up_link
+    a(
+      href: new_user_registration_path,
+      class: "inline-flex items-center min-h-11 text-sm/5 font-semibold underline underline-offset-3 " \
+             "decoration-(--gos-border-default) hover:decoration-current transition-colors duration-200"
+    ) { "Create an account" }
   end
 end
