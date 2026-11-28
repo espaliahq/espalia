@@ -178,7 +178,9 @@ Pundit's `authorize` passes none.
 
 A caller's **reach** (`OrgGraphPolicy::Reach`) is every live unit owned by an
 active person in their subtree, themselves included, and every unit beneath
-those. A retired unit keeps its owners but gives them nothing. So an owner's manager, and their manager's manager, hold the owner's
+those. A retired unit keeps its owners but gives them nothing, though a retired
+unit beneath one in reach stays in reach, so its last memberships can be ended
+and it can be named as a predecessor. So an owner's manager, and their manager's manager, hold the owner's
 rights. Ownership is always stated on a unit, never derived from the
 reporting line; only the rights follow the line. Rights inherit downward:
 owning Payments gives rights over every squad beneath it, even one with owners
@@ -186,13 +188,19 @@ of its own. A caller who has left reaches nothing, and an owner who has left
 drops out of their managers' reach. A manager in between who has left doesn't
 break the line. A request builds the reach once; a command builds it for
 each check, so its check under the structure's lock sees the line as it
-stands. Every check under that lock also reads the caller again: the seven
-commands that change a structure itself (declare, withdraw, both change-backs,
-and adding, reparenting or removing a type), a move between structures and its
-change-back, and a unit's retyping. So a caller deactivated, demoted,
-unlinked from their person or stripped of the editor grant while the command
-waited is refused. A check builds one however many units it names, so a command builds at
-most three (a move between structures checks the move and each structure), and
+stands. Every structure command checks again under that lock, against the
+caller as the database holds them then. So an owner removed, or a caller
+deactivated, demoted, unlinked from their person or stripped of the editor
+grant while the command waited, is refused. A membership command checks
+again under the member's lock. For a tenant cut over to the Org Graph, the
+member's manager is written under that same lock, so a manager taken off the
+member while the command waited is refused. For a tenant not yet cut over, the
+HRIS sync writes the manager to the row outside any person lock, so the change
+is read again but can still land between the check and the write. The same
+holds everywhere for the managers further up the line and the unit's owners
+([#643](https://github.com/espaliahq/espalia/issues/643)). A check builds one however many
+units it names, so a command's check under the lock builds at most three (a
+move between structures checks the move and each structure), and
 a screen asking which changes it may change back shares one across them all. A unit or person the Org Graph
 doesn't hold is left to admins and editors, except that the manager chain can
 still end a membership of a unit that is gone.

@@ -4,9 +4,16 @@ require "test_helper"
 require "rake"
 
 class AdminCreateTaskTest < ActiveSupport::TestCase
+  include AccountMembershipHelpers
+
   setup do
     Rails.application.load_tasks if Rake::Task.tasks.empty?
     Rake::Task["admin:create"].reenable
+  end
+
+  def create_mcp_token(user)
+    app = Mcp::Application.create!(name: "Client", redirect_uri: "https://client.example/cb", scopes: "read", confidential: false)
+    Mcp::AccessToken.create!(application: app, resource_owner_id: user.id, tenant_id: create(:tenant).id, scopes: "read", expires_in: 3600)
   end
 
   def run_task(**vars)
@@ -19,7 +26,7 @@ class AdminCreateTaskTest < ActiveSupport::TestCase
   end
 
   should "promote an existing user, keeping their password when none is given" do
-    user = create(:user, email: "member@example.com", password: "old-password-1", password_confirmation: "old-password-1", global_admin: false)
+    user = member(create(:user, email: "member@example.com", password: "old-password-1", password_confirmation: "old-password-1", global_admin: false))
 
     output = run_task("EMAIL" => "Member@example.com ", "PASSWORD" => nil)
 
@@ -29,7 +36,7 @@ class AdminCreateTaskTest < ActiveSupport::TestCase
   end
 
   should "promote an existing user and change their password" do
-    user = create(:user, email: "member@example.com", password: "old-password-1", password_confirmation: "old-password-1", global_admin: false)
+    user = member(create(:user, email: "member@example.com", password: "old-password-1", password_confirmation: "old-password-1", global_admin: false))
 
     run_task("EMAIL" => "member@example.com", "PASSWORD" => "new-password-2")
 
@@ -48,7 +55,7 @@ class AdminCreateTaskTest < ActiveSupport::TestCase
 
   context "the audit" do
     should "record a promotion and a new admin as admin_task" do
-      user = create(:user, email: "member@example.com")
+      user = member(create(:user, email: "member@example.com"))
 
       run_task("EMAIL" => "member@example.com", "PASSWORD" => nil)
       run_task("EMAIL" => "new-admin@example.com", "PASSWORD" => "new-password-2")
@@ -64,6 +71,58 @@ class AdminCreateTaskTest < ActiveSupport::TestCase
       assert_no_difference -> { GlobalAdminChange.count } do
         run_task("EMAIL" => "member@example.com", "PASSWORD" => "new-password-2")
       end
+    end
+  end
+
+  context "an account no tenant holds" do
+    setup do
+      @user = create(:user, email: "unheld@example.com", password: "old-password-1", password_confirmation: "old-password-1")
+    end
+
+    should "be refused without a password, and left as it was" do
+      assert_raises(SystemExit) { run_task("EMAIL" => "unheld@example.com", "PASSWORD" => nil) }
+
+      assert_not @user.reload.global_admin?
+      assert @user.valid_password?("old-password-1")
+    end
+
+    should "be promoted with the operator's password, its old credentials ended first" do
+      token = create_mcp_token(@user)
+
+      output = run_task("EMAIL" => "unheld@example.com", "PASSWORD" => "new-password-2")
+
+      assert @user.reload.global_admin?
+      assert @user.valid_password?("new-password-2")
+      assert_not @user.valid_password?("old-password-1")
+      assert token.reload.revoked?
+      assert_equal [ [ true, "admin_task" ] ], GlobalAdminChange.where(user_id: @user.id).pluck(:global_admin, :source)
+      assert_includes output, "its password was replaced"
+    end
+  end
+
+  context "an account whose only membership is forgotten after the lookup" do
+    setup do
+      @user = create(:user, email: "held@example.com", password: "old-password-1", password_confirmation: "old-password-1")
+      member(@user)
+    end
+
+    should "be refused without a password" do
+      forgotten_once_locked(@user) do
+        assert_raises(SystemExit) { run_task("EMAIL" => "held@example.com", "PASSWORD" => nil) }
+      end
+
+      assert_not @user.reload.global_admin?
+      assert @user.valid_password?("old-password-1")
+    end
+
+    should "have its credentials replaced when given a password" do
+      token = create_mcp_token(@user)
+
+      forgotten_once_locked(@user) { run_task("EMAIL" => "held@example.com", "PASSWORD" => "new-password-2") }
+
+      assert @user.reload.global_admin?
+      assert_not @user.valid_password?("old-password-1")
+      assert token.reload.revoked?
     end
   end
 

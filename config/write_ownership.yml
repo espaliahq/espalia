@@ -261,12 +261,14 @@ oauth_access_grants:
   writers:
     - app/controllers/oauth/authorizations_controller.rb
     - app/jobs/mcp/prune_stale_clients_job.rb
+    - app/models/user.rb
 oauth_access_tokens:
   owner: plain
   reason: Doorkeeper's tokens; their history is login telemetry, not a domain decision.
   writers:
     - app/controllers/settings/connected_clients_controller.rb
     - app/jobs/mcp/prune_stale_clients_job.rb
+    - app/models/user.rb
 oauth_applications:
   owner: plain
   reason: MCP clients registered through Doorkeeper.
@@ -278,6 +280,7 @@ mcp_pending_approvals:
   reason: An MCP call waiting for approval. The call it approves runs through an Operation, whose events carry it.
   writers:
     - app/controllers/mcp/approvals_controller.rb
+    - app/models/user.rb
     - app/services/mcp/request_handler.rb
 
 # Pay and cost inputs

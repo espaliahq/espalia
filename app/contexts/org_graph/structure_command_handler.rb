@@ -38,7 +38,7 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_taxonomy!
     unless_kinds_rebuilding do
-      with_structure(plan) { |structure| structure.define_taxonomy(levels, **attributed(options, :defined_by_id)) }
+      with_structure_checked(plan, -> { authorize_taxonomy! }) { |structure| structure.define_taxonomy(levels, **attributed(options, :defined_by_id)) }
     end
   end
 
@@ -112,7 +112,7 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_structure!
     unless_kinds_rebuilding do
-      with_structure(plan) { |structure| structure.set_level_provider(level_id, provider, **attributed(options, :set_by_id)) }
+      with_structure_checked(plan, -> { authorize_structure! }) { |structure| structure.set_level_provider(level_id, provider, **attributed(options, :set_by_id)) }
     end
   end
 
@@ -121,7 +121,7 @@ class OrgGraph::StructureCommandHandler
   def hand_over_level(level_id, provider, **options)
     authorize_structure!
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_over_level(level_id, provider, **attributed(options, :set_by_id)) }
+      with_structure_checked(OrgGraph::PlanReference.new, -> { authorize_structure! }) { |structure| structure.hand_over_level(level_id, provider, **attributed(options, :set_by_id)) }
     end
   end
 
@@ -130,7 +130,7 @@ class OrgGraph::StructureCommandHandler
   def hand_back_level(level_id, **options)
     authorize_structure!
     unless_kinds_rebuilding do
-      with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_back_level(level_id, **attributed(options, :set_by_id)) }
+      with_structure_checked(OrgGraph::PlanReference.new, -> { authorize_structure! }) { |structure| structure.hand_back_level(level_id, **attributed(options, :set_by_id)) }
     end
   end
 
@@ -138,7 +138,7 @@ class OrgGraph::StructureCommandHandler
   def set_fact_provider(fact, provider, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_structure!
-    with_structure(plan) { |structure| structure.set_fact_provider(fact, provider, **attributed(options, :set_by_id)) }
+    with_structure_checked(plan, -> { authorize_structure! }) { |structure| structure.set_fact_provider(fact, provider, **attributed(options, :set_by_id)) }
   end
 
   # @see OrgGraph::StructureAggregate#claim_facts
@@ -146,7 +146,7 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_structure!
     claimed = []
-    with_structure(plan) { |structure| claimed = structure.claim_facts(facts, provider, **attributed(options, :set_by_id)) }
+    with_structure_checked(plan, -> { authorize_structure! }) { |structure| claimed = structure.claim_facts(facts, provider, **attributed(options, :set_by_id)) }
     claimed
   end
 
@@ -154,28 +154,28 @@ class OrgGraph::StructureCommandHandler
   def add_unit_owner(unit_id, person_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_unit!(unit_id)
-    with_structure(plan) { |structure| structure.add_unit_owner(unit_id, person_id, **attributed(options, :added_by_id)) }
+    with_structure_checked(plan, -> { authorize_unit!(unit_id) }) { |structure| structure.add_unit_owner(unit_id, person_id, **attributed(options, :added_by_id)) }
   end
 
   # @see OrgGraph::StructureAggregate#remove_unit_owner
   def remove_unit_owner(unit_id, person_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_unit!(unit_id)
-    with_structure(plan) { |structure| structure.remove_unit_owner(unit_id, person_id, **attributed(options, :removed_by_id)) }
+    with_structure_checked(plan, -> { authorize_unit!(unit_id) }) { |structure| structure.remove_unit_owner(unit_id, person_id, **attributed(options, :removed_by_id)) }
   end
 
   # @see OrgGraph::StructureAggregate#create_unit
   def create_unit(unit_id, name, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_new_unit!(options[:parent_id])
-    with_structure(plan) { |structure| structure.create_unit(unit_id, name, **attributed(options, :created_by_id)) }
+    with_structure_checked(plan, -> { authorize_new_unit!(options[:parent_id]) }) { |structure| structure.create_unit(unit_id, name, **attributed(options, :created_by_id)) }
   end
 
   # @see OrgGraph::StructureAggregate#rename_unit
   def rename_unit(unit_id, name, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_unit!(unit_id)
-    with_structure(plan) { |structure| structure.rename_unit(unit_id, name, **attributed(options, :renamed_by_id)) }
+    with_structure_checked(plan, -> { authorize_unit!(unit_id) }) { |structure| structure.rename_unit(unit_id, name, **attributed(options, :renamed_by_id)) }
   end
 
   # A move with a conversion also needs the right to change the structure it
@@ -188,7 +188,7 @@ class OrgGraph::StructureCommandHandler
     authorize_move_unit!(unit_id, parent_id)
     return move_across_structures(unit_id, parent_id, plan, options) unless options[:conversion].nil?
 
-    with_structure(plan) { |structure| structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
+    with_structure_checked(plan, -> { authorize_move_unit!(unit_id, parent_id) }) { |structure| structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
   end
 
   # Needs the rights the move it changes back needed, checked the same way.
@@ -197,7 +197,10 @@ class OrgGraph::StructureCommandHandler
   def change_move_back(unit_id, parent_id, **options)
     authorize_move_unit!(unit_id, parent_id)
     with_structure(OrgGraph::PlanReference.new, grouped: true) do |structure|
-      with_actor_reread { authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id)) }
+      with_actor_reread do
+        authorize_move_unit!(unit_id, parent_id) # implied by both structure rights; kept as defence
+        authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id))
+      end
       unless_kinds_rebuilding { structure.change_move_back(unit_id, parent_id, **attributed(options, :moved_by_id)) }
     end
   end
@@ -219,7 +222,7 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     ActiveRecord::Base.transaction do
       authorize_unit!(unit_id)
-      with_structure(plan) do |structure|
+      with_structure_checked(plan, -> { authorize_unit!(unit_id) }) do |structure|
         unless_kinds_rebuilding_for(structure, [ unit_id ]) { structure.retire_unit(unit_id, **attributed(options, :retired_by_id)) }
       end
     end
@@ -232,7 +235,7 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     ActiveRecord::Base.transaction do
       authorize_succession!([ options[:predecessor_ids], options[:successor_ids] ])
-      with_structure(plan) do |structure|
+      with_structure_checked(plan, -> { authorize_succession!([ options[:predecessor_ids], options[:successor_ids] ]) }) do |structure|
         retiring = options[:retire_predecessors] ? Array(options[:predecessor_ids]) : []
         unless_kinds_rebuilding_for(structure, retiring) { structure.record_succession(succession_id, **attributed(options, :stated_by_id)) }
       end
@@ -265,7 +268,7 @@ class OrgGraph::StructureCommandHandler
     ProjectionVersion.unless_rebuilding(OrgGraph::Projections::Members::PROJECTION_NAME) do # placement_moves reads it
       ActiveRecord::Base.transaction do
         @repository.lock_structure # before any person's, the order retire_unit takes them in
-        authorize_succession!([ predecessor_ids, successor_ids ])
+        with_actor_reread { authorize_succession!([ predecessor_ids, successor_ids ]) }
         applied = OrgUnitSuccession.exists?(succession_id: succession_id.to_s.downcase)
         moves = placement_moves(placements, Array(predecessor_ids), Array(successor_ids), applied:)
         place(moves, effective_on, plan, moved_by_id: options[:stated_by_id])
@@ -283,7 +286,10 @@ class OrgGraph::StructureCommandHandler
 
   def move_across_structures(unit_id, parent_id, plan, options)
     with_structure(plan, grouped: true) do |structure|
-      with_actor_reread { authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id)) }
+      with_actor_reread do
+        authorize_move_unit!(unit_id, parent_id) # implied by both structure rights; kept as defence
+        authorize_move_across!(structure.structure_left_by(unit_id), structure.structure_joined_beneath(parent_id))
+      end
       unless_kinds_rebuilding { structure.move_unit(unit_id, parent_id, **attributed(options, :moved_by_id)) }
     end
   end
@@ -338,12 +344,17 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
-  # Checks the right again under the structure's lock, against the caller as
+  def with_structure_of(unit_id, plan, grouped: false, &)
+    with_structure_checked(plan, -> { authorize_structure_of!(unit_id) }, grouped:, &)
+  end
+
+  # Runs the check again under the structure's lock, against the caller as
   # the database holds them now. So an owner removed while the command waited
   # is refused, and so is a caller deactivated, demoted or stripped of a grant.
-  def with_structure_of(unit_id, plan, grouped: false)
+  # The reread only reads, so it takes no lock of its own.
+  def with_structure_checked(plan, check, grouped: false)
     with_structure(plan, grouped:) do |structure|
-      with_actor_reread { authorize_structure_of!(unit_id) }
+      with_actor_reread(&check)
       yield structure
     end
   end
