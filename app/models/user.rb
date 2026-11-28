@@ -187,12 +187,13 @@ class User < ApplicationRecord
   #   first gets fresh credentials ({#replace_credentials!}).
   # - No User but a Person matches across any tenant → create both User and
   #   the linking TenantUser so the new identity lands in a usable tenant. A
-  #   person forgotten meanwhile rolls both back, and the lookup runs again.
+  #   forgotten person rolls both back, and the lookup runs again without them.
   # - Otherwise refuse.
   #
   # @param auth [OmniAuth::AuthHash]
+  # @param refused [Array<String>] ids of people already found forgotten, left out of the lookup
   # @return [Array(User, nil), Array(nil, Symbol)]
-  def self.from_google_omniauth(auth)
+  def self.from_google_omniauth(auth, refused: [])
     return [ nil, :invalid_payload ] if auth.blank? || auth.uid.blank? || auth.info&.email.blank?
     return [ nil, :email_unverified ] unless google_email_verified?(auth)
 
@@ -211,7 +212,7 @@ class User < ApplicationRecord
     end
 
     person = ActsAsTenant.without_tenant do
-      Person.where("LOWER(email) = ?", email).order(:created_at).first
+      Person.where("LOWER(email) = ?", email).where.not(id: refused).order(:created_at).first
     end
     return [ nil, :no_matching_account ] if person.nil?
 
@@ -220,12 +221,11 @@ class User < ApplicationRecord
     rescue ActiveRecord::RecordNotUnique
       # A concurrent Google sign-in for the same email won the race;
       # re-resolve and link instead of failing.
-      from_google_omniauth(auth)
+      from_google_omniauth(auth, refused:)
     rescue AccountGrants::Aggregate::PersonForgotten
-      # Forgotten while this waited on the person's row: the account and its
-      # membership roll back, and the erase has cleared the email, so looking
-      # again finds the next match or none.
-      from_google_omniauth(auth)
+      # The account and its membership roll back. Leaving this person out
+      # makes each pass try a different one, so the lookup ends.
+      from_google_omniauth(auth, refused: [ *refused, person.id ])
     end
   end
 
