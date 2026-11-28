@@ -43,4 +43,17 @@ class DefaultAccountRoutesTest < ActionDispatch::IntegrationTest
     assert_select "a", text: "Create an account", count: 0
     assert_select "a[href=?]", new_user_password_path
   end
+
+  should "render the password pages with no sign-up link" do
+    user = create(:user)
+    token = user.send_reset_password_instructions
+
+    [ new_user_password_path, edit_user_password_path(reset_password_token: token) ].each do |path|
+      get path
+
+      assert_response :success, path
+      assert_select "a", text: "Sign up", count: 0
+      assert_select "a[href=?]", new_user_session_path
+    end
+  end
 end
