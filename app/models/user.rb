@@ -187,12 +187,14 @@ class User < ApplicationRecord
   # - Existing User by email → backfill `provider`/`uid`; one with no membership
   #   first gets fresh credentials ({#replace_credentials!}).
   # - No User but a Person matches across any tenant → create both User and
-  #   the linking TenantUser so the new identity lands in a usable tenant.
+  #   the linking TenantUser so the new identity lands in a usable tenant. A
+  #   forgotten person rolls both back, and the lookup runs again without them.
   # - Otherwise refuse.
   #
   # @param auth [OmniAuth::AuthHash]
+  # @param refused [Array<String>] ids of people already found forgotten, left out of the lookup
   # @return [Array(User, nil), Array(nil, Symbol)]
-  def self.from_google_omniauth(auth)
+  def self.from_google_omniauth(auth, refused: [])
     return [ nil, :invalid_payload ] if auth.blank? || auth.uid.blank? || auth.info&.email.blank?
     return [ nil, :email_unverified ] unless google_email_verified?(auth)
 
@@ -211,7 +213,7 @@ class User < ApplicationRecord
     end
 
     person = ActsAsTenant.without_tenant do
-      Person.where("LOWER(email) = ?", email).order(:created_at).first
+      Person.where("LOWER(email) = ?", email).where.not(id: refused).order(:created_at).first
     end
     return [ nil, :no_matching_account ] if person.nil?
 
@@ -220,7 +222,11 @@ class User < ApplicationRecord
     rescue ActiveRecord::RecordNotUnique
       # A concurrent Google sign-in for the same email won the race;
       # re-resolve and link instead of failing.
-      from_google_omniauth(auth)
+      from_google_omniauth(auth, refused:)
+    rescue AccountGrants::Aggregate::PersonForgotten
+      # The account and its membership roll back. Leaving this person out
+      # makes each pass try a different one, so the lookup ends.
+      from_google_omniauth(auth, refused: [ *refused, person.id ])
     end
   end
 
@@ -247,11 +253,12 @@ class User < ApplicationRecord
     end
   end
 
-  # A refused link writes nothing, so the account is created unlinked and
-  # sign-in goes ahead; its person stays with whoever holds them.
+  # A link another account holds writes nothing, so the account is created
+  # unlinked and sign-in goes ahead; its person stays with whoever holds them.
+  # A forgotten person raises instead, rolling the new account back.
   def self.link_provisioned(account, person)
     account.link_to!(person, match: :provisioned)
-  rescue AccountGrants::Aggregate::LinkRefused => e
+  rescue AccountGrants::Aggregate::LinkTaken => e
     Rails.logger.warn("provisioned TenantUser #{account.id} left unlinked: #{e.class}")
   end
 
