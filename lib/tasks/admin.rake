@@ -11,7 +11,7 @@ namespace :admin do
     user = User.find_by(email: email)
     if user&.unvouched?
       if password.nil?
-        abort "#{email} has an account that no operator created and no tenant holds. Give PASSWORD to " \
+        abort "#{email} has an account with no tenant membership that isn't a global admin. Give PASSWORD to " \
               "replace its credentials and end its sessions before it becomes a global admin."
       end
 
