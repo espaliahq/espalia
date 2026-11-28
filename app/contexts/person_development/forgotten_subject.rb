@@ -24,6 +24,15 @@ module PersonDevelopment::ForgottenSubject
   # @raise [Forgotten] when the person has been forgotten
   # @return [void]
   def self.refuse!(person_id)
-    raise Forgotten if Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:forgotten_at)
+    raise Forgotten if hold(person_id)
+  end
+
+  # Takes the same lock without refusing, for a caller that must lock before
+  # it authorises. Its first write refuses as usual.
+  #
+  # @param person_id [String]
+  # @return [Time, nil] when the person was forgotten
+  def self.hold(person_id)
+    Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:forgotten_at)
   end
 end

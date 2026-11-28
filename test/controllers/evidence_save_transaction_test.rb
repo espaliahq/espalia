@@ -101,22 +101,27 @@ class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
       assert_equal EvidenceDiffSubmit::VERSION_CONFLICT, flash[:alert]
     end
 
-    should "hold the item's suggestion lock before its first write when it decides a suggestion" do
-      suggestion = ActsAsTenant.with_tenant(@tenant) do
-        create(:evidence_placement_suggestion, tenant: @tenant, item: EvidenceItem.find(@item),
-               capability_stable_id: @cap2.stable_id, level_ordinal: 2)
-      end
-      sign_in @peer_user
-      held = nil
-      record_lock = ->(**) { held = advisory_locks_held; raise PersonDevelopment::Aggregate::CommandError, "stop" }
+    {
+      "reads the suggestion it keeps" => [ :suggestion_ids, EvidencePlacementSuggestion, :pending ],
+      "writes, when it turns one down" => [ :staged_suggestion_ids, Operations::Assessments::UpdateEvidence, :call ]
+    }.each do |moment, (param, target, method)|
+      should "hold the item's suggestion lock before it #{moment}" do
+        suggestion = ActsAsTenant.with_tenant(@tenant) do
+          create(:evidence_placement_suggestion, tenant: @tenant, item: EvidenceItem.find(@item),
+                 capability_stable_id: @cap2.stable_id, level_ordinal: 2)
+        end
+        sign_in @peer_user
+        held = nil
+        record_lock = ->(*, **) { held = item_lock_held?; raise PersonDevelopment::Aggregate::CommandError, "stop" }
 
-      Operations::Assessments::UpdateEvidence.stub(:call, record_lock) do
-        patch evidence_item_path(@item), params: { return_to: "hub", evidence: {
-          evidence_id: @item, desired_links: [ @first ], evidence_type: "peer_feedback", content: "After",
-          staged_suggestion_ids: [ suggestion.id ]
-        } }
+        target.stub(method, record_lock) do
+          patch evidence_item_path(@item), params: { return_to: "hub", evidence: {
+            evidence_id: @item, desired_links: [ @first ], evidence_type: "peer_feedback", content: "After",
+            param => [ suggestion.id ]
+          } }
+        end
+        assert held
       end
-      assert_equal 1, held
     end
 
     [ ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout ].each do |error|
@@ -147,6 +152,23 @@ class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
       sign_in @stranger_user
 
       assert_stores_nothing { move_link_and_edit }
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
+    end
+
+    should "give the ordinary refusal to a caller who stages a suggestion on a forgotten person's item" do
+      suggestion = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_placement_suggestion, tenant: @tenant, item: EvidenceItem.find(@item),
+               capability_stable_id: @cap2.stable_id, level_ordinal: 2)
+      end
+      forget(@author)
+      sign_in @stranger_user
+
+      assert_stores_nothing do
+        patch evidence_item_path(@item), params: { return_to: "hub", evidence: {
+          evidence_id: @item, desired_links: [ @first ], evidence_type: "peer_feedback", content: "After",
+          staged_suggestion_ids: [ suggestion.id ]
+        } }
+      end
       assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
   end
@@ -233,9 +255,14 @@ class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
     count
   end
 
-  def advisory_locks_held
-    ActiveRecord::Base.connection.select_value(<<~SQL)
-      SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted
+  def item_lock_held?
+    key = PersonDevelopment::SuggestionWrites.lock_key(@item)
+    ActiveRecord::Base.connection.select_value(ActiveRecord::Base.sanitize_sql_array([ <<~SQL, key ]))
+      SELECT EXISTS (
+        SELECT 1 FROM pg_locks
+        WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted
+          AND ((classid::bigint << 32) | objid::bigint) = hashtextextended(?, 0)
+      )
     SQL
   end
 

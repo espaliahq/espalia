@@ -628,8 +628,9 @@ Rules, all deliberate:
   sends nothing. The first command's refusal holds the person's row
   `FOR KEY SHARE` until the save commits: an erase, or a change to the
   person's email, waits for it; a name or manager change doesn't. A save that
-  decides a staged suggestion takes the item's suggestion lock before its
-  first write, in the same order as the placement job. Another write to the
+  decides a staged suggestion takes the person's row and then the item's
+  suggestion lock before it reads the suggestions, in the same order as the
+  placement job. Another write to the
   person's stream that lands between the save's reads and one of its appends
   rolls the save back with "Someone else saved a change for this person while
   you were saving", as does a deadlock or lock timeout. A write that arrives

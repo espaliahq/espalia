@@ -46,17 +46,30 @@ module PersonDevelopment::SuggestionWrites
     end
   end
 
-  # Holds each item's lock to the commit. A caller that appends to the stream
-  # before running a suggestion command takes it first, or it can deadlock
-  # with a placement job that holds the lock and waits on that append.
+  # Takes this module's locks, in its order, and holds them to the commit. A
+  # caller that appends to the stream before running a suggestion command
+  # takes them first, or it can deadlock with a placement job that holds an
+  # item's lock and waits on that append. It doesn't refuse a forgotten
+  # person, so the caller still authorises first.
   #
+  # @param person_id [String]
   # @param evidence_ids [Array<String>]
   # @return [void]
+  def self.lock_ahead(person_id, evidence_ids)
+    PersonDevelopment::ForgottenSubject.hold(person_id)
+    lock_items(evidence_ids)
+  end
+
   def self.lock_items(evidence_ids)
     evidence_ids.uniq.sort.each do |evidence_id|
-      sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
-                                                    "placement-suggestions:#{evidence_id}" ])
-      EvidencePlacementSuggestion.connection.execute(sql)
+      EvidencePlacementSuggestion.connection.execute(
+        ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", lock_key(evidence_id) ])
+      )
     end
   end
+  private_class_method :lock_items
+
+  # @param evidence_id [String]
+  # @return [String] the advisory lock's key, hashed by Postgres
+  def self.lock_key(evidence_id) = "placement-suggestions:#{evidence_id}"
 end

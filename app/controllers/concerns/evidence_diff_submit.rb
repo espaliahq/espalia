@@ -123,11 +123,11 @@ module EvidenceDiffSubmit
 
     new_cells = desired - current_cells
     new_cells.each { |cell| valence_for!(valences, cell) }
+    if p[:suggestion_ids].present? || p[:staged_suggestion_ids].present?
+      PersonDevelopment::SuggestionWrites.lock_ahead(item.person_id, [ item.id ])
+    end
     kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
     ensure_staged_cells_exist!(item, kept_suggestions)
-    if kept_suggestions.any? || Array(p[:staged_suggestion_ids]).any?
-      PersonDevelopment::SuggestionWrites.lock_items([ item.id ])
-    end
 
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {
