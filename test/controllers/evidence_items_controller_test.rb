@@ -266,7 +266,42 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
         ActsAsTenant.with_tenant(@tenant) { assert_not EvidenceItem.find(@peer_evidence_id).withdrawn? }
       end
     end
+
+    context "about a person offboarded, then forgotten" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          @peer_evidence_id = SecureRandom.uuid_v7
+          handler = PersonDevelopment::CommandHandler.new
+          handler.record_evidence(@author.id, @framework_id, @peer_evidence_id,
+            source: "peer", evidence_type: "peer_feedback", content: "Calm on the call.", author_id: @other.id)
+          handler.offboard_from_framework(@author.id, @framework_id)
+          @author.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+        end
+      end
+
+      should "let its author withdraw it, with no assignment left" do
+        sign_in @other_user
+        delete evidence_item_path(@peer_evidence_id)
+
+        assert_equal "Feedback withdrawn.", flash[:notice]
+        ActsAsTenant.with_tenant(@tenant) { assert EvidenceItem.find(@peer_evidence_id).withdrawn? }
+      end
+
+      should "refuse an admin who isn't its author" do
+        admin_user = create(:user, password: "password123")
+        ActsAsTenant.with_tenant(@tenant) do
+          admin = create(:person, tenant: @tenant, email: admin_user.email, name: "Admin")
+          create(:tenant_user, tenant: @tenant, user: admin_user, person: admin, role: :admin)
+        end
+        sign_in admin_user
+        delete evidence_item_path(@peer_evidence_id)
+
+        assert_equal "only its author can withdraw feedback about a former member", flash[:alert]
+        ActsAsTenant.with_tenant(@tenant) { assert_not EvidenceItem.find(@peer_evidence_id).withdrawn? }
+      end
+    end
   end
+
   private
 
   def author_assignment

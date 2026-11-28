@@ -8,7 +8,9 @@
 #
 # Feedback about a forgotten person takes the one exception their stream
 # allows: only its author may withdraw it, and with no reason, since a reason
-# would be new text about someone the erase removed.
+# would be new text about someone the erase removed. It needs no
+# assignment, since most forgotten people were offboarded first, so the
+# stream comes from the item itself and `assignment_id` is optional there.
 #
 # Write — :mcp_client approval. Withdrawal is a soft, audited, primarily
 # author-scoped action and is recoverable by recording the evidence again;
@@ -18,7 +20,7 @@ class Operations::Assessments::WithdrawEvidence < Operations::Base
   category :write
   approval :mcp_client
 
-  parameter :assignment_id, String, required: true
+  parameter :assignment_id, String
   parameter :evidence_id,   String, required: true
   parameter :reason, String
 
@@ -31,9 +33,12 @@ class Operations::Assessments::WithdrawEvidence < Operations::Base
   # @return [Hash] `{ evidence_id, status, withdrawn_at }` — confirmation
   #   the item is now withdrawn.
   def perform
-    if Person.find(assignment.person_id).forgotten?
+    ensure_assignment_matches_item!
+    if Person.find(evidence_item.person_id).forgotten?
       withdraw_about_former_member
     else
+      raise Operations::Base::ParameterError, "missing required parameter: assignment_id" if assignment.nil?
+
       PersonDevelopment::CommandHandler.new.withdraw_evidence(
         assignment.person_id, assignment.framework_id, params[:evidence_id],
         withdrawn_by_id: context.person.id,
@@ -54,12 +59,21 @@ class Operations::Assessments::WithdrawEvidence < Operations::Base
     raise Operations::Base::ParameterError, "feedback about a former member is withdrawn without a reason" if params[:reason].present?
 
     PersonDevelopment::CommandHandler.new.withdraw_own_feedback(
-      assignment.person_id, assignment.framework_id, params[:evidence_id],
+      evidence_item.person_id, evidence_item.framework_id, params[:evidence_id],
       author_id: context.person.id
     )
   end
 
+  def ensure_assignment_matches_item!
+    return if assignment.nil?
+    return if [ assignment.person_id, assignment.framework_id ] == [ evidence_item.person_id, evidence_item.framework_id ]
+
+    raise Operations::Base::ParameterError, "evidence_id is not on that assignment"
+  end
+
   def assignment
+    return if params[:assignment_id].blank?
+
     @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])
   end
 

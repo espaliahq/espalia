@@ -94,6 +94,21 @@ class PersonDevelopment::ForgottenSubjectWritesTest < ActiveSupport::TestCase
     end
   end
 
+  should "let an author withdraw feedback about a person offboarded, then forgotten" do
+    author = create(:person, tenant: @tenant)
+    evidence_id = SecureRandom.uuid_v7
+    @handler.record_evidence(@subject.id, @framework_id, evidence_id,
+      source: "peer", evidence_type: "peer_feedback", content: "Calm on the call.", author_id: author.id)
+    @handler.offboard_from_framework(@subject.id, @framework_id)
+    forget!(@subject)
+
+    @handler.withdraw_own_feedback(@subject.id, @framework_id, evidence_id, author_id: author.id)
+
+    event = Rails.configuration.event_store.read.stream(@stream).last
+    assert_kind_of PersonDevelopment::Events::EvidenceWithdrawn, event
+    assert_nil event.data[:reason]
+  end
+
   should "offboard a forgotten person from the framework, though an unassign is refused" do
     forget!(@subject)
 

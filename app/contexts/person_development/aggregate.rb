@@ -1228,14 +1228,14 @@ class PersonDevelopment::Aggregate
 
   # The one withdrawal a forgotten subject's stream takes: the author hiding
   # their own feedback. It carries no reason, so nothing written about the
-  # person can reach the stream after the erase.
+  # person can reach the stream after the erase. It needs no assignment: most
+  # forgotten people are leavers, offboarded from the framework first.
   #
   # @param evidence_id [String] UUID of the evidence
   # @param author_id [String] UUID of the Person withdrawing, who must be its author
-  # @raise [CommandError] if not assigned, evidence not found, already withdrawn,
-  #   or the caller is not the item's recorded author
+  # @raise [CommandError] if evidence not found, already withdrawn, or the
+  #   caller is not the item's recorded author
   def withdraw_own_feedback(evidence_id, author_id:)
-    ensure_assigned!
     state = @evidence[evidence_id]
     raise CommandError, "No evidence with id #{evidence_id}" unless state
     raise CommandError, "Evidence already withdrawn" if state[:status] == "withdrawn"

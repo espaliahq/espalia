@@ -125,6 +125,20 @@ class Operations::Assessments::WithdrawEvidenceTest < ActiveSupport::TestCase
       assert ActsAsTenant.with_tenant(@tenant) { !EvidenceItem.find(@peer_evidence_id).withdrawn? }
     end
 
+    should "refuse an assignment_id that isn't the item's" do
+      other_assignment = ActsAsTenant.with_tenant(@tenant) do
+        other = create(:person, tenant: @tenant)
+        @pd.assign_to_framework(other.id, @framework_id, @role.role_id, @assignment.level_id)
+        PersonFrameworkAssignment.for_person(other.id).first
+      end
+
+      error = assert_raises(Operations::Base::ParameterError) do
+        call_op(context: @author_context, assignment_id: other_assignment.id, evidence_id: @peer_evidence_id)
+      end
+
+      assert_equal "evidence_id is not on that assignment", error.message
+    end
+
     should "give a stranger the ordinary refusal first" do
       other_user = create(:user)
       ctx = ActsAsTenant.with_tenant(@tenant) do
@@ -135,6 +149,40 @@ class Operations::Assessments::WithdrawEvidenceTest < ActiveSupport::TestCase
 
       assert_raises(Pundit::NotAuthorizedError) { call_op(context: ctx, evidence_id: @peer_evidence_id, reason: "x") }
     end
+  end
+
+  context "on a person offboarded, then forgotten" do
+    setup do
+      @author_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        @author = create(:person, tenant: @tenant, email: @author_user.email, name: "Peer")
+        author_tu = create(:tenant_user, tenant: @tenant, user: @author_user, person: @author, role: :member)
+        @author_context = AuthorizationContext.new(user: @author_user, tenant_user: author_tu, person: @author)
+        @peer_evidence_id = SecureRandom.uuid_v7
+        @pd.record_evidence(@person.id, @framework_id, @peer_evidence_id,
+          source: "peer", evidence_type: "peer_feedback", content: "Calm on the call.", author_id: @author.id)
+        @pd.offboard_from_framework(@person.id, @framework_id)
+        @person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+    end
+
+    should "let the author withdraw it with no assignment" do
+      assert_nil ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.find_by(id: @assignment.id) }
+
+      params = { evidence_id: @peer_evidence_id }
+      result = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::WithdrawEvidence.call(context: @author_context, params: params)
+      end
+
+      assert_equal "withdrawn", result[:status]
+      assert_nil ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(@peer_evidence_id).withdrawal_reason }
+    end
+  end
+
+  should "still ask for an assignment on a live subject's withdrawal" do
+    error = assert_raises(Operations::Base::ParameterError) { call_op(assignment_id: nil) }
+
+    assert_equal "missing required parameter: assignment_id", error.message
   end
 
   should "keep the reason on a live subject's withdrawal" do
