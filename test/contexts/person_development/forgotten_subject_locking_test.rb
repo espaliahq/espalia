@@ -28,6 +28,7 @@ class PersonDevelopment::ForgottenSubjectLockingTest < ActiveSupport::TestCase
 
   teardown do
     Person.unscoped.where(id: @person.id).delete_all if @person
+    TenantSettingChange.unscoped.where(tenant_id: @tenant.id).delete_all if @tenant
     @tenant&.delete
   end
 
