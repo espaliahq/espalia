@@ -3,6 +3,8 @@
 require "test_helper"
 
 class SeedAdminTest < ActiveSupport::TestCase
+  include AccountMembershipHelpers
+
   DEV = ActiveSupport::StringInquirer.new("development")
   PROD = ActiveSupport::StringInquirer.new("production")
 
@@ -12,12 +14,6 @@ class SeedAdminTest < ActiveSupport::TestCase
     yield
   ensure
     old.each { |key, value| value.nil? ? ENV.delete(key) : ENV[key] = value }
-  end
-
-  def member(user)
-    tenant = create(:tenant)
-    ActsAsTenant.with_tenant(tenant) { create(:tenant_user, tenant:, user:) }
-    user
   end
 
   def bootstrap(env:, **vars)
@@ -79,6 +75,16 @@ class SeedAdminTest < ActiveSupport::TestCase
 
     assert_includes error.message, "admin:create"
     assert_not unheld.reload.global_admin?
+  end
+
+  should "refuse an account whose only membership is forgotten after the lookup" do
+    held = member(create(:user, email: SeedAdmin::DEV_EMAIL, global_admin: false))
+
+    forgotten_once_locked(held) do
+      assert_raises(ArgumentError) { bootstrap(env: DEV) }
+    end
+
+    assert_not held.reload.global_admin?
   end
 
   should "stay idempotent under a mixed-case padded override" do

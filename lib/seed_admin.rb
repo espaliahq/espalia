@@ -38,14 +38,14 @@ class SeedAdmin
     end
 
     if (user = email && User.find_by(email: email))
-      if user.unvouched?
-        raise ArgumentError, "#{email} has an account with no tenant membership that isn't a global admin, so the seed " \
-                             "won't promote it. Run bin/rails admin:create with EMAIL and PASSWORD instead."
+      promoted = User.transaction do
+        if user.lock!(User::CREDENTIALS_LOCK).unvouched?
+          raise ArgumentError, "#{email} has an account with no tenant membership that isn't a global admin, so the seed " \
+                               "won't promote it. Run bin/rails admin:create with EMAIL and PASSWORD instead."
+        end
+        user.update!(global_admin: true, global_admin_source: "seed") unless user.global_admin?
       end
-      unless user.global_admin?
-        user.update!(global_admin: true, global_admin_source: "seed")
-        output.puts "Promoted #{user.email} to global admin"
-      end
+      output.puts "Promoted #{user.email} to global admin" if promoted
       output.puts "Admin user #{user.email} already exists"
       return user
     end
