@@ -6,6 +6,8 @@ class Tenant::OrgUnitMembersController < ApplicationController
   include OrgUnitDrawer
 
   # POST /tenant/org_graph/units/:org_unit_id/members
+  #
+  # Only an admin or editor sets an allocation, since nobody else can read one back.
   def create
     authorize :org_graph, :show_units?
     person_ids = Array(params[:person_ids]).compact_blank
@@ -13,7 +15,7 @@ class Tenant::OrgUnitMembersController < ApplicationController
 
     terms = nil
     write_each(person_ids, notice: person_ids.one? ? "Added to #{@unit.name}." : "#{person_ids.size} people added to #{@unit.name}.") do |person_id|
-      terms ||= { role: params[:role].presence, allocation: }.compact
+      terms ||= { role: params[:role].presence, allocation: (allocation if policy(:org_graph).edit_structure?) }.compact
       Operations::OrgGraph::AddMember.call(context: pundit_user, params: with_date(unit_id: @unit.id, person_id:, **terms))
     end
   end

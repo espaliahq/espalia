@@ -9,14 +9,14 @@ class Operations::OrgGraph::ChangeBackGroup < Operations::Base
   description "Change back every change made under one cause, by the cause_id of a group from " \
               "org_graph_activity. Reverses it in every unit it touched, not just the one read, as new " \
               "changes; history keeps both. Refused as a whole, with the reason, unless every part can " \
-              "be changed back."
+              "be changed back. Admins and Org Graph editors only."
   category :write
   approval :mcp_client
 
   parameter :cause_id, String, required: true, allow_blank: false
 
   def policy_check
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
   end
 
   # @return [Hash] `:cause_id`, `:unit_ids` every unit it touched

@@ -50,7 +50,7 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
 
     post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } }
 
-    assert_redirected_to tenant_org_graph_settings_path(anchor: "org-graph-levels-#{@org[:checkout]}")
+    assert_redirected_to edit_tenant_org_structure_path(@org[:checkout])
     assert_equal %w[Department Team Squad], own_types(:checkout)
     assert_equal "Squad", type_of(:payments)
     assert_not_equal @org[:squad], overview.unit(@org[:payments]).level_id
@@ -65,14 +65,14 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
 
     post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } }
 
-    assert_redirected_to tenant_org_graph_settings_path(anchor: "org-graph-levels-#{@org[:checkout]}")
+    assert_redirected_to edit_tenant_org_structure_path(@org[:checkout])
     assert_equal %w[Department Team Squad], own_types(:checkout)
     assert_equal "Squad", type_of(:payments)
   end
 
   should "give a unit new types, each able to sit anywhere in it, and then say so in its drawer" do
     get new_tenant_org_unit_structure_declaration_path(@org[:checkout], fresh: 1)
-    assert_equal "Every type can sit anywhere in it for now. Tighten that in Settings.",
+    assert_equal "Every type can sit anywhere in it for now. Narrow that on the next page.",
                  drawer.at_css("#org-unit-structure-permissive").text
 
     declare_fresh(:checkout, { @org[:squad] => "Group" })
@@ -211,6 +211,30 @@ class Tenant::OrgUnitStructuresControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Moved Checkout into Platform's structure. Its type is now Tribe.", flash[:notice]
     assert_equal "Tribe", type_of(:checkout)
     assert_equal "Group", type_of(:payments)
+  end
+
+  context "as Checkout's owner" do
+    setup do
+      owner_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: owner_user, person: @org[:ada], role: :member)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .add_unit_owner(@org[:checkout], @org[:ada].id, effective_on: "2026-01-01")
+      end
+      sign_out @admin_user
+      sign_in owner_user
+    end
+
+    should "open the structure steps for a unit they own, and for none elsewhere" do
+      get new_tenant_org_unit_structure_declaration_path(@org[:payments])
+      assert_response :success
+
+      [ new_tenant_org_unit_structure_declaration_path(@org[:platform]),
+        new_tenant_org_unit_structure_withdrawal_path(@org[:platform]) ].each do |path|
+        get path
+        assert_redirected_to root_path, path
+      end
+    end
   end
 
   context "as a tenant member" do

@@ -23,6 +23,11 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     def view_template = p(id: "comparison-bar") { "Since 1 Oct" }
   end
 
+  StubViewer = Struct.new(:admin, :editor) do
+    def admin? = admin
+    def editor? = editor
+  end
+
   class StubComparison < OrgGraph::Comparison
     def unit_marks(unit) = { "Platform" => [ "was Core" ], "Engineering" => [ "moved" ] }.fetch(unit.name, [])
 
@@ -41,17 +46,22 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     build_org_graph(@tenant)
   end
 
-  def render_page(tenant: @tenant, selected_unit_id: nil, **slots)
+  def render_page(tenant: @tenant, selected_unit_id: nil, viewer: StubViewer.new(true, true), **slots)
     ActsAsTenant.with_tenant(tenant) do
       controller = ApplicationController.new
       controller.request = ActionDispatch::TestRequest.create
       user = @user
       controller.define_singleton_method(:current_user) { user }
       view = Views::Tenant::OrgGraph::ShowView.new(
-        overview: OrgGraph::UnitsOverview.new(selected_unit_id:), user: @user, current_tenant: tenant, **slots
+        overview: OrgGraph::UnitsOverview.new(selected_unit_id:), user: @user, current_tenant: tenant, viewer:, **slots
       )
       Nokogiri::HTML5(controller.view_context.render(view))
     end
+  end
+
+  should "offer Settings to an admin only" do
+    assert render_page.at_xpath("//a[normalize-space()='Settings']")
+    assert_nil render_page(viewer: StubViewer.new(false, false)).at_xpath("//a[normalize-space()='Settings']")
   end
 
   should "leave both slots empty by default" do

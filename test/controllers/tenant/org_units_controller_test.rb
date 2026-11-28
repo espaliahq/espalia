@@ -25,6 +25,9 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
     ActsAsTenant.with_tenant(@tenant) { OrgMembership.find_by(person_id: @org[person].id, unit_id: @org[key]) }
   end
 
+  # What OrgGraph::Authorization says when reach refuses a write.
+  REFUSAL = /\AOnly a tenant admin|\AYou can change|\AYou need the right/
+
   def drawer = Nokogiri::HTML5(response.body).at_css("aside#org-graph-drawer")
 
   context "as a tenant admin" do
@@ -283,7 +286,117 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       frame = Nokogiri::HTML5(response.body).at_css("turbo-frame#owner-candidates")
       assert_includes frame.text, "Ezra Pell"
+      assert_includes frame.text, "Analyst"
       assert_not_includes frame.text, "Faye Lumen"
+    end
+
+    should "show each member's role and allocation, and ask one of people added" do
+      get edit_tenant_org_unit_path(@org[:checkout])
+
+      assert_includes drawer.text, "Tech lead · 50%"
+      assert_select "input[name='allocation']", count: 1
+    end
+  end
+
+  context "as the owner of Payments, who is neither an admin nor an editor" do
+    setup do
+      @owner_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        owner = create(:person, tenant: @tenant, name: "Gale Orrin")
+        create(:tenant_user, tenant: @tenant, user: @owner_user, person: owner, role: :member)
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        structure.add_unit_owner(@org[:payments], owner.id, effective_on: "2026-01-01")
+        structure.add_unit_owner(@org[:platform], @org[:ezra].id, effective_on: "2026-01-01")
+      end
+      sign_in @owner_user
+    end
+
+    should "find people by name and email, without their job titles" do
+      get candidates_tenant_org_unit_path(@org[:payments], q: "e")
+
+      frame = Nokogiri::HTML5(response.body).at_css("turbo-frame#member-candidates")
+      assert_includes frame.text, "Ezra Pell"
+      assert_not_includes frame.text, "Analyst"
+      assert_not_includes frame.text, "Engineer"
+    end
+
+    should "show each member's role, but not their allocation" do
+      get edit_tenant_org_unit_path(@org[:checkout])
+
+      assert_includes drawer.text, "Tech lead"
+      assert_not_includes drawer.text, "50%"
+      get edit_tenant_org_unit_path(@org[:payments])
+      assert_includes drawer.text, "Dot Fennick"
+      assert_not_includes drawer.text, "100%"
+    end
+
+    should "add people to Payments without asking an allocation, and store none sent by hand" do
+      get edit_tenant_org_unit_path(@org[:payments])
+      assert_select "input[name='role']"
+      assert_select "input[name='allocation']", count: 0
+
+      post tenant_org_unit_members_path(@org[:payments]), params: { person_ids: [ @org[:ezra].id ], role: "Analyst", allocation: "50" }
+
+      assert_nil flash[:drawer_alert]
+      membership = ActsAsTenant.with_tenant(@tenant) { OrgMembership.find_by!(unit_id: @org[:payments], person_id: @org[:ezra].id) }
+      assert_equal [ "Analyst", nil ], [ membership.role, membership.allocation ]
+    end
+
+    should "offer no form to retire, merge, split or move a unit out of reach" do
+      steps = {
+        new_tenant_org_unit_retirement_path(@org[:platform]) => tenant_org_unit_retirement_path(@org[:platform]),
+        new_tenant_org_unit_merge_path(@org[:platform]) => tenant_org_unit_merge_path(@org[:platform]),
+        new_tenant_org_unit_split_path(@org[:platform]) => tenant_org_unit_split_path(@org[:platform]),
+        new_tenant_org_unit_structure_move_path(@org[:platform], parent_id: @org[:checkout]) =>
+          tenant_org_unit_structure_move_path(@org[:platform])
+      }
+      steps.each do |step, action|
+        get step
+
+        assert_response :success, step
+        assert_select "form[action='#{action}']", { count: 0 }, step
+        assert_select "#org-unit-step-blocked", { count: 1 }, step
+      end
+    end
+
+    should "change nothing outside Payments, through any write in the drawer" do
+      sign_in @admin_user
+      post tenant_org_unit_structure_declaration_path(@org[:checkout]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } }
+      assert_redirected_to edit_tenant_org_structure_path(@org[:checkout])
+      sign_in @owner_user
+      writes = [
+        -> { patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { name: "Core" } } },
+        -> { patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { level_id: @org[:squad] } } },
+        -> { patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { parent_id: @org[:checkout] } } },
+        -> { patch tenant_org_unit_path(@org[:payments]), params: { org_unit: { parent_id: @org[:platform] } } },
+        -> { post tenant_org_unit_owners_path(@org[:platform]), params: { person_ids: [ @org[:ada].id ] } },
+        -> { delete tenant_org_unit_owner_path(@org[:platform], @org[:ezra].id) },
+        -> { post tenant_org_unit_members_path(@org[:platform]), params: { person_ids: [ @org[:ezra].id ] } },
+        -> { patch tenant_org_unit_member_path(@org[:checkout], @org[:cyril].id), params: { unit_id: @org[:payments] } },
+        -> { delete tenant_org_unit_member_path(@org[:platform], @org[:ada].id) },
+        -> { post tenant_org_unit_retirement_path(@org[:platform]) },
+        -> { post tenant_org_unit_merge_path(@org[:platform]), params: { into_unit_id: @org[:checkout] } },
+        -> { post tenant_org_unit_split_path(@org[:platform]), params: { names: %w[Core Edge], placements: { @org[:ada].id => "Core" } } },
+        -> { post tenant_org_unit_structure_declaration_path(@org[:platform]), params: { start: "copy", conversion: { @org[:squad] => @org[:squad] } } },
+        -> { post tenant_org_unit_structure_withdrawal_path(@org[:checkout]), params: { conversion: { @org[:squad] => @org[:squad] } } },
+        -> { post tenant_org_unit_structure_move_path(@org[:platform]), params: { parent_id: @org[:checkout], conversion: { @org[:team] => @org[:squad] } } }
+      ]
+      events = -> { Rails.configuration.event_store.read.count }
+      count = events.call
+
+      writes.each_with_index do |write, index|
+        write.call
+        assert_response :redirect, "write #{index}"
+        assert_match REFUSAL, flash[:drawer_alert] || flash[:alert], "write #{index}"
+      end
+
+      assert_equal count, events.call
+      assert_equal %w[Checkout Engineering Payments Platform], ActsAsTenant.with_tenant(@tenant) { OrgUnit.live.order(:name).pluck(:name) }
+      assert_equal @org[:checkout], unit(:payments).parent_id
+      assert membership(:ada, :platform)
+      assert membership(:cyril, :checkout)
+      assert_nil membership(:ezra, :platform)
+      assert_nil membership(:cyril, :payments)
     end
   end
 

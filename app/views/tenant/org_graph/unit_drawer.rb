@@ -251,7 +251,11 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     person = membership.person
     li(id: "org-unit-member-#{person.id}", class: "space-y-2 py-3 text-sm") do
       div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5") do
-        a(href: tenant_org_person_path(person, unit: @unit.id, back: "edit", **compared), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+        if @rights.people?
+          a(href: tenant_org_person_path(person, unit: @unit.id, back: "edit", **compared), class: "font-medium text-link hover:text-link-hover underline") { person.name }
+        else
+          span(class: "font-medium text-default") { person.name }
+        end
         span(class: "text-muted") { terms(membership) }
         unless membership.provider == ::OrgGraph::StructureAggregate::ESPALIA
           render Components::Kit::Badge.new("From #{HrisConfig.provider_label(membership.provider)}", leading_icon: :lock)
@@ -266,8 +270,9 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
     render Views::Tenant::OrgGraph::StaleFlag.membership(@confirmations, membership, back_to: { return_to: "unit", unit: @unit.id, effective_on: @effective_on })
   end
 
+  # Allocation is for admins and editors.
   def terms(membership)
-    allocation = "#{(membership.allocation * 100).round}%" if membership.allocation
+    allocation = "#{(membership.allocation * 100).round}%" if membership.allocation && @rights.people?
     [ membership.role, allocation ].compact_blank.join(" · ")
   end
 
@@ -295,16 +300,12 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   def add_member_form
     drawer_form(tenant_org_unit_members_path(@unit), class: "space-y-3") do
       picker(field: "person_ids[]", frame: "member-candidates", label: "Add people")
-      div(class: "grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8rem]") do
+      div(class: @rights.people? ? "grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8rem]" : "grid grid-cols-1 gap-3") do
         div do
           label(for: "org-unit-role", class: "block text-xs text-muted") { "Role (optional)" }
           input(type: "text", id: "org-unit-role", name: "role", class: "#{Components::Kit::Field::INPUT} mt-1")
         end
-        div do
-          label(for: "org-unit-allocation", class: "block text-xs text-muted") { "Allocation %" }
-          input(type: "number", id: "org-unit-allocation", name: "allocation", min: 1, max: 100, step: 1,
-                inputmode: "numeric", placeholder: "100", class: "#{Components::Kit::Field::INPUT} mt-1")
-        end
+        allocation_field if @rights.people?
       end
       unless @unit.held_by_espalia?
         p(class: "text-xs text-muted") do
@@ -312,6 +313,14 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
         end
       end
       submit("Add to #{@unit.name}", variant: :outline)
+    end
+  end
+
+  def allocation_field
+    div do
+      label(for: "org-unit-allocation", class: "block text-xs text-muted") { "Allocation %" }
+      input(type: "number", id: "org-unit-allocation", name: "allocation", min: 1, max: 100, step: 1,
+            inputmode: "numeric", placeholder: "100", class: "#{Components::Kit::Field::INPUT} mt-1")
     end
   end
 
@@ -338,8 +347,7 @@ class Views::Tenant::OrgGraph::UnitDrawer < Views::Base
   def structure_links
     div(class: "flex flex-wrap gap-2") do
       if @overview.declares_structure?(@unit)
-        reshape_link("Edit its unit types", tenant_org_graph_settings_path(anchor: Views::Tenant::OrgGraph::Settings::LevelsPanel.anchor(@unit.id)),
-                     label: "Edit the unit types beneath #{@unit.name}")
+        reshape_link("Edit its unit types", edit_tenant_org_structure_path(@unit.id), label: "Edit the unit types beneath #{@unit.name}")
         reshape_link("Withdraw its structure", new_tenant_org_unit_structure_withdrawal_path(@unit, on: @effective_on, **compared),
                      tone: :danger, label: "Withdraw #{@unit.name}'s structure")
       else

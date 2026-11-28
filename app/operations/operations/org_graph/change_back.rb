@@ -10,14 +10,14 @@ class Operations::OrgGraph::ChangeBack < Operations::Base
               "Writes the inverse as a new change; history keeps both. Refused, with the reason, for a " \
               "change the caller couldn't make, one another provider supplied, one already changed back, " \
               "one a later change has replaced, or a backdated change that moved the day someone joined " \
-              "a unit earlier."
+              "a unit earlier. Admins and Org Graph editors only."
   category :write
   approval :mcp_client
 
   parameter :entry_id, String, required: true, allow_blank: false, schema: { format: "uuid" }
 
   def policy_check
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
   end
 
   # @return [Hash] `:entry_id`, `:unit_id`

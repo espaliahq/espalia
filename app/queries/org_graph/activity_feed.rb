@@ -10,6 +10,9 @@
 class OrgGraph::ActivityFeed
   PER_PAGE = 25
 
+  # Why nothing changes back for a reader who is neither an admin nor an editor.
+  READER_REFUSAL = "Only a tenant admin or an Org Graph editor can change the Org Graph back."
+
   # A group of entries under one cause, as the person reading it may act on it.
   #
   # @!attribute group [OrgUnitActivity::Group]
@@ -48,7 +51,11 @@ class OrgGraph::ActivityFeed
     @unit = unit
     @page = page.to_i.clamp(1..)
     @change_back = OrgGraph::ChangeBackHandler.new(actor:)
+    @change_back_allowed = OrgGraphPolicy.new(actor, :org_graph).edit_structure?
   end
+
+  # @return [Boolean] whether the reader may change anything back at all
+  def change_back? = @change_back_allowed
 
   # @return [Array<Item>]
   def items = @items ||= groups.map { |group| item(group) }
@@ -88,12 +95,16 @@ class OrgGraph::ActivityFeed
 
   def item(group)
     parts = group.parts.map do |entry|
-      Part.new(entry:, description: describe(entry), by: self.class.by(entry), refusal: @change_back.refusal(entry))
+      Part.new(entry:, description: describe(entry), by: self.class.by(entry), refusal: refusal(entry))
     end
     unit_count = organisation? ? 1 : unit_counts.fetch(group.cause_id, 1)
-    refusal = Item.whole_cause?(parts, unit_count) ? @change_back.group_refusal(group.cause_id) : parts.first.refusal
+    refusal = Item.whole_cause?(parts, unit_count) ? group_refusal(group.cause_id) : parts.first.refusal
     Item.new(group:, parts:, refusal:, unit_count:)
   end
+
+  def refusal(entry) = change_back? ? @change_back.refusal(entry) : READER_REFUSAL
+
+  def group_refusal(cause_id) = change_back? ? @change_back.group_refusal(cause_id) : READER_REFUSAL
 
   def describe(entry)
     person = entry.person&.name || (entry.person_id || !entry.grant? ? Person::FORMER_MEMBER : NO_PERSON)

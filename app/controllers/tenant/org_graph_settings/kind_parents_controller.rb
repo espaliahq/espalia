@@ -7,10 +7,11 @@
 # another admin's change.
 class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
   include OrgGraphSettingsRedirect
+  include OrgStructureAuthorization
 
   # PATCH /tenant/org_graph/settings/kind_parents/:level_id
   def update
-    authorize :org_graph, :edit_taxonomy?
+    authorize_structure_of!(structure_unit)
     result = ActiveRecord::Base.transaction do
       ::OrgGraph::Repository.new.lock_structure # so no save lands between the comparison and this write
       next if changed_since_drawn?
@@ -23,7 +24,7 @@ class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
     return back_with_alert(changed_meanwhile) unless result
 
     back_with_notice "Saved where #{result[:name]} can sit.", anchor:
-  rescue Operations::Base::ParameterError => e
+  rescue Operations::Base::ParameterError, OrgGraph::Authorization::Refused => e
     back_with_refusal "#{type_name}'s place did not change", e, anchor:
   end
 
@@ -42,7 +43,7 @@ class Tenant::OrgGraphSettings::KindParentsController < ApplicationController
   end
 
   def back_with_alert(alert)
-    redirect_to tenant_org_graph_settings_path(anchor:), alert:, status: :see_other
+    redirect_to landing(anchor), alert:, status: :see_other
   end
 
   def in_structure = params[:structure_unit_id].present? ? { structure_unit_id: params[:structure_unit_id].to_s } : {}

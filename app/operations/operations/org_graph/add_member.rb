@@ -7,7 +7,8 @@ class Operations::OrgGraph::AddMember < Operations::Base
   prepend Operations::OrgGraph::PlanWrite
 
   description "Place a person in a live unit of the Org Graph, from effective_on (today by default), with an " \
-              "optional role and allocation (greater than 0, at most 1). A person can be in several units. " \
+              "optional role and allocation (greater than 0, at most 1). Only a tenant admin or an Org Graph " \
+              "editor may set an allocation. A person can be in several units. " \
               "A unit an HRIS supplies takes only people that HRIS doesn't hold; place the others in the HRIS. " \
               "Someone already in the unit is refused."
   approval :mcp_client
@@ -24,6 +25,9 @@ class Operations::OrgGraph::AddMember < Operations::Base
     allocation = params[:allocation]
     if allocation && !(allocation.positive? && allocation <= 1)
       raise Operations::Base::ParameterError, "allocation must be greater than 0 and at most 1"
+    end
+    if allocation && !Pundit.policy!(context, :org_graph).edit_structure?
+      raise Operations::Base::ParameterError, "Only a tenant admin or an Org Graph editor may set an allocation"
     end
 
     role = params[:role].presence

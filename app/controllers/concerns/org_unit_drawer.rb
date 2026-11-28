@@ -52,6 +52,7 @@ module OrgUnitDrawer
       overview:,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
+      viewer: OrgGraphPolicy::Viewer.new(policy(:org_graph)),
       tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a },
       drawer: yield(overview, OrgGraphPolicy::UnitRights.new(policy(:org_graph), @unit, overview)),
       **comparison_slots(unit_id: @unit.id)

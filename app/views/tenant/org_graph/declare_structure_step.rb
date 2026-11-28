@@ -63,7 +63,7 @@ class Views::Tenant::OrgGraph::DeclareStructureStep < Views::Tenant::OrgGraph::S
 
   def fresh_fields
     p(id: "org-unit-structure-permissive", class: "text-sm text-muted") do
-      "Every type can sit anywhere in it for now. Tighten that in Settings."
+      "Every type can sit anywhere in it for now. Narrow that on the next page."
     end
     if governed.empty?
       no_units

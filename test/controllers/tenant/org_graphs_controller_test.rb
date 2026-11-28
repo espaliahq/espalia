@@ -35,6 +35,17 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Faye Lumen"
     end
 
+    should "show each member's title, allocation and HRIS level, and the same for the people in no team" do
+      org = build_org_graph(@tenant)
+
+      get tenant_org_graph_path(unit: org[:payments])
+
+      assert_select "#unit-#{org[:payments]}", text: /Engineer/
+      assert_select "#unit-#{org[:payments]}", text: /100%/
+      assert_select "#unit-#{org[:payments]}", text: /L4/
+      assert_select "##{Views::Tenant::OrgGraph::Tray::ID}", text: /Analyst L3/
+    end
+
     should "open the unit named in the query" do
       org = build_org_graph(@tenant)
 
@@ -320,6 +331,79 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_response :redirect
       assert_equal "You are not authorized to perform this action.", flash[:alert]
       assert_not entry.reload.changed_back?
+    end
+  end
+
+  context "as a unit owner who isn't an admin" do
+    setup do
+      @org = build_org_graph(@tenant)
+      owner_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        owner = create(:person, tenant: @tenant, name: "Gale Orrin")
+        create(:tenant_user, tenant: @tenant, user: owner_user, person: owner, role: :member)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .add_unit_owner(@org[:payments], owner.id, effective_on: "2026-01-01")
+        editor = create(:tenant_user, tenant: @tenant, person: create(:person, tenant: @tenant, name: "Rowan Grant"))
+        AccountGrants::CommandHandler.new.add(:org_graph_editor, editor)
+      end
+      sign_in owner_user
+    end
+
+    should "show the units in the app's own layout, with no Settings and no way into a person" do
+      get tenant_org_graph_path(unit: @org[:payments])
+
+      assert_response :success
+      assert_select "a[href='#{tenant_org_graph_path}']", text: "Organisation"
+      assert_select "a", text: "Settings", count: 0
+      assert_select "a[href^='#{tenant_org_person_path(@org[:dot])}']", count: 0
+      assert_includes response.body, "Dot Fennick"
+    end
+
+    should "refuse a change back, by entry or by cause, and write nothing" do
+      before = Rails.configuration.event_store.read.count
+      [ { entry_id: SecureRandom.uuid_v7 }, { cause_id: SecureRandom.uuid_v7 } ].each do |params|
+        post change_back_tenant_org_graph_path, params: params.merge(unit: @org[:payments])
+
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+      assert_equal before, Rails.configuration.event_store.read.count
+    end
+
+    should "offer nothing to change back, and keep the organisation's activity to itself" do
+      get tenant_org_graph_path(unit: @org[:payments], activity: "organisation")
+
+      assert_response :success
+      assert_select "form[action='#{change_back_tenant_org_graph_path}']", count: 0
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Can't change back/, count: 0
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Rowan Grant/, count: 0
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Added Dot Fennick/
+    end
+
+    should "offer an admin a change back in the payments feed the owner is shown, so the owner is really refused one" do
+      sign_in @admin_user
+      get tenant_org_graph_path(unit: @org[:payments])
+
+      assert_response :success
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Added Dot Fennick/
+      assert_select "##{Views::Tenant::OrgGraph::Sidebar::ID}", text: /Rowan Grant/, count: 0
+      assert_select "form[action='#{change_back_tenant_org_graph_path}']", minimum: 1
+    end
+
+    should "show each member's name and role, but not their title, allocation or HRIS level" do
+      get tenant_org_graph_path(unit: @org[:payments])
+
+      assert_select "#unit-#{@org[:payments]}", text: /Dot Fennick/
+      assert_select "#unit-#{@org[:payments]}", text: /Engineer|L4|100%/, count: 0
+      assert_select "##{Views::Tenant::OrgGraph::Tray::ID}", text: /Ezra Pell/
+      assert_select "##{Views::Tenant::OrgGraph::Tray::ID}", text: /Analyst|L3/, count: 0
+    end
+
+    should "refuse a person's drawer" do
+      get tenant_org_person_path(@org[:dot], unit: @org[:payments])
+
+      assert_response :redirect
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
     end
   end
 end

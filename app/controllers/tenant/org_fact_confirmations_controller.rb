@@ -8,7 +8,7 @@ class Tenant::OrgFactConfirmationsController < ApplicationController
 
   # POST /tenant/org_graph/people/:org_person_id/confirmations
   def create
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
     facts = Array(params[:facts]).compact_blank
     return redirect_back_with(alert: "Choose a fact to confirm.") if facts.empty?
 

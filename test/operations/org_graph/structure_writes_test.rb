@@ -168,6 +168,31 @@ class Operations::OrgGraph::StructureWritesTest < ActiveSupport::TestCase
       assert_equal "You can change Checkout's structure if you own Checkout or a unit above it, have such an owner below you in your reporting line, or are an Org Graph editor", error.message
     end
 
+    should "refuse Checkout's owner a type from the organisation's or another unit's structure, writing nothing" do
+      owner = ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, role: :member, person: create(:person, tenant: @tenant)).tap do |tenant_user|
+          OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                           .add_unit_owner(@org[:checkout], tenant_user.person.id, effective_on: "2026-01-05")
+        end
+      end
+      track = call(Operations::OrgGraph::DeclareStructure, unit_id: @org[:platform], levels: [ { name: "Track" } ], conversion: {})
+      track = track[:levels].first[:level_id]
+      events = Rails.configuration.event_store.read.count
+      under_checkout = { as: owner, structure_unit_id: @org[:checkout] }
+
+      [ @org[:squad], track ].each do |foreign|
+        [ -> { call(Operations::OrgGraph::AddLevel, name: "Pod", parent_ids: [ foreign ], **under_checkout) },
+          -> { call(Operations::OrgGraph::SetKindParents, level_id: foreign, parent_ids: [ @stream ], top: false, **under_checkout) },
+          -> { call(Operations::OrgGraph::SetKindParents, level_id: @lane, parent_ids: [ foreign ], top: false, **under_checkout) },
+          -> { call(Operations::OrgGraph::RemoveLevel, level_id: foreign, **under_checkout) } ].each do |write|
+          assert_match(/doesn't exist|this structure doesn't hold/, assert_raises(Operations::Base::ParameterError) { write.call }.message)
+        end
+      end
+      assert_equal events, Rails.configuration.event_store.read.count
+      assert_equal %w[Stream Lane], ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.in_structure(@org[:checkout]).pluck(:name) }
+      assert_equal %w[Track], ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.in_structure(@org[:platform]).pluck(:name) }
+    end
+
     should "withdraw it, converting the units beneath it back" do
       result = call(Operations::OrgGraph::WithdrawStructure, unit_id: @org[:checkout], conversion: { @stream => @org[:squad] })
 

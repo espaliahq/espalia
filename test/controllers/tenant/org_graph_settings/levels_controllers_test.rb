@@ -18,10 +18,10 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
       structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       structure.define_taxonomy([ { level_id: @tribe_id, name: "Tribe" }, { level_id: @squad_id, name: "Squad" },
                                   { level_id: @team_id, name: "Team" } ], effective_on: Date.current)
-      tribe = SecureRandom.uuid_v7
-      structure.create_unit(tribe, "Commerce", level_id: @tribe_id, effective_on: Date.current)
+      @commerce_id = SecureRandom.uuid_v7
+      structure.create_unit(@commerce_id, "Commerce", level_id: @tribe_id, effective_on: Date.current)
       @payments_id = SecureRandom.uuid_v7
-      structure.create_unit(@payments_id, "Payments", level_id: @team_id, parent_id: tribe, effective_on: Date.current)
+      structure.create_unit(@payments_id, "Payments", level_id: @team_id, parent_id: @commerce_id, effective_on: Date.current)
     end
   end
 
@@ -45,6 +45,19 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
 
       assert_equal "The unit type could not be added: There is already a unit type called Squad", flash[:alert]
       assert_equal %w[Tribe Squad Team], level_names
+    end
+
+    should "send a unit with no structure of its own back to the Units view" do
+      get edit_tenant_org_structure_path(@payments_id)
+
+      assert_redirected_to tenant_org_graph_path(unit: @payments_id)
+      assert_equal "Payments has no structure of its own to change.", flash[:alert]
+    end
+
+    should "find no structure page for a unit the Org Graph doesn't hold" do
+      get edit_tenant_org_structure_path(SecureRandom.uuid)
+
+      assert_response :not_found
     end
 
     should "ask for a name" do
@@ -237,6 +250,127 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
     end
   end
 
+  context "as Payments' owner, with Payments' own structure" do
+    setup do
+      @pod_id = SecureRandom.uuid_v7
+      @owner_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        owner = create(:person, tenant: @tenant)
+        create(:tenant_user, tenant: @tenant, user: @owner_user, role: :member, person: owner)
+        structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        structure.add_unit_owner(@payments_id, owner.id, effective_on: Date.current)
+        admin = AuthorizationContext.new(user: @admin_user, tenant_user: TenantUser.find_by!(user: @admin_user), person: nil)
+        OrgGraph::StructureCommandHandler.new(actor: admin).declare_structure(
+          @payments_id, levels: [ { level_id: @pod_id, name: "Pod", parent_level_ids: [ @pod_id ], top: true } ],
+                        conversion: {}, effective_on: Date.current
+        )
+      end
+      sign_in @owner_user
+    end
+
+    should "add, rule and remove a type in Payments' structure" do
+      post tenant_org_graph_settings_levels_path, params: { name: "Guild", structure_unit_id: @payments_id }
+      assert_nil flash[:alert]
+      assert_equal %w[Pod Guild], own_names
+
+      guild_id = ActsAsTenant.with_tenant(@tenant) { OrgTaxonomyLevel.in_structure(@payments_id).find_by!(name: "Guild").id }
+      patch tenant_org_graph_settings_kind_parent_path(guild_id),
+            params: { parent_ids: [ @pod_id ], top: "0", structure_unit_id: @payments_id }
+      assert_equal [ "Saved where Guild can sit.", nil ], [ flash[:notice], flash[:alert] ]
+
+      delete tenant_org_graph_settings_level_path(guild_id), params: { structure_unit_id: @payments_id }
+      assert_nil flash[:alert]
+      assert_equal %w[Pod], own_names
+    end
+
+    should "open Payments' structure on a page of its own, in the app's layout, and land its writes back there" do
+      get edit_tenant_org_structure_path(@payments_id)
+
+      assert_response :success
+      assert_select "h1", text: "The structure beneath Payments"
+      assert_select "a[href='#{tenant_org_graph_path}']", text: "Organisation"
+      assert_select "a[href='#{tenant_org_graph_settings_path}']", count: 0
+      assert_select "#org-graph-levels-#{@payments_id} input[name='back'][value='structure']"
+
+      post tenant_org_graph_settings_levels_path, params: { name: "Guild", structure_unit_id: @payments_id, back: "structure" }
+      assert_redirected_to edit_tenant_org_structure_path(@payments_id)
+      assert_equal %w[Pod Guild], own_names
+
+      post tenant_org_graph_settings_levels_path, params: { name: "pod", structure_unit_id: @payments_id, back: "structure" }
+      assert_redirected_to edit_tenant_org_structure_path(@payments_id)
+      assert_predicate flash[:alert], :present?
+    end
+
+    should "land a refusal from the write back on the structure page, naming it" do
+      refusal = OrgGraph::Authorization::Refused.new("You can't change the structure beneath Payments.")
+      Operations::OrgGraph::AddLevel.stub(:call, ->(**) { raise refusal }) do
+        post tenant_org_graph_settings_levels_path, params: { name: "Guild", structure_unit_id: @payments_id, back: "structure" }
+      end
+
+      assert_redirected_to edit_tenant_org_structure_path(@payments_id)
+      assert_equal "The unit type could not be added: You can't change the structure beneath Payments.", flash[:alert]
+    end
+
+    should "land a write on the unit, not the structure page, once Payments has no structure left" do
+      ActsAsTenant.with_tenant(@tenant) do
+        admin = AuthorizationContext.new(user: @admin_user, tenant_user: TenantUser.find_by!(user: @admin_user), person: nil)
+        OrgGraph::StructureCommandHandler.new(actor: admin).withdraw_structure(@payments_id, conversion: {}, effective_on: Date.current)
+      end
+
+      delete tenant_org_graph_settings_level_path(@pod_id), params: { structure_unit_id: @payments_id, back: "structure" }
+
+      assert_redirected_to tenant_org_graph_path(unit: @payments_id)
+    end
+
+    should "get the same refusal for the structure page of a unit they don't own and of one the Org Graph doesn't hold" do
+      [ @commerce_id, SecureRandom.uuid ].each do |unit_id|
+        get edit_tenant_org_structure_path(unit_id)
+
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+    end
+
+    should "refuse a type from the organisation's or another unit's structure, named under Payments, writing nothing" do
+      lane_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        identity_id = SecureRandom.uuid_v7
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .create_unit(identity_id, "Identity", level_id: @tribe_id, effective_on: Date.current)
+        admin = AuthorizationContext.new(user: @admin_user, tenant_user: TenantUser.find_by!(user: @admin_user), person: nil)
+        OrgGraph::StructureCommandHandler.new(actor: admin).declare_structure(
+          identity_id, levels: [ { level_id: lane_id, name: "Lane", parent_level_ids: [ lane_id ], top: true } ],
+                        conversion: {}, effective_on: Date.current
+        )
+      end
+      events = Rails.configuration.event_store.read.count
+      under_payments = { structure_unit_id: @payments_id }
+
+      [ @squad_id, lane_id ].each do |foreign|
+        [ -> { patch tenant_org_graph_settings_kind_parent_path(foreign), params: { parent_ids: [], top: "1", **under_payments } },
+          -> { patch tenant_org_graph_settings_kind_parent_path(@pod_id), params: { parent_ids: [ foreign ], top: "0", **under_payments } },
+          -> { delete tenant_org_graph_settings_level_path(foreign), params: under_payments } ].each do |request|
+          request.call
+          assert_match(/doesn't exist|this structure doesn't hold/, flash[:alert])
+          assert_nil flash[:notice]
+        end
+      end
+      assert_equal events, Rails.configuration.event_store.read.count
+      assert_equal %w[Tribe Squad Team], level_names
+      assert_equal %w[Pod], own_names
+    end
+
+    should "refuse to change the organisation's structure" do
+      [ -> { post tenant_org_graph_settings_levels_path, params: { name: "Guild" } },
+        -> { patch tenant_org_graph_settings_kind_parent_path(@squad_id), params: { parent_ids: [], top: "1" } },
+        -> { delete tenant_org_graph_settings_level_path(@team_id) } ].each do |request|
+        request.call
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+      assert_equal %w[Tribe Squad Team], level_names
+    end
+  end
+
   context "as a member with no rights" do
     setup do
       @member_user = create(:user)
@@ -244,6 +378,15 @@ class Tenant::OrgGraphSettings::LevelsControllersTest < ActionDispatch::Integrat
         create(:tenant_user, tenant: @tenant, user: @member_user, role: :member, person: create(:person, tenant: @tenant))
       end
       sign_in @member_user
+    end
+
+    should "get the same refusal for the structure page of a real unit and of one the Org Graph doesn't hold" do
+      [ @payments_id, SecureRandom.uuid ].each do |unit_id|
+        get edit_tenant_org_structure_path(unit_id)
+
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
     end
 
     should "refuse to add, rule or remove a unit type, in either structure, changing nothing" do

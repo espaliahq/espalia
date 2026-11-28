@@ -83,6 +83,7 @@ class Components::Shell::PageLayout < Components::Base
       links << { label: "Feedback / Evidence", href: "/evidence" } if show_evidence_link?
       links << { label: "Calibration", href: "/calibration_sessions" } if show_calibration_link?
       links << { label: "Planning", href: "/planning" } if show_planning_link?
+      links << { label: "Organisation", href: "/tenant/org_graph" } if show_organisation_link?
       links << { label: "Cycles", href: "/assessment_cycles" } if show_cycles_link?
       links << { label: "Admin", href: "/tenant" } if show_admin_link?
       mark_current(links)
@@ -117,6 +118,19 @@ class Components::Shell::PageLayout < Components::Base
     context = AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: tenant_user.person)
     PlanPolicy.new(context, TeamPlanningPlan).create? ||
       PlanPolicy::Scope.new(context, TeamPlanningPlan.all).resolve.exists?
+  end
+
+  # Whether to show the Units view to someone who holds a right in the Org
+  # Graph but isn't an admin, who reaches it from Admin instead. Asks
+  # {OrgGraphPolicy}, so the link and the view agree.
+  #
+  # @return [Boolean]
+  def show_organisation_link?
+    tenant_user = resolve_tenant_user
+    return false if !@current_tenant || !tenant_user || viewer_is_admin?
+
+    context = AuthorizationContext.new(user: tenant_user.user, tenant_user:, person: tenant_user.person)
+    OrgGraphPolicy.new(context, :org_graph).show_units?
   end
 
   # Whether the current viewer can manage assessment cycles.

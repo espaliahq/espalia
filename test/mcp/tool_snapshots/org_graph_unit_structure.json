@@ -1,0 +1,25 @@
+{
+  "name": "org_graph_unit_structure",
+  "description": "Read the structure a unit gives the units beneath it: its unit types, top first, each with its provider, how many live units it holds and how many retired units it held (by distinct name, the first three of each named), the type ids it can sit under (parent_ids), whether it can sit directly under the unit (top) and whether the caller can remove it today. declares is false, with no types, for a unit with no structure of its own. For anyone who may change that structure: an admin, an Org Graph editor, or someone whose reach covers the unit.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "unit_id": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "unit_id"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "approval": "none"
+}

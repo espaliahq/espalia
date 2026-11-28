@@ -7,7 +7,7 @@ class Tenant::OrgPeopleController < ApplicationController
 
   # GET /tenant/org_graph/people/:id
   def show
-    authorize :org_graph, :show_units?
+    authorize :org_graph, :edit_structure?
     overview = OrgGraph::UnitsOverview.new(selected_unit_id: unit_param)
     read = person_read
     profile = read.profile
@@ -15,6 +15,7 @@ class Tenant::OrgPeopleController < ApplicationController
       overview:,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
+      viewer: OrgGraphPolicy::Viewer.new(policy(:org_graph)),
       tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a },
       confirmations: OrgGraphPolicy::Confirmations.for_cards(policy(:org_graph), overview),
       drawer: Views::Tenant::OrgGraph::PersonDrawer.new(

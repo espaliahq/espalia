@@ -102,8 +102,8 @@ class Operations::OrgGraph::ActivityTest < ActiveSupport::TestCase
       assert_raises(Pundit::NotAuthorizedError) { call({}, tenant_user: @member) }
     end
 
-    should "refuse an Org Graph editor who isn't an admin, as for a unit" do
-      assert_raises(Pundit::NotAuthorizedError) { call({}, tenant_user: @editor) }
+    should "read for an Org Graph editor who isn't an admin" do
+      assert_equal 3, call({}, tenant_user: @editor)[:groups].size
     end
 
     should "refuse to change a grant back" do

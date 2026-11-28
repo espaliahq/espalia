@@ -3,10 +3,11 @@
 # Withdraws a unit's own structure from its drawer ([#494](https://github.com/espaliahq/espalia/issues/494)).
 class Tenant::OrgUnitStructureWithdrawalsController < ApplicationController
   include OrgUnitDrawer
+  include OrgStructureAuthorization
 
   # GET /tenant/org_graph/units/:org_unit_id/structure_withdrawal/new
   def new
-    authorize :org_graph, :show_units?
+    authorize_structure_of!(@unit)
     render_drawer do |overview, rights|
       Views::Tenant::OrgGraph::WithdrawStructureStep.new(unit: @unit, overview:, rights:, effective_on: step_date,
                                                          alert: flash[:drawer_alert])

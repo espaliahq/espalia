@@ -14,6 +14,7 @@ class Tenant::OrgUnitsController < ApplicationController
       overview:,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
+      viewer: OrgGraphPolicy::Viewer.new(policy(:org_graph)),
       tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a },
       confirmations:,
       drawer: Views::Tenant::OrgGraph::UnitDrawer.new(
@@ -32,12 +33,12 @@ class Tenant::OrgUnitsController < ApplicationController
   # GET /tenant/org_graph/units/:id/candidates?q=
   #
   # The person picker's typeahead for owners and members: active people in
-  # the tenant.
+  # the tenant. Job titles are for admins and editors.
   def candidates
     authorize :org_graph, :show_units?
     render Views::Shared::PersonPickerCandidatesFrame.new(
       frame_id: params[:frame].presence_in(%w[owner-candidates member-candidates]) || "member-candidates",
-      entries: OrgGraph::PersonCandidates.new.search(params[:q]),
+      entries: OrgGraph::PersonCandidates.new.search(params[:q], titles: policy(:org_graph).edit_structure?),
       query: params[:q].presence
     ), layout: false
   end

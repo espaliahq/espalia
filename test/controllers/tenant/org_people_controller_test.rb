@@ -197,4 +197,62 @@ class Tenant::OrgPeopleControllerTest < ActionDispatch::IntegrationTest
       assert membership(:ada, :platform)
     end
   end
+
+  # Payments' owner opens the Units view, but people's drawers and their
+  # writes are for admins and editors, even for Dot, who is in Payments.
+  context "as the owner of Payments, who is neither an admin nor an editor" do
+    setup do
+      @owner_user = create(:user)
+      ActsAsTenant.with_tenant(@tenant) do
+        owner = create(:person, tenant: @tenant, name: "Gale Orrin")
+        create(:tenant_user, tenant: @tenant, user: @owner_user, person: owner, role: :member)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .add_unit_owner(@org[:payments], owner.id, effective_on: "2026-01-01")
+      end
+      sign_in @owner_user
+      get tenant_org_graph_path(unit: @org[:payments])
+      assert_response :success
+    end
+
+    should "not open a person's drawer, even for someone in Payments or no one at all" do
+      [ tenant_org_person_path(@org[:dot], unit: @org[:payments]), tenant_org_person_path(SecureRandom.uuid_v7) ].each do |path|
+        get path
+
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+    end
+
+    should "not change anyone's teams from the person drawer, even within Payments" do
+      before = Rails.configuration.event_store.read.count
+      [
+        -> { post tenant_org_person_memberships_path(@org[:ezra]), params: { unit_id: @org[:payments] } },
+        -> { patch tenant_org_person_membership_path(@org[:dot], @org[:payments]), params: { unit_id: @org[:checkout] } },
+        -> { delete tenant_org_person_membership_path(@org[:dot], @org[:payments]) }
+      ].each do |write|
+        write.call
+
+        assert_redirected_to root_path
+        assert_equal "You are not authorized to perform this action.", flash[:alert]
+      end
+
+      assert_nil membership(:ezra, :payments)
+      assert membership(:dot, :payments)
+      assert_nil membership(:dot, :checkout)
+      assert_equal before, Rails.configuration.event_store.read.count
+    end
+
+    should "not confirm a fact, even for someone in Payments" do
+      travel 91.days
+      checked_on = -> { ActsAsTenant.with_tenant(@tenant) { OrgFactAge.find_by!(person: @org[:dot], unit: @org[:payments]).checked_at } }
+      before = checked_on.call
+
+      post tenant_org_person_confirmations_path(@org[:dot]),
+           params: { facts: [ "membership" ], unit_id: @org[:payments], return_to: "units", unit: @org[:payments] }
+
+      assert_redirected_to root_path
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
+      assert_equal before, checked_on.call
+    end
+  end
 end

@@ -55,7 +55,10 @@ class Operations::OrgGraph::PersonGetTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { call(person_id: SecureRandom.uuid_v7) }
   end
 
-  should "refuse an Org Graph editor who is not an admin" do
-    assert_raises(Pundit::NotAuthorizedError) { call(as: @editor, person_id: @org[:brook].id) }
+  should "read for an Org Graph editor, and refuse a member who holds no grant" do
+    assert_equal @org[:brook].id, call(as: @editor, person_id: @org[:brook].id)[:person][:id]
+
+    member = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, role: :member) }
+    assert_raises(Pundit::NotAuthorizedError) { call(as: member, person_id: @org[:brook].id) }
   end
 end
