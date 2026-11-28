@@ -17,7 +17,9 @@ class Mcp::AccessGrant < ApplicationRecord
   # A consent request is authenticated before it stores its grant, so
   # User#replace_credentials! can commit in between. Under the lock that
   # method takes, the account's current salt must still be the one the
-  # consenting session holds.
+  # consenting session holds. With no salt set it refuses, so any new path that
+  # stores a grant must set Mcp::RequestCredentials first, as
+  # Oauth::AuthorizationsController does today.
   def refuse_a_grant_after_replaced_credentials
     account = User.lock(User::CREDENTIALS_LOCK).find_by(id: resource_owner_id)
     session_salt = Mcp::RequestCredentials.session_salt

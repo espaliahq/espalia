@@ -56,7 +56,9 @@ class Mcp::PendingApproval < ApplicationRecord
 
   # An MCP call is authenticated before it stores its approval, so
   # User#replace_credentials! can revoke the call's token in between. Under
-  # the lock that method takes, the token must still be live.
+  # the lock that method takes, the token must still be live. With no token set
+  # it refuses, so any new path that stores an approval must set
+  # Mcp::RequestCredentials first, as Mcp::ServerController does today.
   def refuse_an_approval_after_replaced_credentials
     User.lock(User::CREDENTIALS_LOCK).find_by(id: user_id)
     live = Mcp::AccessToken.where(id: Mcp::RequestCredentials.access_token_id, resource_owner_id: user_id, revoked_at: nil)
