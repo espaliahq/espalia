@@ -5,7 +5,7 @@
 # callers join names.
 #
 # Incremental disclosure: defaults to `summary` (a count per kind). Pass
-# `mode: "full"` for every change.
+# `mode: "full"` for every change; only tenant admins and Org Graph editors may.
 #
 # The read behind [#130](https://github.com/espaliahq/espalia/issues/130).
 class Operations::OrgGraph::ChangesBetween < Operations::Base
