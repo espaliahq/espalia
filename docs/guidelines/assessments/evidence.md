@@ -617,10 +617,25 @@ Rules, all deliberate:
   so the links on a forgotten person's feedback stay as they were when they
   were forgotten, the hub offers no "Edit links" on it, and "Feedback to
   place" leaves their items out.
-  `EvidenceDiffSubmit` checks it before its first write, so a modal save that
-  would change one of those links normally stores nothing. Only the subject
-  counts: a forgotten author's feedback about someone here can still be placed
-  ([#609](https://github.com/espaliahq/espalia/issues/609)).
+  A modal save on a forgotten person's feedback stores nothing. Only the
+  subject counts: a forgotten author's feedback about someone here can still
+  be placed ([#609](https://github.com/espaliahq/espalia/issues/609)).
+- **A modal save is one transaction.** `EvidenceDiffSubmit` runs every command
+  a save needs (a response or a text edit, then each link added, removed or
+  reclassified, and each staged suggestion accepted or dismissed) in one
+  transaction, so a command that fails rolls back the ones before it. Their
+  jobs and broadcasts wait for the commit, so a rolled-back save queues and
+  sends nothing. The first command's refusal holds the person's row
+  `FOR KEY SHARE` until the save commits: an erase, or a change to the
+  person's email, waits for it; a name or manager change doesn't. A save that
+  decides a staged suggestion takes the person's row and then the item's
+  suggestion lock before it reads the suggestions, in the same order as the
+  placement job. Another write to the
+  person's stream that lands between the save's reads and one of its appends
+  rolls the save back with "Another change for this person landed while
+  you were saving", as does a deadlock. A write that arrives
+  after the save's first append waits for the save to commit, then fails on
+  its own surface ([#624](https://github.com/espaliahq/espalia/issues/624)).
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; a placement notifier would hook in
   there.
