@@ -30,7 +30,7 @@ class User < ApplicationRecord
 
   # Row lock for credential changes. Weaker than FOR UPDATE so that a foreign key
   # check, which takes FOR KEY SHARE, never waits on it. Grant, approval and refresh
-  # inserts take this lock on purpose, to queue behind {#replace_credentials!}.
+  # inserts take this lock on purpose, to queue behind {#end_mcp_access!}.
   CREDENTIALS_LOCK = "FOR NO KEY UPDATE"
 
   # Where the next change to `global_admin` comes from: one of
