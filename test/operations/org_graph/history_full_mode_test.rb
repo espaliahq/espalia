@@ -28,6 +28,11 @@ class Operations::OrgGraph::HistoryFullModeTest < ActiveSupport::TestCase
                                      title: "Engineer", manager_id: @manager.id)
       handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-01", allocation: 1.0)
     end
+    as_tenant do
+      OrgGraph::StructureCommandHandler.new(actor: context_for(@admin, role: :admin))
+                                       .declare_structure(@payments, levels: [ { level_id: SecureRandom.uuid_v7, name: "Stream" } ],
+                                                                     conversion: {}, effective_on: "2026-02-01")
+    end
   end
 
   def as_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
@@ -71,6 +76,7 @@ class Operations::OrgGraph::HistoryFullModeTest < ActiveSupport::TestCase
       summary = call(operation, context, **params).to_json
       person_ids.each { assert_not_includes summary, it, tool }
     end
+    assert_equal [ @payments ], call(Operations::OrgGraph::AsOf, context, date: "2026-02-15")[:structures].map { it[:unit_id] }
   end
 
   should "keep a unit's owners for full mode" do
