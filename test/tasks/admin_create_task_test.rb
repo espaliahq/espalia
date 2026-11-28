@@ -55,6 +55,27 @@ class AdminCreateTaskTest < ActiveSupport::TestCase
     assert kept.reload.revoked?
   end
 
+  should "end an outstanding reset link when it changes a member's password" do
+    user = member(create(:user, email: "member@example.com", password: "old-password-1", password_confirmation: "old-password-1"))
+    link = user.send_reset_password_instructions
+
+    run_task("EMAIL" => "member@example.com", "PASSWORD" => "new-password-2")
+
+    assert_nil user.reload.reset_password_token
+    reset = User.reset_password_by_token(reset_password_token: link, password: "taken-over-3", password_confirmation: "taken-over-3")
+    assert_not reset.errors.empty?
+    assert user.reload.valid_password?("new-password-2")
+  end
+
+  should "keep an outstanding reset link when no password is given" do
+    user = member(create(:user, email: "member@example.com", password: "old-password-1", password_confirmation: "old-password-1"))
+    user.send_reset_password_instructions
+
+    run_task("EMAIL" => "member@example.com", "PASSWORD" => nil)
+
+    assert_not_nil user.reload.reset_password_token
+  end
+
   should "create a global admin" do
     output = run_task("EMAIL" => "new-admin@example.com", "PASSWORD" => "new-password-2")
 
