@@ -627,10 +627,14 @@ Rules, all deliberate:
   jobs and broadcasts wait for the commit, so a rolled-back save queues and
   sends nothing. The first command's refusal holds the person's row
   `FOR KEY SHARE` until the save commits: an erase, or a change to the
-  person's email, waits for it; a name or manager change doesn't. Another
-  write to the stream mid-save rolls the save back with "Someone else saved a
-  change for this person while you were saving"
-  ([#624](https://github.com/espaliahq/espalia/issues/624)).
+  person's email, waits for it; a name or manager change doesn't. A save that
+  decides a staged suggestion takes the item's suggestion lock before its
+  first write, in the same order as the placement job. Another write to the
+  person's stream that lands between the save's reads and one of its appends
+  rolls the save back with "Someone else saved a change for this person while
+  you were saving", as does a deadlock or lock timeout. A write that arrives
+  after the save's first append waits for the save to commit, then fails on
+  its own surface ([#624](https://github.com/espaliahq/espalia/issues/624)).
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; a placement notifier would hook in
   there.
