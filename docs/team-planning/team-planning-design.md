@@ -2107,9 +2107,11 @@ always had it. The start applies to open FTE and placeholders, never to a named 
   start.
 
 The `time_to_hire` rule, already read for backfills, now forecasts an undated open seat
-too: it fills that many days after it opens. The forecast row takes away cost for the days
-before then, and takes away capacity and headcount only when the forecast start falls after
-the step ends. A seat with a target start, or on hold, gets no forecast, and 0 days
+too: it fills that many days after it opens, and never before today, as a seat still open
+today can't have filled ([#474](https://github.com/espaliahq/espalia/issues/474)). Today is the
+tenant's, or the day an archived plan was archived, so an archived plan's figures hold still.
+The forecast row takes away cost for the days before then, and takes away capacity and
+headcount only when the forecast start falls after the step ends. A seat with a target start, or on hold, gets no forecast, and 0 days
 forecasts nothing, so a tenant that sets 0 keeps the figures it had before.
 
 Each leaver's share of a backfill opens the day after they go, and the rest opens with the

@@ -81,7 +81,7 @@ class Operations::TeamPlanning::HiringLagTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) do
       context = AuthorizationContext.new(user: @admin.user, tenant_user: @admin, person: @admin.person)
       map = TeamPlanning::Resolution.new(context:, plan: TeamPlanningPlan.find(@plan_id), scenario_id:).structure
-      TeamPlanning::SeatStart.openings(map).map { |_, fte, start| [ fte, start.planned.iso8601, start.forecast(time_to_hire: 90).iso8601 ] }.sort_by(&:second)
+      TeamPlanning::SeatStart.openings(map).map { |_, fte, start| [ fte, start.planned.iso8601, start.forecast(time_to_hire: 90, today: Tenant.today).iso8601 ] }.sort_by(&:second)
     end
   end
 
@@ -103,6 +103,39 @@ class Operations::TeamPlanning::HiringLagTest < ActiveSupport::TestCase
     assert_equal [ { unit_id: @unit_id, headcount: "-1", cost: { "EUR" => "-24200" }, capacity: { "per_fte" => "-1" } } ], lags(@q2)
     assert_equal [ { unit_id: @unit_id, headcount: "0", cost: { "EUR" => "-15800" }, capacity: {} } ], lags(@q3),
                  "1 July to 17 September, filling on the 18th"
+  end
+
+  should "never forecast the seat as filled before today, once the base date is further back than the time to hire" do
+    open_position
+    travel_back
+    travel_to Time.utc(2026, 8, 1, 9)
+
+    assert_equal [ { unit_id: @unit_id, headcount: "-1", cost: { "EUR" => "-24200" }, capacity: { "per_fte" => "-1" } } ], lags(@q2),
+                 "still open after Q2, so empty all 121 days"
+    assert_equal [ { unit_id: @unit_id, headcount: "0", cost: { "EUR" => "-6200" }, capacity: {} } ], lags(@q3),
+                 "1 to 31 July, filling today, not on 31 May"
+  end
+
+  should "hold an archived plan's forecast to the day it was archived" do
+    open_position
+    call(Operations::TeamPlanning::ArchivePlan, plan_id: @plan_id)
+    travel_back
+    travel_to Time.utc(2026, 8, 1, 9)
+
+    assert_equal [ { unit_id: @unit_id, headcount: "0", cost: { "EUR" => "-18000" }, capacity: {} } ], lags(@q2)
+  end
+
+  should "hold a closed step's forecast still as the clock moves on" do
+    open_position
+    travel_back
+    travel_to Time.utc(2026, 7, 2, 9)
+    call(Operations::TeamPlanning::CloseStep, plan_id: @plan_id, scenario_id: @q2)
+    closed = lags(@q2)
+    travel_back
+    travel_to Time.utc(2026, 8, 1, 9)
+
+    assert_equal [ { unit_id: @unit_id, headcount: "-1", cost: { "EUR" => "-24200" }, capacity: { "per_fte" => "-1" } } ], closed
+    assert_equal closed, lags(@q2)
   end
 
   should "file the lag under the seat's cost centre in cost and capacity alike" do

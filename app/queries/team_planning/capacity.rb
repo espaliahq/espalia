@@ -135,7 +135,8 @@ class TeamPlanning::Capacity
     steps[scenario_id] ||= TeamPlanning::Forecast::Step.new(map: report.map, pricing:) unless scenario_id == plan.id
     against = price.(plan.id) if baseline && scenario_id != plan.id
     Split.new(report:, baseline: against, baseline_skipped: !baseline,
-              forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing:, earlier:).rows)
+              forecast: TeamPlanning::Forecast.new(aggregate:, scenario_id:, map: report.map, pricing:, earlier:,
+                                                   today: plan.archived_on || Tenant.today).rows)
   end
 
   # @!attribute map [TeamPlanning::Baseline::Map] the resolved scenario, named

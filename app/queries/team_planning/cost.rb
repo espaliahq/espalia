@@ -310,7 +310,8 @@ class TeamPlanning::Cost
     earlier = TeamPlanning::Forecast.reaching(aggregate, @scenario_id, defaults: @base.rules.defaults).index_with { earlier_step(it) }
     scenario = priced(own_map)
     @steps[@scenario_id] ||= TeamPlanning::Forecast::Step.new(map: scenario.map, pricing: scenario.pricing) unless run_rate
-    rows = TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:).rows
+    rows = TeamPlanning::Forecast.new(aggregate:, scenario_id: @scenario_id, map: scenario.map, pricing: scenario.pricing, earlier:,
+                                     today: @plan.archived_on || Tenant.today).rows
     forecast = forecasted(rows)
     at_end = (run_rate_at_end(scenario.map, rows) if at_end && !run_rate)
     baseline = (priced(at_end ? at_end.baseline.map : resolved(@plan.id)) if baseline && !run_rate)
