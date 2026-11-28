@@ -9,7 +9,14 @@ require_relative "../../lib/tasks/example_seed"
 # route with ids from two seeded tenants and check that such an account reads
 # none of their data and changes nothing.
 class TenantlessAccountTest < ActionDispatch::IntegrationTest
-  OUT_OF_SCOPE = %r{\A/(rails|inspect|preview|previews|lookbook|embed|pages|up|\.well-known|api/feedback_exchange|users/auth|t/)}
+  # Every other route is crawled. Each entry must match a route and say why it isn't crawled.
+  EXEMPT = {
+    %r{\A/rails/active_storage/} => "signed blob URLs: the signature grants access, not the session",
+    %r{\A/rails/action_mailbox/} => "inbound email webhooks, authenticated by the ingress password",
+    %r{\A/rails/conductor/} => "Action Mailbox's conductor refuses every request but a local one",
+    %r{\A/users/auth/} => "OmniAuth's middleware answers before any controller runs",
+    %r{\A/t/:tenant_slug/sign-in\z} => "the public sign-in page, branded with its tenant's name by design"
+  }.freeze
   WATCHED_TABLES = %w[
     event_store_events tenants tenant_users people users
     oauth_access_grants oauth_access_tokens oauth_applications mcp_pending_approvals
@@ -20,6 +27,15 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     ExampleSeed.new(admin_user: create(:user, global_admin: true), io: StringIO.new).call
     @account = create(:user, email: "nobody@example.com", password: "password-123", password_confirmation: "password-123")
     post user_session_path, params: { user: { email: @account.email, password: "password-123" } }
+  end
+
+  should "crawl every route, or exempt it with a reason" do
+    uncrawlable = route_table.filter_map { |verb, path| "#{verb.upcase} #{path}" if path.include?("*") && !exempt?(path) }
+    stale = EXEMPT.keys.reject { |pattern| route_table.any? { |_verb, path| path.match?(pattern) } }
+
+    assert_empty uncrawlable, "a wildcard route can't be crawled: exempt it in EXEMPT with a reason"
+    assert_empty stale, "an EXEMPT entry matches no route: remove it"
+    assert(EXEMPT.values.all?(&:present?), "every EXEMPT entry gives a reason")
   end
 
   should "read no tenant's people, names or settings on any page" do
@@ -91,14 +107,17 @@ class TenantlessAccountTest < ActionDispatch::IntegrationTest
     [ e.class.name, "" ]
   end
 
-  def routes
-    Rails.application.routes.routes.filter_map do |route|
-      verb = route.verb.to_s.downcase
-      path = route.path.spec.to_s.sub("(.:format)", "")
-      next if verb.empty? || path.match?(OUT_OF_SCOPE) || path.include?("*")
-
-      [ verb.split("|").first.to_sym, fill(path.gsub(/\(.*?\)/, "")) ]
+  def route_table
+    Rails.application.routes.routes.map do |route|
+      verb = route.verb.to_s.downcase.split("|").first || "get"
+      [ verb.to_sym, route.path.spec.to_s.sub("(.:format)", "").gsub(/\(.*?\)/, "") ]
     end.uniq
+  end
+
+  def exempt?(path) = EXEMPT.keys.any? { path.match?(it) }
+
+  def routes
+    route_table.filter_map { |verb, path| [ verb, fill(path) ] unless exempt?(path) || path.include?("*") }
   end
 
   def get_routes = routes.filter_map { |verb, path| path if verb == :get }
