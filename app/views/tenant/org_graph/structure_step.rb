@@ -36,7 +36,7 @@ class Views::Tenant::OrgGraph::StructureStep < Views::Tenant::OrgGraph::UnitStep
   # A structure sits over sub-units, and an HRIS may supply the unit that
   # declares one, so the reshape blockers don't apply.
   def blocked_because
-    return "Only an admin can change a unit's structure." unless @rights.structure?
+    return "#{::OrgGraph::Authorization.structure_refusal(@unit)}." unless @rights.structure?
 
     not_allowed_because unless allowed?
   end
