@@ -74,6 +74,8 @@ module OrgGraph::Authorization
   # @param structure_unit_id [String, nil] the declaring unit of the structure
   #   in force where it sits, nil for the organisation's
   def authorize_unit_kind!(unit_id, structure_unit_id)
+    raise Refused, "The system cannot change a structure" if system? && structure_unit_id
+
     structure_unit = structure_unit_id && unit_for(structure_unit_id)
     authorize!(:change_unit_kind?, structure_unit) do
       name = unit_name(unit_for(unit_id))

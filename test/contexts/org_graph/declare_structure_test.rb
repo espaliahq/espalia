@@ -182,13 +182,13 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     as_tenant { @admin.add_level(lane, "Lane", parent_ids: [ @group ], structure_unit_id: @payments, effective_on: @today + 3) }
     refusal = "Payments's structure last changed on #{(@today + 3).iso8601}, so date the change then or later"
 
-    [ -> { @handler.change_unit_kind(@basket, lane, effective_on: @today + 2) },
+    [ -> { @admin.change_unit_kind(@basket, lane, effective_on: @today + 2) },
       -> { @handler.move_unit(@basket, search, effective_on: @today + 2) } ].each do |change|
       assert_equal refusal, assert_raises(RuntimeError) { as_tenant(&change) }.message
     end
 
     as_tenant do
-      @handler.change_unit_kind(@basket, lane, effective_on: @today + 3)
+      @admin.change_unit_kind(@basket, lane, effective_on: @today + 3)
       @handler.move_unit(@basket, search, effective_on: @today + 3)
     end
     assert_equal [ lane, search ], structure.unit(@basket).then { [ it.level_id, it.parent_id ] }
@@ -232,10 +232,10 @@ class OrgGraph::DeclareStructureTest < ActiveSupport::TestCase
     end
 
     should "refuse a type a sub-unit couldn't sit beneath before it left" do
-      error = assert_raises(RuntimeError) { as_tenant { @handler.change_unit_kind(@checkout, @lane, effective_on: @today + 2) } }
+      error = assert_raises(RuntimeError) { as_tenant { @admin.change_unit_kind(@checkout, @lane, effective_on: @today + 2) } }
       assert_equal "On #{(@today + 2).iso8601}, Lane wouldn't have fit: Basket (Stream under Lane). Date the change later", error.message
 
-      as_tenant { @handler.change_unit_kind(@checkout, @lane, effective_on: @today + 4) }
+      as_tenant { @admin.change_unit_kind(@checkout, @lane, effective_on: @today + 4) }
       assert_equal @lane, structure.unit(@checkout).level_id
     end
 
