@@ -11,7 +11,8 @@ class EvidenceSaveTransactionTest < ActionDispatch::IntegrationTest
     def add_evidence_link(...)
       if (stream = Thread.current[:land_write_before_link])
         Thread.current[:land_write_before_link] = nil
-        Rails.configuration.event_store.publish(RubyEventStore::Event.new, stream_name: stream, expected_version: :auto)
+        Rails.configuration.event_store.publish(RubyEventStore::Event.new(metadata: { tenant_id: ActsAsTenant.current_tenant.id }),
+                                                stream_name: stream, expected_version: :auto)
       end
       super
     end
