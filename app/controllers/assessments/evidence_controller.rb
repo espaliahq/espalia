@@ -250,11 +250,10 @@ class Assessments::EvidenceController < ApplicationController
     item = EvidenceItem.find(params.expect(:id))
     authorize item, :withdraw?, policy_class: EvidencePolicy
 
-    reason = params.fetch(:evidence, {}).permit(:reason)[:reason]
-    PersonDevelopment::CommandHandler.new.withdraw_evidence(
-      @assignment.person_id, @assignment.framework_id, item.id,
-      withdrawn_by_id: current_person.id,
-      reason: reason
+    Operations::Assessments::WithdrawEvidence.call(
+      context: pundit_user,
+      params: { assignment_id: @assignment.id, evidence_id: item.id,
+                reason: params.fetch(:evidence, {}).permit(:reason)[:reason] }
     )
 
     redirect_to assessment_path(@assignment,
@@ -262,7 +261,7 @@ class Assessments::EvidenceController < ApplicationController
       status: :see_other, notice: "Feedback withdrawn."
   rescue ActiveRecord::RecordNotFound
     head :not_found
-  rescue PersonDevelopment::Aggregate::CommandError => e
+  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
     fallback = @assignment ? assessment_path(@assignment) : assessments_path
     redirect_back fallback_location: fallback,
       alert: "Could not withdraw feedback: #{e.message}"

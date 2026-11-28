@@ -251,7 +251,7 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "##{EvidenceItem.dom_id(placed_id)} button", text: "Edit links", count: 0
     end
 
-    should "offer the author Edit and Withdraw on their feedback, until its subject is forgotten" do
+    should "offer the author Edit and Withdraw on their feedback, and only Withdraw once its subject is forgotten" do
       sign_in @peer_user
       item = "##{EvidenceItem.dom_id(@unplaced_id)}"
 
@@ -265,7 +265,7 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       get evidence_conversation_path(@assessee.id)
       assert_select item
       assert_select "#{item} button", text: "Edit", count: 0
-      assert_select "#{item} button", text: "Withdraw", count: 0
+      assert_select "#{item} button", text: "Withdraw"
     end
 
     should "offer Give and Ask in a thread, until the other person is forgotten" do

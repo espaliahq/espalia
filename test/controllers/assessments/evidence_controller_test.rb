@@ -540,6 +540,46 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
         assert_equal "active", @item.link_status
       end
     end
+
+    should "let a tenant admin who isn't the author withdraw it" do
+      admin_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        admin = create(:person, tenant: @tenant, email: admin_user.email, name: "Admin")
+        create(:tenant_user, tenant: @tenant, user: admin_user, person: admin, role: :admin)
+        @admin_id = admin.id
+      end
+
+      sign_in admin_user
+      delete assessment_evidence_path(@assignment, @item.id)
+
+      assert_equal "Feedback withdrawn.", flash[:notice]
+      ActsAsTenant.with_tenant(@tenant) do
+        @item.reload
+        assert_equal "withdrawn", @item.link_status
+        assert_equal @admin_id, @item.withdrawn_by_id
+      end
+    end
+
+    should "deny the assessee's manager feedback someone else wrote" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @peer_item_id = SecureRandom.uuid_v7
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @assessee.id, @assignment.framework_id, @peer_item_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2,
+          source: "peer", evidence_type: "peer_feedback",
+          content: "Calm on the call.", author_id: @peer.id, valence: "demonstrated"
+        )
+      end
+
+      sign_in @manager_user
+      delete assessment_evidence_path(@assignment, @peer_item_id)
+
+      assert_response :redirect
+      assert_equal "You are not authorized to perform this action.", flash[:alert]
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "active", EvidenceItem.find(@peer_item_id).link_status
+      end
+    end
   end
 
   private
@@ -580,12 +620,32 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Could not record feedback: this person has been forgotten", flash[:alert]
     end
 
-    should "refuse the author's withdrawal with a message, not a 500" do
+    should "let the author withdraw it with no reason param" do
       sign_in @manager_user
       delete assessment_evidence_path(@assignment, @evidence_id)
 
+      assert_equal "Feedback withdrawn.", flash[:notice]
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(@evidence_id)
+        assert item.withdrawn?
+        assert_nil item.withdrawal_reason
+      end
+    end
+
+    should "take a blank reason as none" do
+      sign_in @manager_user
+      delete assessment_evidence_path(@assignment, @evidence_id), params: { evidence: { reason: "" } }
+
+      assert_equal "Feedback withdrawn.", flash[:notice]
+    end
+
+    should "refuse the author's withdrawal with a reason, and keep the item" do
+      sign_in @manager_user
+      delete assessment_evidence_path(@assignment, @evidence_id), params: { evidence: { reason: "Wrong person." } }
+
       assert_response :redirect
-      assert_includes flash[:alert], "this person has been forgotten"
+      assert_equal "Could not withdraw feedback: feedback about a former member is withdrawn without a reason", flash[:alert]
+      ActsAsTenant.with_tenant(@tenant) { assert_not EvidenceItem.find(@evidence_id).withdrawn? }
     end
 
     should "give a peer with no right on the item the ordinary refusal" do

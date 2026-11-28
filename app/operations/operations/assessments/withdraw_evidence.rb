@@ -6,15 +6,21 @@
 # same {EvidencePolicy#withdraw?} authorisation (author + tenant admin) and
 # {PersonDevelopment::CommandHandler#withdraw_evidence} dispatch.
 #
+# Feedback about a forgotten person takes the one exception their stream
+# allows: only its author may withdraw it, and with no reason, since a reason
+# would be new text about someone the erase removed. Most forgotten people
+# were offboarded first, which deleted their assignment. So that path reads
+# the stream from the item, and ignores an `assignment_id` that is stale.
+#
 # Write — :mcp_client approval. Withdrawal is a soft, audited, primarily
 # author-scoped action and is recoverable by recording the evidence again;
 # the same friction as recording it is appropriate.
 class Operations::Assessments::WithdrawEvidence < Operations::Base
-  description "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history)."
+  description "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history). assignment_id is required, except for feedback about a forgotten person, where it may be left out or stale. Only the author can withdraw that feedback, and without a reason."
   category :write
   approval :mcp_client
 
-  parameter :assignment_id, String, required: true
+  parameter :assignment_id, String
   parameter :evidence_id,   String, required: true
   parameter :reason, String
 
@@ -27,11 +33,19 @@ class Operations::Assessments::WithdrawEvidence < Operations::Base
   # @return [Hash] `{ evidence_id, status, withdrawn_at }` — confirmation
   #   the item is now withdrawn.
   def perform
-    PersonDevelopment::CommandHandler.new.withdraw_evidence(
-      assignment.person_id, assignment.framework_id, params[:evidence_id],
-      withdrawn_by_id: context.person.id,
-      reason: params[:reason].presence
-    )
+    ensure_assignment_matches_item!
+    if Person.find(evidence_item.person_id).forgotten?
+      withdraw_about_former_member
+    else
+      raise Operations::Base::ParameterError, "missing required parameter: assignment_id" if params[:assignment_id].blank?
+      raise ActiveRecord::RecordNotFound, "Couldn't find PersonFrameworkAssignment" if assignment.nil?
+
+      PersonDevelopment::CommandHandler.new.withdraw_evidence(
+        assignment.person_id, assignment.framework_id, params[:evidence_id],
+        withdrawn_by_id: context.person.id,
+        reason: params[:reason].presence
+      )
+    end
 
     item = EvidenceItem.find(params[:evidence_id])
     { evidence_id: item.id, status: item.link_status, withdrawn_at: item.withdrawn_at&.iso8601 }
@@ -41,8 +55,27 @@ class Operations::Assessments::WithdrawEvidence < Operations::Base
 
   private
 
+  def withdraw_about_former_member
+    raise Operations::Base::ParameterError, "only its author can withdraw feedback about a former member" unless evidence_item.author_id == context.person.id
+    raise Operations::Base::ParameterError, "feedback about a former member is withdrawn without a reason" if params[:reason].present?
+
+    PersonDevelopment::CommandHandler.new.withdraw_own_feedback(
+      evidence_item.person_id, evidence_item.framework_id, params[:evidence_id],
+      author_id: context.person.id
+    )
+  end
+
+  def ensure_assignment_matches_item!
+    return if assignment.nil?
+    return if [ assignment.person_id, assignment.framework_id ] == [ evidence_item.person_id, evidence_item.framework_id ]
+
+    raise Operations::Base::ParameterError, "evidence_id is not on that assignment"
+  end
+
   def assignment
-    @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])
+    return @assignment if defined?(@assignment)
+
+    @assignment = params[:assignment_id].presence && PersonFrameworkAssignment.find_by(id: params[:assignment_id])
   end
 
   def evidence_item

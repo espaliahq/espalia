@@ -208,7 +208,8 @@ Open a Person Development stream for writing only through
 subject before it loads the aggregate. To let a write through anyway, pass
 `forgotten:` with a reason from `Repository::FORGOTTEN_ALLOWED`, and only for an
 event that carries nothing about the person, since it can land after the erase.
-Never free text. See
+Never free text. Four reasons exist: a framework migration, a cycle ending,
+offboarding, and an author withdrawing their own feedback. See
 [person-development-aggregate.md → Writes to a forgotten person's stream](../architecture/person-development-aggregate.md#writes-to-a-forgotten-persons-stream).
 
 ## Production data rules

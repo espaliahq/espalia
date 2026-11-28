@@ -7,7 +7,8 @@ class PersonDevelopment::ForgottenSubjectWritesTest < ActiveSupport::TestCase
     migrate_framework_version: :framework_migration,
     leave_cycle: :cycle_ending,
     conclude_cycle: :cycle_ending,
-    offboard_from_framework: :offboarding
+    offboard_from_framework: :offboarding,
+    withdraw_own_feedback: :author_withdrawal
   }.freeze
 
   # Records how each command opens the stream, without opening it.
@@ -52,9 +53,60 @@ class PersonDevelopment::ForgottenSubjectWritesTest < ActiveSupport::TestCase
     end
   end
 
-  should "name exactly three exceptions, used by four commands" do
-    assert_equal %i[framework_migration cycle_ending offboarding], PersonDevelopment::Repository::FORGOTTEN_ALLOWED
-    assert_equal 4, EXCEPTIONS.size
+  should "name exactly four exceptions, used by five commands" do
+    assert_equal %i[framework_migration cycle_ending offboarding author_withdrawal], PersonDevelopment::Repository::FORGOTTEN_ALLOWED
+    assert_equal 5, EXCEPTIONS.size
+  end
+
+  context "an author withdrawing their own feedback about a forgotten person" do
+    setup do
+      @author = create(:person, tenant: @tenant)
+      @evidence_id = SecureRandom.uuid_v7
+      @handler.record_evidence(@subject.id, @framework_id, @evidence_id,
+        source: "peer", evidence_type: "peer_feedback", content: "Calm on the call.",
+        author_id: @author.id)
+      forget!(@subject)
+    end
+
+    should "store a withdrawal by the author with no reason" do
+      @handler.withdraw_own_feedback(@subject.id, @framework_id, @evidence_id, author_id: @author.id)
+
+      event = Rails.configuration.event_store.read.stream(@stream).last
+      assert_kind_of PersonDevelopment::Events::EvidenceWithdrawn, event
+      assert_equal({ evidence_id: @evidence_id, withdrawn_by_id: @author.id, reason: nil }, event.data.slice(:evidence_id, :withdrawn_by_id, :reason))
+    end
+
+    should "refuse anyone but the author and store nothing" do
+      before = event_count
+
+      error = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @handler.withdraw_own_feedback(@subject.id, @framework_id, @evidence_id, author_id: create(:person, tenant: @tenant).id)
+      end
+
+      assert_equal "only its author can withdraw feedback about a former member", error.message
+      assert_equal before, event_count
+    end
+
+    should "still refuse the ordinary withdrawal" do
+      assert_raises(PersonDevelopment::ForgottenSubject::Forgotten) do
+        @handler.withdraw_evidence(@subject.id, @framework_id, @evidence_id, withdrawn_by_id: @author.id)
+      end
+    end
+  end
+
+  should "let an author withdraw feedback about a person offboarded, then forgotten" do
+    author = create(:person, tenant: @tenant)
+    evidence_id = SecureRandom.uuid_v7
+    @handler.record_evidence(@subject.id, @framework_id, evidence_id,
+      source: "peer", evidence_type: "peer_feedback", content: "Calm on the call.", author_id: author.id)
+    @handler.offboard_from_framework(@subject.id, @framework_id)
+    forget!(@subject)
+
+    @handler.withdraw_own_feedback(@subject.id, @framework_id, evidence_id, author_id: author.id)
+
+    event = Rails.configuration.event_store.read.stream(@stream).last
+    assert_kind_of PersonDevelopment::Events::EvidenceWithdrawn, event
+    assert_nil event.data[:reason]
   end
 
   should "offboard a forgotten person from the framework, though an unassign is refused" do
