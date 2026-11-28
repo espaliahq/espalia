@@ -3,6 +3,8 @@
 require "test_helper"
 
 class PasswordResetMcpAccessTest < ActionDispatch::IntegrationTest
+  include McpRequestCredentialsHelpers
+
   setup do
     @tenant = create(:tenant)
     @account = create(:user, email: "colleague@example.com", password: "old-password-1", password_confirmation: "old-password-1",
@@ -111,12 +113,15 @@ class PasswordResetMcpAccessTest < ActionDispatch::IntegrationTest
   end
 
   def mcp_credentials(tenant)
-    [
-      Mcp::AccessToken.create!(application: @client, resource_owner_id: @account.id, tenant_id: tenant.id, scopes: "read", expires_in: 3600),
+    token = Mcp::AccessToken.create!(application: @client, resource_owner_id: @account.id, tenant_id: tenant.id, scopes: "read", expires_in: 3600)
+    grant = as_consent_by(@account) do
       Mcp::AccessGrant.create!(application: @client, resource_owner_id: @account.id, tenant_id: tenant.id, scopes: "read",
-                               expires_in: 600, redirect_uri: @client.redirect_uri),
+                               expires_in: 600, redirect_uri: @client.redirect_uri)
+    end
+    approval = as_mcp_call_with(token) do
       Mcp::PendingApproval.create!(user: @account, tenant:, client_application: @client,
                                    operation_class: "Operations::System::Whoami", arguments: {}, expires_at: 1.hour.from_now)
-    ]
+    end
+    [ token, grant, approval ]
   end
 end
