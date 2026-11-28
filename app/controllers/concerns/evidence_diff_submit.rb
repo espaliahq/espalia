@@ -18,12 +18,16 @@ module EvidenceDiffSubmit
 
   TouchedCells = Struct.new(:cells, :evidence_id)
 
+  VERSION_CONFLICT = "Someone else changed this feedback while you were saving. Nothing was saved; please try again."
+
   private
 
   # One transaction: a command that fails partway rolls back the ones before
   # it, and their jobs and broadcasts, which wait for the commit.
   #
   # @return [TouchedCells]
+  # @raise [Operations::Base::ParameterError] also when another write to the
+  #   stream landed mid-save, which the callers already show as an alert
   def apply_evidence_diff
     params_hash = evidence_diff_params
     ActiveRecord::Base.transaction do
@@ -33,6 +37,8 @@ module EvidenceDiffSubmit
       else               diff_new(params_hash)
       end
     end
+  rescue RubyEventStore::WrongExpectedEventVersion
+    raise Operations::Base::ParameterError, VERSION_CONFLICT
   end
 
   def evidence_diff_params
