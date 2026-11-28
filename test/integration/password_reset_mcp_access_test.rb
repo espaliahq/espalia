@@ -72,6 +72,36 @@ class PasswordResetMcpAccessTest < ActionDispatch::IntegrationTest
       assert(kept.first(2).none? { it.reload.revoked? })
       assert kept.last.reload.pending?
     end
+
+    should "refuse to run outside a transaction, revoking nothing" do
+      token, = mcp_credentials(@tenant)
+
+      assert_raises(User::NoTransaction) { @account.end_mcp_access! }
+      assert_not token.reload.revoked?
+    end
+
+    should "lock the account itself with a fresh query before revoking" do
+      @account.email = "unsaved@example.com"
+      queries = []
+      record = ->(*, payload) { queries << payload[:sql] }
+
+      ActiveSupport::Notifications.subscribed(record, "sql.active_record") do
+        @account.transaction { @account.end_mcp_access! }
+      end
+
+      lock = queries.index { it.match?(/SELECT "users"."id" FROM "users" WHERE "users"."id" = .* FOR NO KEY UPDATE/) }
+      revoke = queries.index { it.start_with?('UPDATE "oauth_access_grants"') }
+      assert lock && revoke && lock < revoke, "it should lock the account row before revoking"
+    end
+  end
+
+  should "lock and revoke for a reset on a record loaded without a reset token" do
+    token, = mcp_credentials(@tenant)
+
+    assert @account.reset_password("new-password-1", "new-password-1")
+
+    assert @account.reload.valid_password?("new-password-1")
+    assert token.reload.revoked?
   end
 
   private

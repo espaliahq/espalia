@@ -98,13 +98,22 @@ class User < ApplicationRecord
     end
   end
 
+  # Raised by {#end_mcp_access!} outside a transaction, where its lock would end at once.
+  class NoTransaction < StandardError; end
+
   # Revokes the account's MCP grants and tokens and rejects its calls awaiting
-  # approval: all of them, or only one tenant's. The caller holds
-  # {CREDENTIALS_LOCK} on the account, inside the transaction that changes it.
+  # approval: all of them, or only one tenant's. Takes {CREDENTIALS_LOCK} on the
+  # account first, so the revocation queues behind a grant or token insert, and
+  # must run inside the transaction that changes the account.
   #
   # @param tenant [Tenant, nil] the tenant whose access ends; nil for every tenant
   # @return [void]
+  # @raise [NoTransaction] outside a transaction
   def end_mcp_access!(tenant: nil)
+    raise NoTransaction, "end_mcp_access! must run inside a transaction" unless self.class.connection.current_transaction.joinable?
+
+    # A fresh query, as lock! refuses a record with unsaved changes.
+    self.class.lock(CREDENTIALS_LOCK).where(id:).pick(:id)
     in_scope = ->(relation) { tenant ? relation.where(tenant_id: tenant.id) : relation }
     now = Time.current
     # Grants before tokens, so a code exchange holding its grant commits its
