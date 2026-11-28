@@ -8,15 +8,15 @@
 #
 # Feedback about a forgotten person takes the one exception their stream
 # allows: only its author may withdraw it, and with no reason, since a reason
-# would be new text about someone the erase removed. It needs no
-# assignment, since most forgotten people were offboarded first, so the
-# stream comes from the item itself and `assignment_id` is optional there.
+# would be new text about someone the erase removed. Most forgotten people
+# were offboarded first, which deleted their assignment. So that path reads
+# the stream from the item, and ignores an `assignment_id` that is stale.
 #
 # Write — :mcp_client approval. Withdrawal is a soft, audited, primarily
 # author-scoped action and is recoverable by recording the evidence again;
 # the same friction as recording it is appropriate.
 class Operations::Assessments::WithdrawEvidence < Operations::Base
-  description "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history). assignment_id is required, except for feedback about a forgotten person, which takes the item's own assignment or none. That feedback can be withdrawn only by its author, and without a reason."
+  description "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history). assignment_id is required, except for feedback about a forgotten person, where it may be left out or stale. Only the author can withdraw that feedback, and without a reason."
   category :write
   approval :mcp_client
 
@@ -73,9 +73,9 @@ class Operations::Assessments::WithdrawEvidence < Operations::Base
   end
 
   def assignment
-    return if params[:assignment_id].blank?
+    return @assignment if defined?(@assignment)
 
-    @assignment ||= PersonFrameworkAssignment.find_by(id: params[:assignment_id])
+    @assignment = params[:assignment_id].presence && PersonFrameworkAssignment.find_by(id: params[:assignment_id])
   end
 
   def evidence_item
