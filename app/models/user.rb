@@ -173,8 +173,10 @@ class User < ApplicationRecord
     by_email = find_by(email: email)
     if by_email
       if by_email.provider.blank?
-        by_email.replace_credentials! if by_email.unvouched?
-        by_email.update!(provider: auth.provider, uid: auth.uid)
+        transaction do
+          by_email.replace_credentials! if by_email.unvouched?
+          by_email.update!(provider: auth.provider, uid: auth.uid)
+        end
       end
       return [ by_email, nil ]
     end

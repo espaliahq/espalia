@@ -15,8 +15,10 @@ namespace :admin do
               "replace its credentials and end its sessions before it becomes a global admin."
       end
 
-      user.replace_credentials!(password)
-      user.update!(global_admin: true, global_admin_source: "admin_task")
+      User.transaction do
+        user.replace_credentials!(password)
+        user.update!(global_admin: true, global_admin_source: "admin_task")
+      end
       puts "#{email} is a global admin; its password was replaced and its sessions and tokens ended."
     elsif user
       user.assign_attributes(global_admin: true, global_admin_source: "admin_task")
