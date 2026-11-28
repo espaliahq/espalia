@@ -633,7 +633,7 @@ Rules, all deliberate:
   placement job. Another write to the
   person's stream that lands between the save's reads and one of its appends
   rolls the save back with "Someone else saved a change for this person while
-  you were saving", as does a deadlock or lock timeout. A write that arrives
+  you were saving", as does a deadlock. A write that arrives
   after the save's first append waits for the save to commit, then fails on
   its own surface ([#624](https://github.com/espaliahq/espalia/issues/624)).
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
