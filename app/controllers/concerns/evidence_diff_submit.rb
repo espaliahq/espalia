@@ -18,16 +18,28 @@ module EvidenceDiffSubmit
 
   TouchedCells = Struct.new(:cells, :evidence_id)
 
+  VERSION_CONFLICT = "Another change for this person landed while you were saving. Nothing was saved; please try again."
+
   private
 
+  # One transaction: a command that fails partway rolls back the ones before
+  # it, and their jobs and broadcasts, which wait for the commit.
+  #
   # @return [TouchedCells]
+  # @raise [Operations::Base::ParameterError] also when another write to the
+  #   stream, or a deadlock with one, beat the save, which the callers
+  #   already show as an alert
   def apply_evidence_diff
     params_hash = evidence_diff_params
-    case evidence_diff_mode(params_hash)
-    when :respond then diff_respond(params_hash)
-    when :edit    then diff_edit(params_hash)
-    else               diff_new(params_hash)
+    ActiveRecord::Base.transaction do
+      case evidence_diff_mode(params_hash)
+      when :respond then diff_respond(params_hash)
+      when :edit    then diff_edit(params_hash)
+      else               diff_new(params_hash)
+      end
     end
+  rescue RubyEventStore::WrongExpectedEventVersion, ActiveRecord::Deadlocked
+    raise Operations::Base::ParameterError, VERSION_CONFLICT
   end
 
   def evidence_diff_params
@@ -84,15 +96,7 @@ module EvidenceDiffSubmit
     primary = [ request.capability_stable_id, request.level_ordinal ]
     valences = link_valences(p)
     extras = desired_cells(p) - [ primary ]
-    # Validate every new link's valence BEFORE any write — otherwise a
-    # missing valence on cell N would abort after cells 1..N-1 (and the
-    # response itself) had already landed.
     ([ primary ] + extras).each { |cell| valence_for!(valences, cell) }
-    # Best effort: stops the ordinary case before the response is stored. The
-    # lock ends with this check, so an erase that commits before the link
-    # commands still leaves the response stored and the links refused. The
-    # link commands hold the lock; they are what keeps a link from being written.
-    PersonDevelopment::ForgottenSubject.refuse!(request.person_id) if extras.any?
 
     result = Operations::Assessments::RespondToEvidenceRequest.call(context: pundit_user, params: {
       request_id: request.id, valence: valences[primary], **content_params(p)
@@ -117,16 +121,13 @@ module EvidenceDiffSubmit
     desired = desired_cells(p).to_set
     valences = link_valences(p)
 
-    # Validate every new link's valence BEFORE any write (incl. the content
-    # update) — a missing valence must reject the whole submit, not leave a
-    # partially-applied diff behind.
     new_cells = desired - current_cells
     new_cells.each { |cell| valence_for!(valences, cell) }
+    if p[:suggestion_ids].present? || p[:staged_suggestion_ids].present?
+      PersonDevelopment::SuggestionWrites.lock_ahead(item.person_id, [ item.id ])
+    end
     kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
     ensure_staged_cells_exist!(item, kept_suggestions)
-    # Best effort, as in diff_respond: an erase that commits after this check
-    # still leaves the content edit stored and the link refused.
-    PersonDevelopment::ForgottenSubject.refuse!(item.person_id) if kept_suggestions.any? || links_change?(current_valences, desired, valences, p[:staged_suggestion_ids])
 
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {
@@ -180,14 +181,6 @@ module EvidenceDiffSubmit
     EvidencePlacementSuggestion.pending.for_evidence(item.id).where(id: ids).index_by(&:cell)
   end
 
-  # A staged suggestion is accepted or dismissed on save, and both refuse too,
-  # so the caller also counts the kept ones, which can arrive without staged ids.
-  def links_change?(current_valences, desired, valences, staged_suggestion_ids)
-    return true if Array(staged_suggestion_ids).any? || desired != current_valences.keys.to_set
-
-    desired.any? { |cell| valences[cell] && valences[cell] != current_valences[cell] }
-  end
-
   # A suggestion kept through "Adjust" is accepted with the valence the
   # person left on it: edited when they changed it, accepted when they didn't.
   def accept_adjusted(suggestion, valence)
@@ -196,9 +189,7 @@ module EvidenceDiffSubmit
     })
   end
 
-  # Checked before any write, like the valences: the framework may have
-  # dropped a staged cell since the suggestion was made, and failing on it
-  # halfway would leave the save half-applied.
+  # The framework may have dropped a staged cell since the suggestion was made.
   def ensure_staged_cells_exist!(item, kept)
     return if kept.empty?
 
