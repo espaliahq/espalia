@@ -324,6 +324,18 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     end
   end
 
+  should "check again under each lock past Rails' query cache, warmed once the lock is held" do
+    cached_revocations.each do |change, (context, command, handler, revoke, restore)|
+      repository = LockedRepository.new(OrgGraph::Repository.new, lambda {
+        context.reread
+        revoke.call
+      })
+      assert_refused_with_the_cache_warm(change, command, context, handler.new(actor: context, repository:))
+    ensure
+      as_tenant { restore.call }
+    end
+  end
+
   should "let the system change the organisation's types under the lock, with no person to read again" do
     level_id = SecureRandom.uuid_v7
     as_tenant { system.add_level(level_id, "Pod", **ON) }
@@ -539,6 +551,31 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     ensure
       as_tenant { restore.call(manager.person.id) }
     end
+  end
+
+  # Runs a step once the handler holds its lock, before its check under it.
+  LockedRepository = Struct.new(:repository, :step) do
+    def with_structure(*, **, &block)
+      repository.with_structure(*, **) { |structure| locked { block.call(structure) } }
+    end
+
+    def lock_structure
+      repository.lock_structure.tap { locked { nil } }
+    end
+
+    def with_person(*, **, &block)
+      repository.with_person(*, **) { |person| locked { block.call(person) } }
+    end
+
+    def locked
+      step&.call
+      self.step = nil
+      yield
+    end
+
+    def method_missing(name, ...) = repository.public_send(name, ...)
+
+    def respond_to_missing?(name, include_private = false) = repository.respond_to?(name, include_private) || super
   end
 
   # One change per lock path, each with a revocation written on the test's own
