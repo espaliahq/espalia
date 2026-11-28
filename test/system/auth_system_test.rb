@@ -46,7 +46,7 @@ class AuthSystemTest < ApplicationSystemTestCase
       assert_selector "input[type='password']"
       assert_selector "input[type='checkbox']"
       assert_selector "button[type='submit']", text: "Log in"
-      assert_text "Create an account"
+      assert_no_text "Create an account"
       assert_text "Forgot your password?"
     end
   end
@@ -263,10 +263,12 @@ class AuthSystemTest < ApplicationSystemTestCase
 
     [ log_in_css, "button[type='submit']", "#sign-in-divider", ".auth-page h1", ".auth-page h2", ".auth-page p",
       "label[for='user_email']", "label[for='user_remember_me']", "#user_email",
-      "a[href='#{new_user_registration_path}']", "a[href='#{new_user_password_path}']" ].each do |css|
+      *sign_up_link_css, "a[href='#{new_user_password_path}']" ].each do |css|
       assert_operator rendered_contrast(css), :>=, 4.5, "#{css} fails AA"
     end
   end
+
+  def sign_up_link_css = Views::Users::Sessions::NewView.sign_up_routed? ? [ "a[href='#{new_user_registration_path}']" ] : []
 
   def assert_control_heights(selectors)
     selectors.each do |css|
