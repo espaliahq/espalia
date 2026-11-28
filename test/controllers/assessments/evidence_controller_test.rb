@@ -620,12 +620,32 @@ class Assessments::EvidenceControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Could not record feedback: this person has been forgotten", flash[:alert]
     end
 
-    should "refuse the author's withdrawal with a message, not a 500" do
+    should "let the author withdraw it with no reason param" do
       sign_in @manager_user
       delete assessment_evidence_path(@assignment, @evidence_id)
 
+      assert_equal "Feedback withdrawn.", flash[:notice]
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(@evidence_id)
+        assert item.withdrawn?
+        assert_nil item.withdrawal_reason
+      end
+    end
+
+    should "take a blank reason as none" do
+      sign_in @manager_user
+      delete assessment_evidence_path(@assignment, @evidence_id), params: { evidence: { reason: "" } }
+
+      assert_equal "Feedback withdrawn.", flash[:notice]
+    end
+
+    should "refuse the author's withdrawal with a reason, and keep the item" do
+      sign_in @manager_user
+      delete assessment_evidence_path(@assignment, @evidence_id), params: { evidence: { reason: "Wrong person." } }
+
       assert_response :redirect
-      assert_includes flash[:alert], "this person has been forgotten"
+      assert_equal "Could not withdraw feedback: feedback about a former member is withdrawn without a reason", flash[:alert]
+      ActsAsTenant.with_tenant(@tenant) { assert_not EvidenceItem.find(@evidence_id).withdrawn? }
     end
 
     should "give a peer with no right on the item the ordinary refusal" do

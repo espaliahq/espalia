@@ -15,7 +15,7 @@ class PersonDevelopment::Repository
   # The writes a forgotten person's stream still takes. Each call that skips
   # the refusal names one; an append from it races the erase unlocked, so
   # its events must carry nothing about the person that the erase removes.
-  FORGOTTEN_ALLOWED = %i[framework_migration cycle_ending offboarding].freeze
+  FORGOTTEN_ALLOWED = %i[framework_migration cycle_ending offboarding author_withdrawal].freeze
 
   # Loads the person development aggregate, yields it, and stores any new events.
   #

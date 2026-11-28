@@ -788,6 +788,19 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # The author withdraws their own feedback about a forgotten person. The one
+  # withdrawal that stream still takes, and it carries no reason.
+  #
+  # @param person_id [String] UUID of the forgotten person
+  # @param framework_id [String] UUID of the framework
+  # @param evidence_id [String] UUID of the evidence
+  # @param author_id [String] UUID of the Person withdrawing, who must be its author
+  def withdraw_own_feedback(person_id, framework_id, evidence_id, author_id:)
+    @repository.with_person_development(person_id, framework_id, forgotten: :author_withdrawal) do |aggregate|
+      aggregate.withdraw_own_feedback(evidence_id, author_id: author_id)
+    end
+  end
+
   # Asks a colleague for evidence about a specific (capability, level) cell.
   #
   # @param person_id [String] the assessee

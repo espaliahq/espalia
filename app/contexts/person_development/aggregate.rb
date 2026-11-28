@@ -1226,6 +1226,28 @@ class PersonDevelopment::Aggregate
     }))
   end
 
+  # The one withdrawal a forgotten subject's stream takes: the author hiding
+  # their own feedback. It carries no reason, so nothing written about the
+  # person can reach the stream after the erase.
+  #
+  # @param evidence_id [String] UUID of the evidence
+  # @param author_id [String] UUID of the Person withdrawing, who must be its author
+  # @raise [CommandError] if not assigned, evidence not found, already withdrawn,
+  #   or the caller is not the item's recorded author
+  def withdraw_own_feedback(evidence_id, author_id:)
+    ensure_assigned!
+    state = @evidence[evidence_id]
+    raise CommandError, "No evidence with id #{evidence_id}" unless state
+    raise CommandError, "Evidence already withdrawn" if state[:status] == "withdrawn"
+    raise CommandError, "only its author can withdraw feedback about a former member" if state[:author_id].nil? || state[:author_id] != author_id
+
+    apply(PersonDevelopment::Events::EvidenceWithdrawn.new(data: {
+      evidence_id: evidence_id,
+      withdrawn_by_id: author_id,
+      reason: nil
+    }))
+  end
+
   # ── Evidence requests ──
   #
   # A cell-scoped ask for peer evidence. The requester is the assessee or
@@ -1924,7 +1946,8 @@ class PersonDevelopment::Aggregate
       # membership. Backs the evidence_link comment-thread anchor, which
       # stays valid after the link is removed (post_comment above).
       ever_linked: Set.new([ origin ].compact),
-      status: "active"
+      status: "active",
+      author_id: event.data[:author_id]
     }
   end
 

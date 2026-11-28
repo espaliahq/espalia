@@ -1,6 +1,6 @@
 {
   "name": "assessments_withdraw_evidence",
-  "description": "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history).",
+  "description": "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history). Feedback about a forgotten person can be withdrawn only by its author, and without a reason.",
   "inputSchema": {
     "type": "object",
     "properties": {
