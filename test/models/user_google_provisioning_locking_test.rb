@@ -14,18 +14,24 @@ class UserGoogleProvisioningLockingTest < ActiveSupport::TestCase
   end
 
   teardown do
+    next unless @tenant
+
     connection = ActiveRecord::Base.connection
-    ids = connection.quote("tenant-#{@tenant.id}/%")
-    connection.execute(<<~SQL)
-      WITH linked AS (SELECT event_id FROM event_store_events_in_streams WHERE stream LIKE #{ids}),
-           unlinked AS (DELETE FROM event_store_events_in_streams WHERE event_id IN (SELECT event_id FROM linked))
-      DELETE FROM event_store_events WHERE event_id IN (SELECT event_id FROM linked)
-    SQL
-    users = TenantUser.unscoped.where(tenant_id: @tenant.id).pluck(:user_id) + User.where(email: EMAIL).pluck(:id)
-    TenantUser.unscoped.where(tenant_id: @tenant.id).delete_all
+    tenants = [ @tenant, @other ].compact
+    tenants.each do |tenant|
+      ids = connection.quote("tenant-#{tenant.id}/%")
+      connection.execute(<<~SQL)
+        WITH linked AS (SELECT event_id FROM event_store_events_in_streams WHERE stream LIKE #{ids}),
+             unlinked AS (DELETE FROM event_store_events_in_streams WHERE event_id IN (SELECT event_id FROM linked))
+        DELETE FROM event_store_events WHERE event_id IN (SELECT event_id FROM linked)
+      SQL
+    end
+    tenant_ids = tenants.map(&:id)
+    users = TenantUser.unscoped.where(tenant_id: tenant_ids).pluck(:user_id) + User.where(email: EMAIL).pluck(:id)
+    TenantUser.unscoped.where(tenant_id: tenant_ids).delete_all
     User.where(id: users).delete_all
-    Person.unscoped.where(tenant_id: @tenant.id).delete_all
-    @tenant.delete
+    Person.unscoped.where(tenant_id: tenant_ids).delete_all
+    tenants.each(&:delete)
   end
 
   should "refuse a sign-in that waited on a forget, leaving no account, membership or event" do
@@ -44,6 +50,23 @@ class UserGoogleProvisioningLockingTest < ActiveSupport::TestCase
     assert Person.unscoped.find(@person.id).forgotten?
   end
 
+  should "provision into the next tenant whose person matches when the first is forgotten meanwhile" do
+    @other = create(:tenant)
+    later = travel(1.minute) { ActsAsTenant.with_tenant(@other) { create(:person, tenant: @other, email: EMAIL) } }
+    signing_in = nil
+
+    forgetting do
+      pids = Queue.new
+      signing_in = Thread.new { on_another_connection { |connection| pids << backend_pid(connection); User.from_google_omniauth(auth) } }
+      assert_waiting(pids, signing_in)
+    end
+
+    user, reason = signing_in.value
+    assert_nil reason
+    assert_empty TenantUser.unscoped.where(tenant_id: @tenant.id), "nothing is left in the forgotten person's tenant"
+    assert_equal later.id, TenantUser.unscoped.find_by!(user_id: user.id, tenant_id: @other.id).person_id
+  end
+
   private
 
   def auth
@@ -51,9 +74,9 @@ class UserGoogleProvisioningLockingTest < ActiveSupport::TestCase
                            info: { email: EMAIL, email_verified: true }, extra: { raw_info: { email_verified: true } })
   end
 
-  # The forget's writes, as OrgGraph::Forgetting#erase makes them: the
-  # person's row locked and erased, then the grants lock. Held open while the
-  # block runs, then committed.
+  # The writes of the forget that a sign-in can wait on: the person's row
+  # locked and erased, then the grants lock. Held open while the block runs,
+  # then committed.
   def forgetting
     started = Queue.new
     finish = Queue.new

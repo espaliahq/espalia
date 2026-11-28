@@ -186,7 +186,8 @@ class User < ApplicationRecord
   # - Existing User by email → backfill `provider`/`uid`; one with no membership
   #   first gets fresh credentials ({#replace_credentials!}).
   # - No User but a Person matches across any tenant → create both User and
-  #   the linking TenantUser so the new identity lands in a usable tenant.
+  #   the linking TenantUser so the new identity lands in a usable tenant. A
+  #   person forgotten meanwhile rolls both back, and the lookup runs again.
   # - Otherwise refuse.
   #
   # @param auth [OmniAuth::AuthHash]
@@ -222,8 +223,9 @@ class User < ApplicationRecord
       from_google_omniauth(auth)
     rescue AccountGrants::Aggregate::PersonForgotten
       # Forgotten while this waited on the person's row: the account and its
-      # membership roll back with the refusal.
-      [ nil, :no_matching_account ]
+      # membership roll back, and the erase has cleared the email, so looking
+      # again finds the next match or none.
+      from_google_omniauth(auth)
     end
   end
 
