@@ -103,28 +103,26 @@ class User < ApplicationRecord
   class NoTransaction < StandardError; end
 
   # Revokes the account's MCP grants and tokens and rejects its calls awaiting
-  # approval: all of them, or only one tenant's. Takes {CREDENTIALS_LOCK} on the
-  # account first, so the revocation queues behind a grant or token insert, and
-  # must run inside the transaction that changes the account.
+  # approval. Takes {CREDENTIALS_LOCK} on the account first, so the revocation
+  # queues behind a grant or token insert, and must run inside the transaction
+  # that changes the account.
   #
-  # @param tenant [Tenant, nil] the tenant whose access ends; nil for every tenant
   # @return [void]
   # @raise [NoTransaction] outside a transaction
-  def end_mcp_access!(tenant: nil)
+  def end_mcp_access!
     raise NoTransaction, "end_mcp_access! must run inside a transaction" unless self.class.connection.current_transaction.joinable?
 
     # A fresh query, as lock! refuses a record with unsaved changes.
     self.class.lock(CREDENTIALS_LOCK).where(id:).pick(:id)
-    in_scope = ->(relation) { tenant ? relation.where(tenant_id: tenant.id) : relation }
     now = Time.current
     # A stamp ahead of this clock counts as live until it passes, so it is moved to now.
-    live = ->(model) { in_scope.(model.where(resource_owner_id: id).where("revoked_at IS NULL OR revoked_at > ?", now)) }
+    live = ->(model) { model.where(resource_owner_id: id).where("revoked_at IS NULL OR revoked_at > ?", now) }
     # Grants before tokens, so a code exchange holding its grant commits its
     # token before the tokens are revoked.
     live.(Mcp::AccessGrant).update_all(revoked_at: now)
     live.(Mcp::AccessToken).update_all(revoked_at: now)
     ActsAsTenant.without_tenant do
-      in_scope.(Mcp::PendingApproval.pending.where(user_id: id)).update_all(status: :rejected, updated_at: now)
+      Mcp::PendingApproval.pending.where(user_id: id).update_all(status: :rejected, updated_at: now)
     end
   end
 

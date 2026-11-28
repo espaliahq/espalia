@@ -78,23 +78,7 @@ class PasswordResetMcpAccessTest < ActionDispatch::IntegrationTest
     assert lock && revoke && lock < revoke, "the reset should lock the account before revoking its grants"
   end
 
-  context "ending one tenant's MCP access" do
-    should "leave the account's access to other tenants" do
-      other = create(:tenant)
-      ended = mcp_credentials(@tenant)
-      kept = mcp_credentials(other)
-
-      @account.transaction do
-        @account.lock!(User::CREDENTIALS_LOCK)
-        @account.end_mcp_access!(tenant: @tenant)
-      end
-
-      assert(ended.first(2).all? { it.reload.revoked? })
-      assert ended.last.reload.rejected?
-      assert(kept.first(2).none? { it.reload.revoked? })
-      assert kept.last.reload.pending?
-    end
-
+  context "ending an account's MCP access" do
     should "refuse to run outside a transaction, revoking nothing" do
       token, = mcp_credentials(@tenant)
 
