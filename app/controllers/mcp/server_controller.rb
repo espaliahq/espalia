@@ -21,6 +21,8 @@ class Mcp::ServerController < ActionController::Base
 
   before_action :doorkeeper_authorize!
   before_action :set_tenant_from_token
+  before_action { Mcp::RequestCredentials.access_token_id = doorkeeper_token.id }
+  rescue_from Mcp::RequestCredentials::Replaced, with: :refuse_the_revoked_token
 
   # Override Doorkeeper's default 401 response so the WWW-Authenticate
   # header points MCP clients at our OAuth discovery doc (RFC 9728). Without
@@ -123,6 +125,11 @@ class Mcp::ServerController < ActionController::Base
     return render_token_error(:membership_revoked) unless membership
 
     ActsAsTenant.current_tenant = tenant
+  end
+
+  def refuse_the_revoked_token
+    Rails.logger.info("[mcp] call refused: the token's credentials were replaced")
+    doorkeeper_render_error_with(Doorkeeper::OAuth::InvalidTokenResponse.from_access_token(Mcp::AccessToken.find_by(id: doorkeeper_token.id)))
   end
 
   def render_token_error(reason)

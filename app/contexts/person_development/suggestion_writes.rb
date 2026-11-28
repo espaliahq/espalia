@@ -2,14 +2,12 @@
 
 # Runs a suggestion command on a person's development stream.
 #
-# It holds the person's row FOR KEY SHARE to the commit and refuses a
-# forgotten person: a rationale quotes the feedback, and a dismissal can
-# carry a typed reason. An erase takes that row FOR UPDATE before it writes
-# `forgotten_at`, so it either commits first and the refusal sees it, or
-# waits until this command's events are stored. Key share doesn't block an
-# ordinary update of the row, so a sync carries on. The row comes first so a
-# command waiting behind an erase holds nothing the job wants. It is taken
-# outside the savepoint, whose rollback would release it.
+# It refuses a forgotten person first, through
+# {PersonDevelopment::ForgottenSubject}: a rationale quotes the feedback, and a
+# dismissal can carry a typed reason. The person's row comes before anything
+# else, so a command waiting behind an erase holds nothing the job wants. The
+# repository refuses again as it opens the stream; the second key share is
+# a no-op.
 #
 # Then an advisory lock per evidence item, so runs and decisions for one
 # item never overlap: an edit and its original, or a double "Suggest again".
@@ -20,11 +18,7 @@
 module PersonDevelopment::SuggestionWrites
   ATTEMPTS = 3
 
-  # The person was forgotten, so nothing more is written about them.
-  class Forgotten < PersonDevelopment::Aggregate::CommandError
-    # @param msg [String] what the hub and the MCP tools say; it names no one
-    def initialize(msg = "this person has been forgotten") = super
-  end
+  Forgotten = PersonDevelopment::ForgottenSubject::Forgotten
 
   # @param person_id [String]
   # @param framework_id [String]
@@ -34,8 +28,8 @@ module PersonDevelopment::SuggestionWrites
   def self.with_aggregate(person_id, framework_id, evidence_ids:)
     attempts = 0
     EvidencePlacementSuggestion.transaction do
-      raise Forgotten if Person.unscoped.where(id: person_id).lock("FOR KEY SHARE").pick(:forgotten_at)
-      evidence_ids.uniq.sort.each { lock_item(it) }
+      PersonDevelopment::ForgottenSubject.refuse!(person_id)
+      lock_items(evidence_ids)
       begin
         attempts += 1
         EvidencePlacementSuggestion.transaction(requires_new: true) do
@@ -52,10 +46,30 @@ module PersonDevelopment::SuggestionWrites
     end
   end
 
-  def self.lock_item(evidence_id)
-    sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
-                                                  "placement-suggestions:#{evidence_id}" ])
-    EvidencePlacementSuggestion.connection.execute(sql)
+  # Takes this module's locks, in its order, and holds them to the commit. A
+  # caller that appends to the stream before running a suggestion command
+  # takes them first, or it can deadlock with a placement job that holds an
+  # item's lock and waits on that append. It doesn't refuse a forgotten
+  # person, so the caller still authorises first.
+  #
+  # @param person_id [String]
+  # @param evidence_ids [Array<String>]
+  # @return [void]
+  def self.lock_ahead(person_id, evidence_ids)
+    PersonDevelopment::ForgottenSubject.hold(person_id)
+    lock_items(evidence_ids)
   end
-  private_class_method :lock_item
+
+  def self.lock_items(evidence_ids)
+    evidence_ids.uniq.sort.each do |evidence_id|
+      EvidencePlacementSuggestion.connection.execute(
+        ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", lock_key(evidence_id) ])
+      )
+    end
+  end
+  private_class_method :lock_items
+
+  # @param evidence_id [String]
+  # @return [String] the advisory lock's key, hashed by Postgres
+  def self.lock_key(evidence_id) = "placement-suggestions:#{evidence_id}"
 end

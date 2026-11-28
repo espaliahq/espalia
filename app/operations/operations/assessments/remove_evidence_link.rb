@@ -10,6 +10,10 @@
 # the last link is rejected (withdraw the item instead). That domain
 # invariant surfaces here as a ParameterError.
 #
+# A forgotten person's links stay as they were when they were forgotten: a
+# link about them is refused with "this person has been forgotten", as a
+# ParameterError ({PersonDevelopment::ForgottenSubject}).
+#
 # Write — :mcp_client approval. Removing a link is a reversible, additive-
 # scope change (re-add the link to undo); the same friction as recording
 # evidence is appropriate.

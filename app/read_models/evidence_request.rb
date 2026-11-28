@@ -49,7 +49,15 @@ class EvidenceRequest < ApplicationRecord
 
   scope :pending, -> { where(status: "pending") }
   scope :resolved, -> { where.not(status: "pending") }
-  scope :reminder_candidates, -> { pending.where(requested_at: MAX_REMINDER_REQUEST_AGE.ago..MIN_REMINDER_REQUEST_AGE.ago) }
+  # Pending and still answerable: a request about a forgotten person stays
+  # pending until https://github.com/espaliahq/espalia/issues/627 cancels it,
+  # but nobody can answer it.
+  scope :open, -> { pending.where.not(person_id: Person.forgotten.select(:id)) }
+  # A forgotten requestee gets no reminder, so none is recorded for them.
+  scope :reminder_candidates, -> {
+    pending.where.not(requestee_person_id: Person.forgotten.select(:id))
+      .where(requested_at: MAX_REMINDER_REQUEST_AGE.ago..MIN_REMINDER_REQUEST_AGE.ago)
+  }
   # Stalest first: least recently touched (requested or reminded) at the top,
   # so the requests most in need of attention lead the open lists.
   scope :least_recently_touched, -> { order(Arel.sql("GREATEST(requested_at, COALESCE(last_reminded_at, requested_at)) ASC")) }
@@ -65,14 +73,15 @@ class EvidenceRequest < ApplicationRecord
   end
 
   # Whether the requester may manually nudge the requestee right now: the
-  # request is still open and NUDGE_GAP has passed since the last reminder of
-  # any kind (or since the ask, when never reminded). `last_reminded_at` is a
+  # request is still open, the requestee isn't forgotten (nobody would get the
+  # nudge), and NUDGE_GAP has passed since the last reminder of any kind (or
+  # since the ask, when never reminded). `last_reminded_at` is a
   # projected column covering automatic reminders AND manual nudges.
   #
   # @param now [Time]
   # @return [Boolean]
   def can_nudge?(now: Time.current)
-    pending? && now >= (last_reminded_at || requested_at) + NUDGE_GAP
+    pending? && !requestee&.forgotten? && now >= (last_reminded_at || requested_at) + NUDGE_GAP
   end
 
   # The reminder kind whose threshold has been crossed and not yet sent — nil

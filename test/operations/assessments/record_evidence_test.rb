@@ -208,14 +208,14 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
       err = assert_raises(Operations::Base::ParameterError) do
         call_op(ctx: @report_ctx, capability_stable_id: @foreign_cap.stable_id)
       end
-      assert_match(/does not belong to the assignment's framework/, err.message)
+      assert_match(/is not an active capability in the published framework/, err.message)
     end
 
     should "reject a capability_stable_id that does not exist at all" do
       err = assert_raises(Operations::Base::ParameterError) do
         call_op(ctx: @report_ctx, capability_stable_id: SecureRandom.uuid_v7)
       end
-      assert_match(/does not belong to the assignment's framework/, err.message)
+      assert_match(/is not an active capability in the published framework/, err.message)
     end
 
     should "reject an unknown evidence_type at the parameter layer" do

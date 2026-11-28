@@ -88,7 +88,8 @@ class TeamPlanning::Forecast
   # @!attribute averages [Hash{String, nil => Average}] by unit
   # @!attribute earlier [Array<Frame>] the earlier steps that reach this one, in timeline order
   # @!attribute open [Hash{String => Open}] the open seats, priced, by position id
-  Frame = Data.define(:kind, :map, :step, :covered, :filled, :averages, :earlier, :open) do
+  # @!attribute today [Date] the tenant's today, or the day an archived plan was archived
+  Frame = Data.define(:kind, :map, :step, :covered, :filled, :averages, :earlier, :open, :today) do
     def initialize(filled: [], averages: {}, earlier: [], open: {}, **) = super
 
     # @param unit_id [String, nil]
@@ -114,8 +115,10 @@ class TeamPlanning::Forecast
   # @param map [TeamPlanning::Baseline::Map] the scenario's resolved map
   # @param pricing [Pricing] the scenario's filled places, priced as the caller sees them
   # @param earlier [Hash{String => Step}] the earlier steps that can reach this one ({.reaching}), by scenario id
-  def initialize(aggregate:, scenario_id:, map:, earlier:, pricing: Pricing.new)
+  # @param today [Date] the tenant's today, or the day an archived plan was archived
+  def initialize(aggregate:, scenario_id:, map:, earlier:, pricing: Pricing.new, today: Tenant.today)
     @aggregate = aggregate
+    @today = today
     @scenario_id = scenario_id
     @map = map
     @pricing = pricing
@@ -174,7 +177,7 @@ class TeamPlanning::Forecast
   def frame(scenario_id, step, map, pricing)
     covered = @aggregate.resolution_chain(scenario_id).flat_map { @aggregate.changes_in(it) }.to_set { it.data[:subject_id] }
     filled = filled_places(map)
-    Frame.new(kind: nil, map:, step:, covered:, filled:, averages: averages(filled, pricing), open: pricing.open)
+    Frame.new(kind: nil, map:, step:, covered:, filled:, averages: averages(filled, pricing), open: pricing.open, today: @today)
   end
 
   # A filled seat is a person's: an open position fills none. A planned leaver

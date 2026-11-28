@@ -3,6 +3,8 @@
 require "test_helper"
 
 class SeedAdminTest < ActiveSupport::TestCase
+  include AccountMembershipHelpers
+
   DEV = ActiveSupport::StringInquirer.new("development")
   PROD = ActiveSupport::StringInquirer.new("production")
 
@@ -58,12 +60,31 @@ class SeedAdminTest < ActiveSupport::TestCase
   end
 
   should "promote an existing plain user with the admin email" do
-    create(:user, email: SeedAdmin::DEV_EMAIL, global_admin: false)
+    member(create(:user, email: SeedAdmin::DEV_EMAIL, global_admin: false))
 
     user, output = bootstrap(env: DEV)
 
     assert user.reload.global_admin?
     assert_includes output, "Promoted"
+  end
+
+  should "refuse to promote an account no tenant holds, and leave it as it was" do
+    unheld = create(:user, email: SeedAdmin::DEV_EMAIL, global_admin: false)
+
+    error = assert_raises(ArgumentError) { bootstrap(env: DEV) }
+
+    assert_includes error.message, "admin:create"
+    assert_not unheld.reload.global_admin?
+  end
+
+  should "refuse an account whose only membership is forgotten after the lookup" do
+    held = member(create(:user, email: SeedAdmin::DEV_EMAIL, global_admin: false))
+
+    forgotten_once_locked(held) do
+      assert_raises(ArgumentError) { bootstrap(env: DEV) }
+    end
+
+    assert_not held.reload.global_admin?
   end
 
   should "stay idempotent under a mixed-case padded override" do
@@ -125,7 +146,7 @@ class SeedAdminTest < ActiveSupport::TestCase
 
   context "the audit" do
     should "record a promotion and a new admin as seed" do
-      promoted = create(:user, email: SeedAdmin::DEV_EMAIL)
+      promoted = member(create(:user, email: SeedAdmin::DEV_EMAIL))
       bootstrap(env: DEV)
       created, = bootstrap(env: DEV, "SEED_ADMIN_EMAIL" => "ops@example.org", "SEED_ADMIN_PASSWORD" => "s3eded-secret")
 

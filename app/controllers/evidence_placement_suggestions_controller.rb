@@ -72,6 +72,14 @@ class EvidencePlacementSuggestionsController < ApplicationController
     [ result[:capability_name], code.presence || "L#{result[:level_ordinal]}" ].compact.join(" · ")
   end
 
+  # Sent only in this response, to the person who acted: the block holds their reason.
+  def own_dismissals_block
+    Views::Evidence::OwnDismissals.new(
+      item: evidence_item,
+      **Evidence::OwnDismissals.for([ evidence_item ], current_person.id).fetch(evidence_item.id, Evidence::OwnDismissals::NONE)
+    )
+  end
+
   def render_block(message:, error: false)
     rows = Evidence::PlacementSuggestionRows.for([ evidence_item ])
     block = Views::Evidence::PlacementSuggestions.new(
@@ -81,6 +89,7 @@ class EvidencePlacementSuggestionsController < ApplicationController
     )
     render turbo_stream: [
       turbo_stream.replace(Views::Evidence::PlacementSuggestions.dom_id_for(evidence_item.id), block),
+      turbo_stream.replace(Views::Evidence::OwnDismissals.dom_id_for(evidence_item.id), own_dismissals_block),
       turbo_stream.update(Views::Evidence::PlacementSuggestions.status_id_for(evidence_item.id),
                           Views::Evidence::PlacementSuggestionStatus.new(message: message, error: error))
     ], status: error ? :unprocessable_content : :ok

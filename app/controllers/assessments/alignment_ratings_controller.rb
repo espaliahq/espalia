@@ -70,7 +70,7 @@ class Assessments::AlignmentRatingsController < ApplicationController
     end
 
     respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id])
-  rescue RuntimeError => e
+  rescue RuntimeError, PersonDevelopment::Aggregate::CommandError => e
     render_rating_error(capability_stable_id, level_ordinal, e.message)
   end
 

@@ -69,7 +69,11 @@ Rails.application.routes.draw do
     controllers authorizations: "oauth/authorizations"
     skip_controllers :authorized_applications, :token_info
   end
-  devise_for :users, controllers: {
+  # Sign-up, edit account and delete account are off on purpose (#653); the
+  # :registerable code stays. Before they come back, delete must go through
+  # the forgetting flow, and sign-up needs a decision on who may register.
+  # The sign-in page shows its "Create an account" link only while sign-up routes.
+  devise_for :users, skip: :registrations, controllers: {
     sessions: "users/sessions",
     omniauth_callbacks: "users/omniauth_callbacks"
   }

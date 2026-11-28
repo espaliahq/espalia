@@ -160,7 +160,7 @@ class Assessments::PastCycleTest < ActiveSupport::TestCase
 
   should "read a cycle the person withdrew from while it is still open" do
     with_tenant do
-      AssessmentCycles::CommandHandler.new.unenroll(@past_id, @person.id, "left the team")
+      AssessmentCycles::CommandHandler.new.unenroll(@past_id, @person.id, "manual")
       lens = past_lens
       assert lens.past?
       assert Assessments::MatrixDataBuilder.for_lens(lens: lens, context: :manager)[:individual_ratings_frozen]

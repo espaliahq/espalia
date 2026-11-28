@@ -28,7 +28,7 @@ Rails.configuration.to_prepare do
     )
   )
 
-  # Synchronous projections (same transaction)
+  # Synchronous projections
   event_store.subscribe(
     Frameworks::Projections::PublishedState.new,
     to: Frameworks::Events.all_content_events

@@ -18,16 +18,28 @@ module EvidenceDiffSubmit
 
   TouchedCells = Struct.new(:cells, :evidence_id)
 
+  VERSION_CONFLICT = "Another change for this person landed while you were saving. Nothing was saved; please try again."
+
   private
 
+  # One transaction: a command that fails partway rolls back the ones before
+  # it, and their jobs and broadcasts, which wait for the commit.
+  #
   # @return [TouchedCells]
+  # @raise [Operations::Base::ParameterError] also when another write to the
+  #   stream, or a deadlock with one, beat the save, which the callers
+  #   already show as an alert
   def apply_evidence_diff
     params_hash = evidence_diff_params
-    case evidence_diff_mode(params_hash)
-    when :respond then diff_respond(params_hash)
-    when :edit    then diff_edit(params_hash)
-    else               diff_new(params_hash)
+    ActiveRecord::Base.transaction do
+      case evidence_diff_mode(params_hash)
+      when :respond then diff_respond(params_hash)
+      when :edit    then diff_edit(params_hash)
+      else               diff_new(params_hash)
+      end
     end
+  rescue RubyEventStore::WrongExpectedEventVersion, ActiveRecord::Deadlocked
+    raise Operations::Base::ParameterError, VERSION_CONFLICT
   end
 
   def evidence_diff_params
@@ -84,9 +96,6 @@ module EvidenceDiffSubmit
     primary = [ request.capability_stable_id, request.level_ordinal ]
     valences = link_valences(p)
     extras = desired_cells(p) - [ primary ]
-    # Validate every new link's valence BEFORE any write — otherwise a
-    # missing valence on cell N would abort after cells 1..N-1 (and the
-    # response itself) had already landed.
     ([ primary ] + extras).each { |cell| valence_for!(valences, cell) }
 
     result = Operations::Assessments::RespondToEvidenceRequest.call(context: pundit_user, params: {
@@ -112,11 +121,11 @@ module EvidenceDiffSubmit
     desired = desired_cells(p).to_set
     valences = link_valences(p)
 
-    # Validate every new link's valence BEFORE any write (incl. the content
-    # update) — a missing valence must reject the whole submit, not leave a
-    # partially-applied diff behind.
     new_cells = desired - current_cells
     new_cells.each { |cell| valence_for!(valences, cell) }
+    if p[:suggestion_ids].present? || p[:staged_suggestion_ids].present?
+      PersonDevelopment::SuggestionWrites.lock_ahead(item.person_id, [ item.id ])
+    end
     kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
     ensure_staged_cells_exist!(item, kept_suggestions)
 
@@ -180,9 +189,7 @@ module EvidenceDiffSubmit
     })
   end
 
-  # Checked before any write, like the valences: the framework may have
-  # dropped a staged cell since the suggestion was made, and failing on it
-  # halfway would leave the save half-applied.
+  # The framework may have dropped a staged cell since the suggestion was made.
   def ensure_staged_cells_exist!(item, kept)
     return if kept.empty?
 

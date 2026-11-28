@@ -6,6 +6,8 @@
 # Write — :mcp_client. It's additive (creates a request + notifies), changes
 # no permissions, and a manager asking on behalf of a report is routine.
 class Operations::Assessments::RequestEvidence < Operations::Base
+  include Operations::CapabilityGuard
+
   description "Ask a colleague to provide feedback / evidence for a capability × level on an assessment."
   category :write
   approval :mcp_client
@@ -25,7 +27,7 @@ class Operations::Assessments::RequestEvidence < Operations::Base
 
   # @return [Hash] { request_id, requestee_person_id, capability_stable_id, level_ordinal, status }
   def perform
-    validate_capability_in_framework!
+    ensure_active_capability!(assignment.framework_id, params[:capability_stable_id])
     validate_level_ordinal!
     validate_requestee!
 
@@ -64,17 +66,6 @@ class Operations::Assessments::RequestEvidence < Operations::Base
     # The assessee may be asked (a manager nudging them for more evidence); only
     # asking yourself is meaningless.
     raise Operations::Base::ParameterError, "cannot request evidence from yourself" if person.id == context.person.id
-  end
-
-  def validate_capability_in_framework!
-    in_framework = FrameworkState::Capability
-      .joins(:category)
-      .where(stable_id: params[:capability_stable_id])
-      .merge(FrameworkState::CapabilityCategory.where(framework_id: assignment.framework_id))
-      .exists?
-    return if in_framework
-
-    raise Operations::Base::ParameterError, "capability_stable_id does not belong to the assignment's framework"
   end
 
   def validate_level_ordinal!

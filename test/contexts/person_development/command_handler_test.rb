@@ -680,7 +680,64 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "evidence links for a forgotten person" do
+    setup do
+      @subject = create(:person, tenant: @tenant, name: "Subject")
+      @linker = create(:person, tenant: @tenant, name: "Linker")
+      @cap_sid = SecureRandom.uuid_v7
+      @handler.assign_to_framework(@subject.id, @framework_id, @role_id, @level_id)
+      @evidence_id = SecureRandom.uuid_v7
+      @handler.record_evidence(@subject.id, @framework_id, @evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 2, source: "peer", evidence_type: "peer_feedback",
+        content: "Ran the incident call", author_id: @linker.id, valence: "demonstrated")
+      @handler.add_evidence_link(@subject.id, @framework_id, @evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, linked_by_id: @linker.id, valence: "demonstrated")
+      @stream = EventStreamNaming.person_development_stream(@subject.id, @framework_id)
+    end
+
+    should "refuse to add, revalence or remove a link, keeping the links as they were" do
+      forget!(@subject)
+      before = Rails.configuration.event_store.read.stream(@stream).count
+      commands = {
+        add: -> {
+          @handler.add_evidence_link(@subject.id, @framework_id, @evidence_id,
+            capability_stable_id: @cap_sid, level_ordinal: 4, linked_by_id: @linker.id, valence: "demonstrated")
+        },
+        revalence: -> {
+          @handler.set_evidence_link_valence(@subject.id, @framework_id, @evidence_id,
+            capability_stable_id: @cap_sid, level_ordinal: 3, valence: "growth_area", changed_by_id: @linker.id)
+        },
+        remove: -> {
+          @handler.remove_evidence_link(@subject.id, @framework_id, @evidence_id,
+            capability_stable_id: @cap_sid, level_ordinal: 3, removed_by_id: @linker.id)
+        }
+      }
+
+      commands.each do |name, command|
+        error = assert_raises(PersonDevelopment::ForgottenSubject::Forgotten, "#{name} wasn't refused") { command.call }
+        assert_equal "this person has been forgotten", error.message
+      end
+      assert_equal before, Rails.configuration.event_store.read.stream(@stream).count
+      assert_equal [ [ @cap_sid, 2, "demonstrated" ], [ @cap_sid, 3, "demonstrated" ] ],
+        EvidenceLink.active.where(evidence_id: @evidence_id).order(:level_ordinal)
+          .pluck(:capability_stable_id, :level_ordinal, :valence)
+    end
+
+    should "still link feedback a forgotten author wrote about someone here" do
+      forget!(@linker)
+
+      @handler.add_evidence_link(@subject.id, @framework_id, @evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 4, linked_by_id: @subject.id, valence: "demonstrated")
+
+      assert EvidenceLink.active.exists?(evidence_id: @evidence_id, level_ordinal: 4)
+    end
+  end
+
   private
+
+  def forget!(person)
+    person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+  end
 
   # Every cell this person rated in the cycle — the role scope these tests'
   # frameworkless fixtures would otherwise have to build.

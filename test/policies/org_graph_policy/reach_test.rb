@@ -254,9 +254,9 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     assert_raises(OrgGraph::Authorization::Refused) { handler.rename_unit(@org[:payments], "Payments", **ON) }
   end
 
-  should "check a structure change again under the structure's lock, refusing an owner removed while it waited" do
+  should "check a structure or unit change again under the structure's lock, refusing an owner removed while it waited" do
     engineering = @org[:engineering]
-    structure_changes.each_with_index do |(change, command), index|
+    structure_changes.merge(unit_changes).each_with_index do |(change, command), index|
       as_tenant { system.add_unit_owner(engineering, @engineering_owner.id, **ON) } unless index.zero?
 
       assert_refused_under_the_lock(change, command, as(@engineering_owner)) do
@@ -265,7 +265,7 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     end
   end
 
-  should "check a structure change again under the structure's lock against the caller as it stands, not as it started" do
+  should "check a structure or unit change again under the structure's lock against the caller as it stands, not as it started" do
     lead = as(as_tenant { create(:person, tenant: @tenant).tap { @engineering_owner.update!(manager: it) } })
     {
       "a manager of the owner deactivated" => [ lead, ->(id) { Person.find(id).update!(status: "inactive") },
@@ -277,7 +277,7 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
       "an admin demoted" => [ admin, ->(_) { TenantUser.find(admin.tenant_user.id).update!(role: :member) },
                               ->(_) { TenantUser.find(admin.tenant_user.id).update!(role: :admin) } ]
     }.each do |revocation, (context, revoke, restore)|
-      structure_changes.each do |change, command|
+      structure_changes.merge(unit_changes).each do |change, command|
         assert_refused_under_the_lock("#{change}, #{revocation}", command, context) { revoke.call(context.person.id) }
       ensure
         as_tenant { restore.call(context.person.id) }
@@ -285,18 +285,66 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     end
   end
 
-  should "check a move between structures and a unit's retyping again under the lock against the caller as it stands" do
+  should "check a move between structures, a unit's retyping and a provider change again under the lock against the caller as it stands" do
     {
       "an editor's grant removed" => [ editor, ->(tenant_user) { tenant_user.update!(org_graph_editor: false) },
                                        ->(tenant_user) { tenant_user.update!(org_graph_editor: true) } ],
       "an admin demoted" => [ admin, ->(tenant_user) { tenant_user.update!(role: :member) },
                               ->(tenant_user) { tenant_user.update!(role: :admin) } ]
     }.each do |revocation, (context, revoke, restore)|
-      cross_structure_changes.each do |change, command|
+      cross_structure_changes.merge(provider_changes).each do |change, command|
         assert_refused_under_the_lock("#{change}, #{revocation}", command, context) { revoke.call(TenantUser.find(context.tenant_user.id)) }
       ensure
         as_tenant { restore.call(TenantUser.find(context.tenant_user.id)) }
       end
+    end
+  end
+
+  should "check a membership change again under the member's lock, refusing a manager taken off the member through the Org Graph, " \
+         "for a tenant cut over to it" do
+    as_tenant { @tenant.update!(org_graph_people_projected_at: Time.current) }
+    lead = as_tenant { create(:person, tenant: @tenant).tap { manage_dot(it) } }
+    assert_equal lead.id, as_tenant { @org[:dot].reload.manager_id }, "change_manager writes the column the policy reads"
+    manager = as(lead)
+    {
+      "the member's manager changed" => [ ->(_) { manage_dot(@skip) }, ->(_) { manage_dot(lead) } ],
+      "the caller deactivated" => [ ->(id) { Person.find(id).update!(status: "inactive") },
+                                    ->(id) { Person.find(id).update!(status: "active") } ],
+      "the caller unlinked from their account" => [ ->(_) { TenantUser.find(manager.tenant_user.id).update!(person_id: nil) },
+                                                    ->(id) { TenantUser.find(manager.tenant_user.id).update!(person_id: id) } ]
+    }.each do |revocation, (revoke, restore)|
+      assert_membership_changes_refused_under_the_lock(manager, revocation, revoke:, restore:)
+    end
+  end
+
+  # Only narrowed: the HRIS sync writes this tenant's manager_id to the row
+  # directly, outside any person lock, so nothing serialises the two.
+  should "only read the member's manager again under the member's lock, serialising nothing, for a tenant not yet cut over" do
+    manager = as(as_tenant { create(:person, tenant: @tenant).tap { @org[:dot].update!(manager: it) } })
+
+    assert_membership_changes_refused_under_the_lock(manager, "the member's manager changed",
+                                                     revoke: ->(_) { Person.find(@org[:dot].id).update!(manager: @skip) },
+                                                     restore: ->(id) { Person.find(@org[:dot].id).update!(manager_id: id) })
+  end
+
+  should "check again under each lock past Rails' query cache, warmed before the lock" do
+    cached_revocations.each do |change, (context, command, handler, revoke, restore)|
+      repository = RevokingRepository.new(OrgGraph::Repository.new, revoke)
+      assert_refused_with_the_cache_warm(change, command, context, handler.new(actor: context, repository:)) { context.reread }
+    ensure
+      as_tenant { restore.call }
+    end
+  end
+
+  should "check again under each lock past Rails' query cache, warmed once the lock is held" do
+    cached_revocations.each do |change, (context, command, handler, revoke, restore)|
+      repository = LockedRepository.new(OrgGraph::Repository.new, lambda {
+        context.reread
+        revoke.call
+      })
+      assert_refused_with_the_cache_warm(change, command, context, handler.new(actor: context, repository:))
+    ensure
+      as_tenant { restore.call }
     end
   end
 
@@ -384,6 +432,11 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
 
   def system = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
 
+  def manage_dot(manager)
+    OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                            .change_manager(@org[:dot].id, manager.id, provider: OrgGraph::StructureAggregate::ESPALIA, **ON)
+  end
+
   def structure(actor) = StructureHandler.new(@tenant, OrgGraph::StructureCommandHandler.new(actor:))
 
   def people(actor) = StructureHandler.new(@tenant, OrgGraph::CommandHandler.new(actor:))
@@ -395,12 +448,24 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     def respond_to_missing?(name, include_private = false) = handler.respond_to?(name, include_private) || super
   end
 
-  # Takes a right away after the handler's first check and before it takes the structure's lock.
+  # Takes a right away after the handler's first check and before it takes its lock.
   RevokingRepository = Struct.new(:repository, :revoke) do
     def with_structure(...)
+      revoking { repository.with_structure(...) }
+    end
+
+    def lock_structure
+      revoking { repository.lock_structure }
+    end
+
+    def with_person(...)
+      revoking { repository.with_person(...) }
+    end
+
+    def revoking
       revoke&.call
       self.revoke = nil
-      repository.with_structure(...)
+      yield
     end
 
     def method_missing(name, ...) = repository.public_send(name, ...)
@@ -423,6 +488,47 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
     }
   end
 
+  # Each beneath Engineering, whose owner is the caller's right over them.
+  def unit_changes
+    checkout = @org[:checkout]
+    {
+      "a unit created" => ->(handler) { handler.create_unit(SecureRandom.uuid_v7, "Pod", level_id: @lane, parent_id: checkout, **ON) },
+      "a unit renamed" => ->(handler) { handler.rename_unit(checkout, "Checkout Core", **ON) },
+      "an owner added" => ->(handler) { handler.add_unit_owner(checkout, @org[:ezra].id, **ON) },
+      "an owner removed" => ->(handler) { handler.remove_unit_owner(@org[:payments], @owner.id, **ON) },
+      "a unit moved" => ->(handler) { handler.move_unit(@billing, @org[:payments], **ON) },
+      "a unit retired" => ->(handler) { handler.retire_unit(@billing, **ON) },
+      "a succession recorded" => lambda { |handler|
+        handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @billing ], successor_ids: [ @org[:payments] ], **ON)
+      },
+      "a succession applied" => lambda { |handler|
+        handler.apply_succession(SecureRandom.uuid_v7, predecessor_ids: [ @billing ], successor_ids: [ @org[:payments] ], **ON)
+      }
+    }
+  end
+
+  # Changes to Dot's membership of Payments, which the caller may make only as Dot's manager.
+  def membership_changes
+    dot, payments, espalia = @org[:dot].id, @org[:payments], { provider: OrgGraph::StructureAggregate::ESPALIA }
+    {
+      "a membership's terms set" => ->(handler) { handler.set_membership(dot, payments, allocation: 0.5, **espalia, **ON) },
+      "a membership ended" => ->(handler) { handler.end_membership(dot, payments, **espalia, **ON) },
+      "a membership moved" => ->(handler) { handler.move_membership(dot, payments, @product, **ON) },
+      "a membership confirmed" => ->(handler) { handler.confirm_fact(dot, "membership", unit_id: payments, **ON) }
+    }
+  end
+
+  def provider_changes
+    {
+      "the organisation's types defined" => ->(handler) { handler.define_taxonomy([], **ON) },
+      "a type's provider set" => ->(handler) { handler.set_level_provider(@lane, "hibob", **ON) },
+      "a type handed over" => ->(handler) { handler.hand_over_level(@lane, "hibob", **ON) },
+      "a type handed back" => ->(handler) { handler.hand_back_level(@lane, **ON) },
+      "a fact's provider set" => ->(handler) { handler.set_fact_provider("title", "hibob", **ON) },
+      "facts claimed" => ->(handler) { handler.claim_facts([ "title" ], "hibob", **ON) }
+    }
+  end
+
   def cross_structure_changes
     {
       "a move between structures" => ->(handler) { handler.move_unit(@org[:payments], nil, conversion: { @lane => @org[:squad] }, **ON) },
@@ -435,17 +541,87 @@ class OrgGraphPolicy::ReachTest < ActiveSupport::TestCase
 
   # Runs the command as the caller, taking the right away between its first
   # check and the lock, and asserts it is refused and writes nothing.
-  def assert_refused_under_the_lock(change, command, context)
+  #
+  # A command that runs in its own transaction rolls the revocation back with
+  # it, so the check is that no event appeared beyond those the revocation wrote.
+  def assert_refused_under_the_lock(change, command, context, handler: OrgGraph::StructureCommandHandler)
     events_after_revoke = nil
     revoke = lambda do
       yield
-      events_after_revoke = Rails.configuration.event_store.read.count
+      events_after_revoke = event_ids
     end
-    handler = OrgGraph::StructureCommandHandler.new(actor: context,
-                                                    repository: RevokingRepository.new(OrgGraph::Repository.new, revoke))
+    handler = handler.new(actor: context, repository: RevokingRepository.new(OrgGraph::Repository.new, revoke))
 
     assert_raises(OrgGraph::Authorization::Refused, change) { StructureHandler.new(@tenant, handler).then { command.call(it) } }
-    assert_equal events_after_revoke, Rails.configuration.event_store.read.count, change
+    assert_empty event_ids - events_after_revoke, change
+  end
+
+  def event_ids = Rails.configuration.event_store.read.map(&:event_id)
+
+  def assert_membership_changes_refused_under_the_lock(manager, revocation, revoke:, restore:)
+    membership_changes.each do |change, command|
+      assert_refused_under_the_lock("#{change}, #{revocation}", command, manager, handler: OrgGraph::CommandHandler) do
+        revoke.call(manager.person.id)
+      end
+    ensure
+      as_tenant { restore.call(manager.person.id) }
+    end
+  end
+
+  # Runs a step once the handler holds its lock, before its check under it.
+  LockedRepository = Struct.new(:repository, :step) do
+    def with_structure(*, **, &block)
+      repository.with_structure(*, **) { |structure| locked { block.call(structure) } }
+    end
+
+    def lock_structure
+      repository.lock_structure.tap { locked { nil } }
+    end
+
+    def with_person(*, **, &block)
+      repository.with_person(*, **) { |person| locked { block.call(person) } }
+    end
+
+    def locked
+      step&.call
+      self.step = nil
+      yield
+    end
+
+    def method_missing(name, ...) = repository.public_send(name, ...)
+
+    def respond_to_missing?(name, include_private = false) = repository.respond_to?(name, include_private) || super
+  end
+
+  # One change per lock path, each with a revocation written on the test's own
+  # connection below Active Record, so Rails' query cache never hears of it.
+  def cached_revocations
+    lead = as(as_tenant { create(:person, tenant: @tenant).tap { @org[:dot].update!(manager: it) } })
+    take_grant = -> { raw_sql("UPDATE tenant_users SET org_graph_editor = false WHERE id = $1", editor.tenant_user.id) }
+    give_grant = -> { TenantUser.find(editor.tenant_user.id).update!(org_graph_editor: true) }
+    {
+      "a withdrawal, under the structure's lock" =>
+        [ editor, structure_changes["a withdrawal"], OrgGraph::StructureCommandHandler, take_grant, give_grant ],
+      "a unit retyped, under the structure's lock" =>
+        [ editor, cross_structure_changes["a unit retyped"], OrgGraph::StructureCommandHandler, take_grant, give_grant ],
+      "a succession applied, under the structure's lock it takes itself" =>
+        [ editor, unit_changes["a succession applied"], OrgGraph::StructureCommandHandler, take_grant, give_grant ],
+      "a membership's terms set, under the member's lock" =>
+        [ lead, membership_changes["a membership's terms set"], OrgGraph::CommandHandler,
+          -> { raw_sql("UPDATE people SET status = 'inactive' WHERE id = $1", lead.person.id) },
+          -> { Person.find(lead.person.id).update!(status: "active") } ]
+    }
+  end
+
+  def raw_sql(sql, *binds) = ActiveRecord::Base.connection.raw_connection.exec_params(sql, binds)
+
+  def assert_refused_with_the_cache_warm(change, command, context, handler)
+    events_before = event_ids
+    ActiveRecord::Base.cache do
+      yield if block_given?
+      assert_raises(OrgGraph::Authorization::Refused, change) { StructureHandler.new(@tenant, handler).then { command.call(it) } }
+    end
+    assert_empty event_ids - events_before, change
   end
 
   def unit(id) = as_tenant { OrgUnit.find(id) }

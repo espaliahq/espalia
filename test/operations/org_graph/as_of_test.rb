@@ -28,7 +28,7 @@ class Operations::OrgGraph::AsOfTest < ActiveSupport::TestCase
       end
 
       user = create(:user)
-      @context = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, user:, tenant: @tenant), person: nil)
+      @context = AuthorizationContext.new(user:, tenant_user: create(:tenant_user, user:, tenant: @tenant, org_graph_editor: true), person: nil)
     end
   end
 

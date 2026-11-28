@@ -16,6 +16,7 @@
 # a rater who isn't present to hear the discussion.
 class Operations::CalibrationSessions::RequestRatingRevisit < Operations::Base
   include Operations::CalibrationSessions::ScopeChecks
+  include Operations::CapabilityGuard
 
   description "Ask a rater to revisit a manager rating from a live calibration session — value-free, with the room's note."
   category :write
@@ -39,6 +40,7 @@ class Operations::CalibrationSessions::RequestRatingRevisit < Operations::Base
     ensure_session_started!
     ensure_note!
     ensure_rater_in_session!
+    ensure_active_capability!(session.framework_id, params[:capability_stable_id])
 
     begin
       command_handler.request_rating_revisit(

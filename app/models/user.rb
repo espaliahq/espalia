@@ -28,6 +28,11 @@ class User < ApplicationRecord
   # source. A validated save fails on `global_admin_source` instead.
   class GlobalAdminSourceMissing < StandardError; end
 
+  # Row lock for credential changes. Weaker than FOR UPDATE so that a foreign key
+  # check, which takes FOR KEY SHARE, never waits on it. Grant, approval and refresh
+  # inserts take this lock on purpose, to queue behind {#end_mcp_access!}.
+  CREDENTIALS_LOCK = "FOR NO KEY UPDATE"
+
   # Where the next change to `global_admin` comes from: one of
   # {GlobalAdminChange::RECORDABLE_SOURCES}. Cleared after every save, by a validation that finds
   # an error, and by one run while the flag is unchanged: name it just before the save it is for.
@@ -65,6 +70,87 @@ class User < ApplicationRecord
   # @return [Boolean] whether this user has global admin privileges
   def global_admin?
     global_admin
+  end
+
+  # Whether neither a live membership nor the global admin flag vouches for
+  # this account. Provisioning that hands such an account to a person first
+  # replaces its credentials.
+  #
+  # @return [Boolean]
+  def unvouched?
+    !global_admin? && ActsAsTenant.without_tenant { tenant_users.none? }
+  end
+
+  # Sets a new password and ends everything the old credentials opened, in one
+  # transaction: sessions and remember-me cookies (Devise salts both from the
+  # password digest), an outstanding reset link, the linked Google identity,
+  # MCP access tokens and grants, and MCP calls awaiting approval.
+  #
+  # @param password [String] random unless an operator supplies one
+  # @return [void]
+  def replace_credentials!(password = SecureRandom.hex(24))
+    transaction do
+      lock!(CREDENTIALS_LOCK)
+      end_mcp_access!
+      # The account row last, as clearing a unique column would block a code
+      # exchange's foreign key check.
+      update!(password:, password_confirmation: password, remember_created_at: nil,
+              reset_password_token: nil, reset_password_sent_at: nil, provider: nil, uid: nil)
+    end
+  end
+
+  # Raised by {#end_mcp_access!} outside a transaction, where its lock would end at once.
+  class NoTransaction < StandardError; end
+
+  # Revokes the account's MCP grants and tokens and rejects its calls awaiting
+  # approval. Takes {CREDENTIALS_LOCK} on the account first, so the revocation
+  # queues behind a grant or token insert, and must run inside the transaction
+  # that changes the account.
+  #
+  # @return [void]
+  # @raise [NoTransaction] outside a transaction
+  def end_mcp_access!
+    raise NoTransaction, "end_mcp_access! must run inside a transaction" unless self.class.connection.current_transaction.joinable?
+
+    # A fresh query, as lock! refuses a record with unsaved changes.
+    self.class.lock(CREDENTIALS_LOCK).where(id:).pick(:id)
+    now = Time.current
+    # A stamp ahead of this clock counts as live until it passes, so it is moved to now.
+    live = ->(model) { model.where(resource_owner_id: id).where("revoked_at IS NULL OR revoked_at > ?", now) }
+    # Grants before tokens, so a code exchange holding its grant commits its
+    # token before the tokens are revoked.
+    live.(Mcp::AccessGrant).update_all(revoked_at: now)
+    live.(Mcp::AccessToken).update_all(revoked_at: now)
+    ActsAsTenant.without_tenant do
+      Mcp::PendingApproval.pending.where(user_id: id).update_all(status: :rejected, updated_at: now)
+    end
+  end
+
+  # Completes a reset under the lock {#replace_credentials!} takes, and ends the
+  # account's MCP access with the old password. Devise loads the account before
+  # this runs, so a reset token is read again under the lock, and a link a
+  # replacement ended meanwhile is refused. A reset that fails revokes nothing.
+  #
+  # @param new_password [String]
+  # @param new_password_confirmation [String]
+  # @return [Boolean] whether the password was saved
+  def reset_password(new_password, new_password_confirmation)
+    loaded_token = reset_password_token_in_database
+    saved = false
+
+    # Its own savepoint, so a failed reset inside a caller's transaction still revokes nothing.
+    transaction(requires_new: true) do
+      locked_token = self.class.lock(CREDENTIALS_LOCK).where(id:).pick(:reset_password_token)
+      if loaded_token.present? && locked_token != loaded_token
+        errors.add(:reset_password_token, :invalid)
+        raise ActiveRecord::Rollback
+      end
+
+      end_mcp_access!
+      saved = super
+      raise ActiveRecord::Rollback unless saved
+    end
+    saved
   end
 
   # Drops a source named for a save that never reached the audit, such as one that failed validation.
@@ -126,14 +212,17 @@ class User < ApplicationRecord
   # Provisioning rules (see docs/guidelines/authorization.md and the plan):
   # - Refuse unless Google reports the email as verified.
   # - Existing User by `provider/uid` → return as-is.
-  # - Existing User by email → backfill `provider`/`uid`.
+  # - Existing User by email → backfill `provider`/`uid`; one with no membership
+  #   first gets fresh credentials ({#replace_credentials!}).
   # - No User but a Person matches across any tenant → create both User and
-  #   the linking TenantUser so the new identity lands in a usable tenant.
+  #   the linking TenantUser so the new identity lands in a usable tenant. A
+  #   forgotten person rolls both back, and the lookup runs again without them.
   # - Otherwise refuse.
   #
   # @param auth [OmniAuth::AuthHash]
+  # @param refused [Array<String>] ids of people already found forgotten, left out of the lookup
   # @return [Array(User, nil), Array(nil, Symbol)]
-  def self.from_google_omniauth(auth)
+  def self.from_google_omniauth(auth, refused: [])
     return [ nil, :invalid_payload ] if auth.blank? || auth.uid.blank? || auth.info&.email.blank?
     return [ nil, :email_unverified ] unless google_email_verified?(auth)
 
@@ -144,12 +233,15 @@ class User < ApplicationRecord
 
     by_email = find_by(email: email)
     if by_email
-      by_email.update!(provider: auth.provider, uid: auth.uid) if by_email.provider.blank?
+      transaction do
+        by_email.replace_credentials! if by_email.lock!(CREDENTIALS_LOCK).unvouched?
+        by_email.update!(provider: auth.provider, uid: auth.uid) if by_email.provider.blank?
+      end
       return [ by_email, nil ]
     end
 
     person = ActsAsTenant.without_tenant do
-      Person.where("LOWER(email) = ?", email).order(:created_at).first
+      Person.where("LOWER(email) = ?", email).where.not(id: refused).order(:created_at).first
     end
     return [ nil, :no_matching_account ] if person.nil?
 
@@ -158,7 +250,11 @@ class User < ApplicationRecord
     rescue ActiveRecord::RecordNotUnique
       # A concurrent Google sign-in for the same email won the race;
       # re-resolve and link instead of failing.
-      from_google_omniauth(auth)
+      from_google_omniauth(auth, refused:)
+    rescue AccountGrants::Aggregate::PersonForgotten
+      # The account and its membership roll back. Leaving this person out
+      # makes each pass try a different one, so the lookup ends.
+      from_google_omniauth(auth, refused: [ *refused, person.id ])
     end
   end
 
@@ -185,11 +281,12 @@ class User < ApplicationRecord
     end
   end
 
-  # A refused link writes nothing, so the account is created unlinked and
-  # sign-in goes ahead; its person stays with whoever holds them.
+  # A link another account holds writes nothing, so the account is created
+  # unlinked and sign-in goes ahead; its person stays with whoever holds them.
+  # A forgotten person raises instead, rolling the new account back.
   def self.link_provisioned(account, person)
     account.link_to!(person, match: :provisioned)
-  rescue AccountGrants::Aggregate::LinkRefused => e
+  rescue AccountGrants::Aggregate::LinkTaken => e
     Rails.logger.warn("provisioned TenantUser #{account.id} left unlinked: #{e.class}")
   end
 
