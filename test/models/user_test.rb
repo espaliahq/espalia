@@ -200,4 +200,11 @@ class UserTest < ActiveSupport::TestCase
       assert_equal existing.id, result.id
     end
   end
+
+  should "set a password through reset_password when no reset link is pending" do
+    user = create(:user)
+
+    assert user.reset_password("new-password-1", "new-password-1")
+    assert user.reload.valid_password?("new-password-1")
+  end
 end
