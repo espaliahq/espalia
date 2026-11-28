@@ -35,15 +35,7 @@ class UserGoogleProvisioningLockingTest < ActiveSupport::TestCase
   end
 
   should "refuse a sign-in that waited on a forget, leaving no account, membership or event" do
-    signing_in = nil
-
-    forgetting do
-      pids = Queue.new
-      signing_in = Thread.new { on_another_connection { |connection| pids << backend_pid(connection); User.from_google_omniauth(auth) } }
-      assert_waiting(pids, signing_in)
-    end
-
-    assert_equal [ nil, :no_matching_account ], signing_in.value
+    assert_equal [ nil, :no_matching_account ], signing_in_during_forget
     assert_not User.exists?(email: EMAIL), "no account is left for the address"
     assert_empty TenantUser.unscoped.where(tenant_id: @tenant.id)
     assert_empty grants_events, "the account's grants event rolls back with it"
@@ -53,15 +45,7 @@ class UserGoogleProvisioningLockingTest < ActiveSupport::TestCase
   should "provision into the next tenant whose person matches when the first is forgotten meanwhile" do
     @other = create(:tenant)
     later = travel(1.minute) { ActsAsTenant.with_tenant(@other) { create(:person, tenant: @other, email: EMAIL) } }
-    signing_in = nil
-
-    forgetting do
-      pids = Queue.new
-      signing_in = Thread.new { on_another_connection { |connection| pids << backend_pid(connection); User.from_google_omniauth(auth) } }
-      assert_waiting(pids, signing_in)
-    end
-
-    user, reason = signing_in.value
+    user, reason = signing_in_during_forget
     assert_nil reason
     assert_empty TenantUser.unscoped.where(tenant_id: @tenant.id), "nothing is left in the forgotten person's tenant"
     assert_equal later.id, TenantUser.unscoped.find_by!(user_id: user.id, tenant_id: @other.id).person_id
@@ -72,6 +56,21 @@ class UserGoogleProvisioningLockingTest < ActiveSupport::TestCase
   def auth
     OmniAuth::AuthHash.new(provider: "google_oauth2", uid: "uid-frankie",
                            info: { email: EMAIL, email_verified: true }, extra: { raw_info: { email_verified: true } })
+  end
+
+  # A sign-in on another connection that waits on the forget, then its result.
+  # Joined before teardown even when an assertion fails, so it can't write
+  # after the teardown's deletes.
+  def signing_in_during_forget
+    worker = nil
+    forgetting do
+      pids = Queue.new
+      worker = Thread.new { on_another_connection { |connection| pids << backend_pid(connection); User.from_google_omniauth(auth) } }
+      assert_waiting(pids, worker)
+    end
+    worker.value
+  ensure
+    worker&.join(15) || worker&.kill
   end
 
   # The writes of the forget that a sign-in can wait on: the person's row
