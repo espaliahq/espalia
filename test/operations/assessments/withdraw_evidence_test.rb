@@ -166,6 +166,10 @@ class Operations::Assessments::WithdrawEvidenceTest < ActiveSupport::TestCase
       end
     end
 
+    should "let the author withdraw it with the assignment_id offboarding deleted" do
+      assert_equal "withdrawn", call_op(context: @author_context, evidence_id: @peer_evidence_id)[:status]
+    end
+
     should "let the author withdraw it with no assignment" do
       assert_nil ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.find_by(id: @assignment.id) }
 
@@ -183,6 +187,27 @@ class Operations::Assessments::WithdrawEvidenceTest < ActiveSupport::TestCase
     error = assert_raises(Operations::Base::ParameterError) { call_op(assignment_id: nil) }
 
     assert_equal "missing required parameter: assignment_id", error.message
+  end
+
+  context "a stranger passing only an evidence id" do
+    setup do
+      other_user = create(:user)
+      @stranger_context = ActsAsTenant.with_tenant(@tenant) do
+        other = create(:person, tenant: @tenant, email: other_user.email)
+        tu = create(:tenant_user, tenant: @tenant, user: other_user, person: other, role: :member)
+        AuthorizationContext.new(user: other_user, tenant_user: tu, person: other)
+      end
+    end
+
+    should "get the ordinary refusal on a live subject's item" do
+      assert_raises(Pundit::NotAuthorizedError) { call_op(context: @stranger_context, assignment_id: nil) }
+    end
+
+    should "get the ordinary refusal on a forgotten subject's item" do
+      ActsAsTenant.with_tenant(@tenant) { @person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
+
+      assert_raises(Pundit::NotAuthorizedError) { call_op(context: @stranger_context, assignment_id: nil) }
+    end
   end
 
   should "keep the reason on a live subject's withdrawal" do

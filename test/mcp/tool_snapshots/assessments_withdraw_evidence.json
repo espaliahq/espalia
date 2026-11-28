@@ -1,6 +1,6 @@
 {
   "name": "assessments_withdraw_evidence",
-  "description": "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history). Feedback about a forgotten person can be withdrawn only by its author, and without a reason.",
+  "description": "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history). assignment_id is required, except for feedback about a forgotten person, which takes the item's own assignment or none. That feedback can be withdrawn only by its author, and without a reason.",
   "inputSchema": {
     "type": "object",
     "properties": {

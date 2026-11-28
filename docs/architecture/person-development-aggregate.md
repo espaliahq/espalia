@@ -414,7 +414,9 @@ Today the list holds four:
   `EvidenceRecorded` and refuses anyone else, an admin included. It takes no
   reason. `Operations::Assessments::WithdrawEvidence` sends a forgotten
   subject's withdrawals here and refuses one with a reason; the ordinary
-  `withdraw_evidence` stays refused. An item with no recorded author can't be
+  `withdraw_evidence` stays refused. It needs no assignment, since most
+  forgotten people left and were offboarded first: the operation reads the
+  stream from the item, and takes `assignment_id` only for a live subject. An item with no recorded author can't be
   withdrawn once its subject is forgotten; none exists today, since
   `evidence_items.author_id` is required.
 

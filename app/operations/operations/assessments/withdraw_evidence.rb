@@ -16,7 +16,7 @@
 # author-scoped action and is recoverable by recording the evidence again;
 # the same friction as recording it is appropriate.
 class Operations::Assessments::WithdrawEvidence < Operations::Base
-  description "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history). Feedback about a forgotten person can be withdrawn only by its author, and without a reason."
+  description "Withdraw a feedback / evidence item (soft delete — hides it everywhere, preserves history). assignment_id is required, except for feedback about a forgotten person, which takes the item's own assignment or none. That feedback can be withdrawn only by its author, and without a reason."
   category :write
   approval :mcp_client
 
@@ -37,7 +37,8 @@ class Operations::Assessments::WithdrawEvidence < Operations::Base
     if Person.find(evidence_item.person_id).forgotten?
       withdraw_about_former_member
     else
-      raise Operations::Base::ParameterError, "missing required parameter: assignment_id" if assignment.nil?
+      raise Operations::Base::ParameterError, "missing required parameter: assignment_id" if params[:assignment_id].blank?
+      raise ActiveRecord::RecordNotFound, "Couldn't find PersonFrameworkAssignment" if assignment.nil?
 
       PersonDevelopment::CommandHandler.new.withdraw_evidence(
         assignment.person_id, assignment.framework_id, params[:evidence_id],
@@ -74,7 +75,7 @@ class Operations::Assessments::WithdrawEvidence < Operations::Base
   def assignment
     return if params[:assignment_id].blank?
 
-    @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])
+    @assignment ||= PersonFrameworkAssignment.find_by(id: params[:assignment_id])
   end
 
   def evidence_item
