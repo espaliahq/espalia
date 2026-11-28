@@ -227,6 +227,13 @@ users:
     - lib/tasks/admin.rake
     - lib/tasks/example_seed.rb
     - lib/tasks/stress_seed.rb
+tenant_setting_changes:
+  owner: plain
+  reason: >-
+    Each change to the settings past answers read: the time zone and the smallest comparison group
+    (https://github.com/espaliahq/espalia/issues/553). Tenant records a row in the save that changes one.
+  writers:
+    - app/models/tenant.rb
 tenants:
   owner: tenant_planning_inputs/tables
   columns:

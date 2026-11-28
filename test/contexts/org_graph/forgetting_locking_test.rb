@@ -19,6 +19,7 @@ class OrgGraph::ForgettingLockingTest < ActiveSupport::TestCase
     Tenant.connection.execute("DELETE FROM event_store_events_in_streams WHERE event_id IN (#{ids})")
     Tenant.connection.execute("DELETE FROM event_store_events WHERE event_id NOT IN (SELECT event_id FROM event_store_events_in_streams)")
     TenantRetentionSetting.unscoped.where(tenant_id: @tenant.id).delete_all
+    TenantSettingChange.unscoped.where(tenant_id: @tenant.id).delete_all
     @tenant.delete
   end
 

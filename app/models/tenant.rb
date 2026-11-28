@@ -21,6 +21,7 @@ class Tenant < ApplicationRecord
   has_many :tenant_users, -> { unscope(where: :forgotten_at) }, dependent: :destroy, inverse_of: :tenant
   has_many :users, through: :tenant_users
   has_many :people, dependent: :destroy
+  has_many :setting_changes, class_name: "TenantSettingChange", inverse_of: false
 
   # The HRIS integration. The config is plain settings; the credentials are
   # encrypted JSON: { service_user_id:, api_token:, webhook_secret: }.
@@ -47,6 +48,9 @@ class Tenant < ApplicationRecord
   # Comparing a person with their level: on or off, the smallest group, and
   # how often the group scores are taken.
   attribute :comparison_config, ComparisonConfig.to_type, default: -> { ComparisonConfig.new }
+
+  # `update_column`, `update_all` and raw SQL skip this; see docs/architecture/domain-models.md.
+  after_save :record_setting_changes
 
   # Slack bot credentials for this workspace, set when a tenant admin installs
   # the Espalia Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
@@ -222,18 +226,27 @@ class Tenant < ApplicationRecord
   # @return [Date]
   def today(at: Time.current) = at.in_time_zone(working_zone).to_date
 
-  # The last moment of a day where the tenant works, for reading what was
-  # known by the end of it.
-  #
-  # @param date [Date]
-  # @return [ActiveSupport::TimeWithZone]
-  def end_of(date) = date.in_time_zone(working_zone).end_of_day
-
   # The stored zone, or UTC when TZInfo has since dropped it, so today still
   # reads and the settings page still opens to replace it.
   #
   # @return [String]
   def working_zone = self.class.time_zone_known?(time_zone) ? time_zone : "UTC"
+
+  # The last moment of a past day where the tenant worked then: in the zone in
+  # force at the end of that day, so a later change of zone doesn't move it.
+  # Never before the end of the day before, as a zone moved by more than a day
+  # would otherwise end a day before the one ahead of it.
+  #
+  # @param date [Date]
+  # @return [ActiveSupport::TimeWithZone]
+  def end_of_day_then(date) = [ end_in_zone_then(date.prev_day), end_in_zone_then(date) ].max
+
+  # Drops the setting history read before, so the next read sees changes made since.
+  #
+  # @return [Tenant]
+  def reload(*)
+    super.tap { @setting_history = nil }
+  end
 
   # The current tenant's today, for code that runs inside a tenant.
   #
@@ -241,12 +254,12 @@ class Tenant < ApplicationRecord
   # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
   def self.today = current!.today
 
-  # The current tenant's end of a day, for code that runs inside a tenant.
+  # The current tenant's end of a past day, in the zone in force then.
   #
   # @param date [Date]
   # @return [ActiveSupport::TimeWithZone]
   # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
-  def self.end_of(date) = current!.end_of(date)
+  def self.end_of_day_then(date) = current!.end_of_day_then(date)
 
   # @return [Tenant]
   # @raise [ActsAsTenant::Errors::NoTenantSet] outside a tenant
@@ -511,6 +524,35 @@ class Tenant < ApplicationRecord
   rescue => e
     Rails.error.report(e, handled: true, context: { tenant_id: id })
   end
+
+  def recorded_settings(zone, config) = { "time_zone" => zone, "min_group_size" => config&.min_group_size.to_s }
+
+  def record_setting_changes
+    now = recorded_settings(time_zone, comparison_config)
+    before = previously_new_record? ? {} : recorded_settings(time_zone_before_last_save, comparison_config_before_last_save)
+    changed = now.reject { |setting, value| before[setting] == value }
+    return if changed.empty?
+
+    at = Time.current
+    ActsAsTenant.with_tenant(self) { changed.each { |setting, value| setting_changes.create!(setting:, value:, changed_at: at) } }
+    @setting_history = nil
+  end
+
+  # @return [Hash{String => Array<TenantSettingChange>}] each setting's changes, oldest first
+  def setting_history
+    @setting_history ||= ActsAsTenant.with_tenant(self) { setting_changes.order(:changed_at, :id).to_a }.group_by(&:setting)
+  end
+
+  # The zone in force at the end of a day, judged by each zone's own end of it.
+  def zone_then(date)
+    rows = setting_history.fetch("time_zone", [])
+    zone = rows.reverse.find { |row| row.changed_at <= date.in_time_zone(known_zone(row.value)).end_of_day }&.value
+    known_zone(zone || rows.first&.value || time_zone)
+  end
+
+  def end_in_zone_then(date) = date.in_time_zone(zone_then(date)).end_of_day
+
+  def known_zone(name) = self.class.time_zone_known?(name) ? name : "UTC"
 
   # Checked only when the zone changes, so a zone stored before an upgrade
   # renamed it never blocks an unrelated save.

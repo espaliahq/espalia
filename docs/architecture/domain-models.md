@@ -62,6 +62,23 @@ end
 
 A tenant's theme is Default, the Bento preset, or Custom (ADR-23). Custom stores values only for the roles it overrides; a blank role, light or dark, falls back to Default's. The roles it can set are the ones `theme/roles.css` reads a `--tenant-*` hook for (`Themeable::CUSTOM_ROLES`). The font applies to Custom only; presets carry their own. Additional JSONB columns for `sso_config`, `hris_config`, and `notification_config` are planned for V1 integrations but not yet implemented.
 
+### Setting history
+
+Every change to two settings leaves a row in `tenant_setting_changes`: the setting, its new value and when. `Tenant` writes the row in the save that changes the setting, so the two commit together. Rows are never changed; a saved row is read-only.
+
+| Setting | Read by |
+|---|---|
+| `time_zone` | `OrgFactPeriod.known_on` and `OrgGraph::ChangesBetween`, through `Tenant#end_of_day_then`: a past day ends in the zone in force at the end of it |
+| `min_group_size` | No reader. It is a record only: every report, a closed cycle's included, uses today's size, so a row explains why a closed cycle's report changed |
+
+A day before a tenant's first row reads the first row's zone, as that is what was known to be in force. The migration that created the table wrote each tenant's values that day, dated from the tenant's creation. Today's zone is read only for a tenant with no rows at all. Reads of today use today's zone.
+
+A closed cycle's report uses today's size, so an admin who changes it changes closed cycles' reports too. Lowering it shows groups those reports hid until then; raising it hides groups they showed. The rows record when each change happened.
+
+A recorded size must be a whole number: the model and a check constraint refuse anything else.
+
+**The limit.** `update_column`, `update_all` and raw SQL that change either setting skip the callback and leave no row, so the record misses the change, and a past day would end in the old zone after the new one took over. The recorded write check and the `Espalia/WritesMustBeDeclared` cop guard those, and nothing else does (see [direct-writes.md](direct-writes.md)). A save that skips validation with no whole size, such as a blank one, fails as a whole: the record refuses the row, and the tenant is left as it was.
+
 ---
 
 ## User (Devise — Global Identity)

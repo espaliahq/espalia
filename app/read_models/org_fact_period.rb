@@ -31,12 +31,12 @@ class OrgFactPeriod < ApplicationRecord
   # The rows the Org Graph believes now.
   scope :current, -> { where(superseded_at: nil) }
 
-  # The rows the Org Graph believed at the end of a day in the tenant's time zone, or now.
+  # The rows the Org Graph believed at the end of a day in the tenant's time zone then, or now.
   #
   # @param date [Date, nil] nil for what the Org Graph believes now
   # @param at [Time, nil] the instant that day ended, when a reader fixed it
   #   earlier, so a later change of zone doesn't move it
-  scope :known_on, ->(date, at: nil) { at ? known_at(at) : date ? known_at(Tenant.end_of(date)) : current }
+  scope :known_on, ->(date, at: nil) { at ? known_at(at) : date ? known_at(Tenant.end_of_day_then(date)) : current }
 
   # Every unit type's name, removed ones included, so history can name a type
   # the live taxonomy no longer holds. A live type takes its current name. A

@@ -46,7 +46,9 @@ When suppression applies, any cell under the tenant's smallest group
 admin → Comparisons and shared with the level comparison) keeps its coverage
 counts but hides buckets/percentages; family cells add a differencing guard
 (suppressed when the remainder behind visible role cells is a reconstructable
-1..floor−1 people). **Currently every attainment viewer is
+1..floor−1 people). Every cycle uses today's size, closed cycles included:
+lowering it shows groups that a closed cycle's report hid until then, and raising
+it hides groups the report showed. **Currently every attainment viewer is
 unsuppressed** (`AssessmentCyclePolicy#attainment_unsuppressed?`): since
 `AssessmentPolicy#show?` grants the full live manager chain individual view
 access, a manager's aggregate scope (`Person#all_reports`, the same live chart

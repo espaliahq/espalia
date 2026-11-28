@@ -28,6 +28,7 @@ class AccountGrants::RoleLockingTest < ActiveSupport::TestCase
     TenantUser.unscoped.where(tenant_id: @tenant.id).delete_all
     User.where(id: users).delete_all
     Person.unscoped.where(tenant_id: @tenant.id).delete_all
+    TenantSettingChange.unscoped.where(tenant_id: @tenant.id).delete_all
     @tenant.delete
   end
 

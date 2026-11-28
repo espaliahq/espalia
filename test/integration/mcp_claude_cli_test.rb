@@ -82,6 +82,7 @@ class McpClaudeCliTest < ActiveSupport::TestCase
       @application&.destroy
       TenantUser.where(tenant_id: @tenant&.id).delete_all if @tenant
       Person.where(tenant_id: @tenant&.id).delete_all if @tenant
+      TenantSettingChange.unscoped.where(tenant_id: @tenant.id).delete_all if @tenant
       @tenant&.destroy
       @user&.destroy
     end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_27_055717) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_27_082422) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1291,6 +1291,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_055717) do
     t.index ["tenant_id"], name: "index_tenant_retention_settings_on_tenant_id", unique: true
   end
 
+  create_table "tenant_setting_changes", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "setting", null: false
+    t.string "value", null: false
+    t.datetime "changed_at", null: false
+    t.index ["tenant_id", "setting", "changed_at"], name: "idx_on_tenant_id_setting_changed_at_01e4d5d272"
+    t.check_constraint "setting::text <> 'min_group_size'::text OR value::text ~ '^[0-9]+$'::text", name: "tenant_setting_changes_min_group_size_whole"
+    t.check_constraint "setting::text = ANY (ARRAY['time_zone'::character varying, 'min_group_size'::character varying]::text[])", name: "tenant_setting_changes_setting"
+  end
+
   create_table "tenant_users", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.uuid "person_id"
@@ -1456,6 +1466,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_055717) do
   add_foreign_key "team_planning_plans", "tenants"
   add_foreign_key "team_planning_scenarios", "tenants"
   add_foreign_key "tenant_retention_settings", "tenants"
+  add_foreign_key "tenant_setting_changes", "tenants"
   add_foreign_key "tenant_users", "people"
   add_foreign_key "tenant_users", "tenants"
   add_foreign_key "tenant_users", "users"
