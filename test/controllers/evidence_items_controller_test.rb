@@ -239,6 +239,33 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to root_path
       ActsAsTenant.with_tenant(@tenant) { assert_equal "active", EvidenceItem.find(@evidence_id).link_status }
     end
+
+    context "about a forgotten person" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          @peer_evidence_id = SecureRandom.uuid_v7
+          PersonDevelopment::CommandHandler.new.record_evidence(@author.id, @framework_id, @peer_evidence_id,
+            source: "peer", evidence_type: "peer_feedback", content: "Calm on the call.", author_id: @other.id)
+          @author.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+        end
+      end
+
+      should "let its author withdraw it without a reason" do
+        sign_in @other_user
+        delete evidence_item_path(@peer_evidence_id)
+
+        assert_equal "Feedback withdrawn.", flash[:notice]
+        ActsAsTenant.with_tenant(@tenant) { assert_nil EvidenceItem.find(@peer_evidence_id).withdrawal_reason }
+      end
+
+      should "refuse a withdrawal that carries a reason" do
+        sign_in @other_user
+        delete evidence_item_path(@peer_evidence_id), params: { evidence: { reason: "Wrong person." } }
+
+        assert_equal "feedback about a former member is withdrawn without a reason", flash[:alert]
+        ActsAsTenant.with_tenant(@tenant) { assert_not EvidenceItem.find(@peer_evidence_id).withdrawn? }
+      end
+    end
   end
   private
 

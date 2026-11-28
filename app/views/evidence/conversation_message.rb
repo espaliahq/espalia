@@ -264,17 +264,18 @@ class Views::Evidence::ConversationMessage < Views::Base
   def item_actions
     owed = @details[:owed_ids].include?(@message.dom_id)
     in_situ = @details[:in_situ_paths][@item.id]
-    mine = @item.author_id == @viewer_id && !@details[:closed_ids].include?(@item.id)
-    edit_links = !mine && !owed && @details[:linkable_ids].include?(@item.id)
-    return unless owed || in_situ || mine || edit_links
+    authored = @item.author_id == @viewer_id
+    mine = authored && !@details[:closed_ids].include?(@item.id)
+    edit_links = !authored && !owed && @details[:linkable_ids].include?(@item.id)
+    return unless owed || in_situ || authored || edit_links
 
     div(class: "pt-2 border-t border-subtle flex flex-wrap items-center gap-x-4") do
       if owed
         button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: @item.id), class: LINK) { "Place on a capability" }
       end
       a(href: in_situ, class: LINK) { "View in assessment" } if in_situ
-      if mine
-        button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: @item.id), class: LINK) { "Edit" }
+      if authored
+        button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: @item.id), class: LINK) { "Edit" } if mine
         form_with(url: evidence_item_path(@item), method: :delete) do
           button(type: "submit", data: { turbo_confirm: "Withdraw this feedback? It will be hidden everywhere it appears." },
                  class: DANGER_LINK) { "Withdraw" }

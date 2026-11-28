@@ -261,7 +261,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     end
   end
 
-  should "offer the author no Edit or Withdraw on feedback about a forgotten person" do
+  should "offer the author Withdraw but not Edit on feedback about a forgotten person" do
     ActsAsTenant.with_tenant(@tenant) do
       PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
         source: "peer", evidence_type: "peer_feedback", content: "Kept the retro on time.", author_id: @peer.id)
@@ -273,8 +273,10 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     within("[data-testid='conversation-thread']") do
       assert_text "Kept the retro on time."
       assert_no_button "Edit"
-      assert_no_button "Withdraw"
     end
+
+    auto_confirm { click_button_with_js_fallback("Withdraw", expect_text: "Feedback withdrawn.") }
+    assert_no_text "Kept the retro on time."
   end
 
   should "offer no Give or Ask in a thread with a forgotten person" do
